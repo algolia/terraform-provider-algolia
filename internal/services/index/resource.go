@@ -6,6 +6,7 @@ import (
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -82,12 +83,17 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	// Save a snapshot of the plan before reading back, so we can preserve
+	// values the API accepts on write but doesn't return on read.
+	planSnapshot := plan
+
 	diags = r.readIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	resp.Diagnostics.Append(preservePlannedValues(ctx, &planSnapshot, &plan)...)
 	restoreNullBlocks(&plan, nullBlocks)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -102,12 +108,17 @@ func (r *indexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// Remember which blocks were null in state so we preserve them after read.
 	nullBlocks := captureNullBlocks(&state)
 
+	// Save a snapshot of the state before reading back, so we can preserve
+	// values the API accepts on write but doesn't return on read.
+	stateSnapshot := state
+
 	diags := r.readIndex(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	resp.Diagnostics.Append(preservePlannedValues(ctx, &stateSnapshot, &state)...)
 	restoreNullBlocks(&state, nullBlocks)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -142,12 +153,15 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	planSnapshot := plan
+
 	diags = r.readIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	resp.Diagnostics.Append(preservePlannedValues(ctx, &planSnapshot, &plan)...)
 	restoreNullBlocks(&plan, nullBlocks)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -231,6 +245,66 @@ func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel
 	model.DataSize = types.Int64Value(0)
 	model.CreatedAt = types.StringValue("")
 	model.UpdatedAt = types.StringValue("")
+
+	return diags
+}
+
+// preservePlannedValues copies non-null planned block attribute values into the
+// read-back model when the API returned null for those attributes. This handles
+// fields the Algolia API accepts on write but does not include in GetSettings
+// responses (e.g., relevancyStrictness, allowCompressionOfIntegerArray).
+func preservePlannedValues(ctx context.Context, plan, state *IndexResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	blockPairs := []struct {
+		planObj  types.Object
+		stateObj *types.Object
+		attrTypes map[string]attr.Type
+	}{
+		{plan.Ranking, &state.Ranking, rankingAttrTypes},
+		{plan.Performance, &state.Performance, performanceAttrTypes},
+		{plan.Advanced, &state.Advanced, advancedAttrTypes},
+		{plan.Faceting, &state.Faceting, facetingAttrTypes},
+		{plan.Highlighting, &state.Highlighting, highlightingAttrTypes},
+		{plan.Pagination, &state.Pagination, paginationAttrTypes},
+		{plan.Typos, &state.Typos, typosAttrTypes},
+		{plan.Languages, &state.Languages, languagesAttrTypes},
+		{plan.QueryStrategy, &state.QueryStrategy, queryStrategyAttrTypes},
+		{plan.Attributes, &state.Attributes, attributesAttrTypes},
+	}
+
+	for _, bp := range blockPairs {
+		if bp.planObj.IsNull() || bp.planObj.IsUnknown() {
+			continue
+		}
+		if bp.stateObj.IsNull() || bp.stateObj.IsUnknown() {
+			continue
+		}
+
+		planAttrs := bp.planObj.Attributes()
+		stateAttrs := bp.stateObj.Attributes()
+		changed := false
+
+		for k, planVal := range planAttrs {
+			stateVal, ok := stateAttrs[k]
+			if !ok {
+				continue
+			}
+			// If planned value was set but API returned null, keep the planned value.
+			if !planVal.IsNull() && !planVal.IsUnknown() && stateVal.IsNull() {
+				stateAttrs[k] = planVal
+				changed = true
+			}
+		}
+
+		if changed {
+			newObj, d := types.ObjectValue(bp.attrTypes, stateAttrs)
+			diags.Append(d...)
+			if !diags.HasError() {
+				*bp.stateObj = newObj
+			}
+		}
+	}
 
 	return diags
 }

@@ -509,8 +509,8 @@ func flattenIgnorePlurals(ctx context.Context, ip *search.IgnorePlurals, block *
 		block.IgnorePlurals = types.BoolValue(v)
 		block.IgnorePluralsLanguages = types.ListNull(types.StringType)
 	case []search.SupportedLanguage:
-		// Languages present means plurals are being ignored for those languages.
-		block.IgnorePlurals = types.BoolValue(true)
+		// Languages present: only populate the languages field, leave bool null.
+		block.IgnorePlurals = types.BoolNull()
 		block.IgnorePluralsLanguages = flattenSupportedLanguageList(ctx, v)
 	case search.BooleanString:
 		block.IgnorePlurals = types.BoolValue(v == search.BOOLEAN_STRING_TRUE)
@@ -535,8 +535,8 @@ func flattenRemoveStopWords(ctx context.Context, rsw *search.RemoveStopWords, bl
 		block.RemoveStopWords = types.BoolValue(v)
 		block.RemoveStopWordsLanguages = types.ListNull(types.StringType)
 	case []search.SupportedLanguage:
-		// Languages present means stop words are being removed for those languages.
-		block.RemoveStopWords = types.BoolValue(true)
+		// Languages present: only populate the languages field, leave bool null.
+		block.RemoveStopWords = types.BoolNull()
 		block.RemoveStopWordsLanguages = flattenSupportedLanguageList(ctx, v)
 	default:
 		block.RemoveStopWords = types.BoolNull()

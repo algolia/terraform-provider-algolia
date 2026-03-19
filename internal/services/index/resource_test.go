@@ -167,11 +167,12 @@ func TestAccIndexResource_import(t *testing.T) {
 				Config: testAccIndexResourceConfig_basic(indexName),
 			},
 			{
-				ResourceName:            "algolia_index.test",
-				ImportState:             true,
-				ImportStateId:           indexName,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"deletion_protection"},
+				ResourceName:                         "algolia_index.test",
+				ImportState:                          true,
+				ImportStateId:                        indexName,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "name",
+				ImportStateVerifyIgnore:              []string{"deletion_protection"},
 			},
 		},
 	})
