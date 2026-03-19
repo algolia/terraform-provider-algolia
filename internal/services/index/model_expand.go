@@ -11,184 +11,189 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
+// isKnown returns true if the value is neither null nor unknown.
+func isKnown(v interface{ IsNull() bool; IsUnknown() bool }) bool {
+	return !v.IsNull() && !v.IsUnknown()
+}
+
 // expandIndexSettings converts the Terraform resource model to Algolia IndexSettings.
 func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*search.IndexSettings, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	settings := search.NewEmptyIndexSettings()
 
 	// Attributes block
-	if !model.Attributes.IsNull() {
+	if isKnown(model.Attributes) {
 		var attrs AttributesModel
 		diags.Append(model.Attributes.As(ctx, &attrs, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !attrs.SearchableAttributes.IsNull() {
+		if isKnown(attrs.SearchableAttributes) {
 			settings.SearchableAttributes = expandStringList(ctx, attrs.SearchableAttributes)
 		}
-		if !attrs.AttributesToRetrieve.IsNull() {
+		if isKnown(attrs.AttributesToRetrieve) {
 			settings.AttributesToRetrieve = expandStringList(ctx, attrs.AttributesToRetrieve)
 		}
-		if !attrs.UnretrievableAttributes.IsNull() {
+		if isKnown(attrs.UnretrievableAttributes) {
 			settings.UnretrievableAttributes = expandStringList(ctx, attrs.UnretrievableAttributes)
 		}
-		if !attrs.AttributeForDistinct.IsNull() {
+		if isKnown(attrs.AttributeForDistinct) {
 			settings.AttributeForDistinct = utils.ToPtr(attrs.AttributeForDistinct.ValueString())
 		}
 	}
 
 	// Ranking block
-	if !model.Ranking.IsNull() {
+	if isKnown(model.Ranking) {
 		var ranking RankingModel
 		diags.Append(model.Ranking.As(ctx, &ranking, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !ranking.Ranking.IsNull() {
+		if isKnown(ranking.Ranking) {
 			settings.Ranking = expandStringList(ctx, ranking.Ranking)
 		}
-		if !ranking.CustomRanking.IsNull() {
+		if isKnown(ranking.CustomRanking) {
 			settings.CustomRanking = expandStringList(ctx, ranking.CustomRanking)
 		}
-		if !ranking.RelevancyStrictness.IsNull() {
+		if isKnown(ranking.RelevancyStrictness) {
 			settings.RelevancyStrictness = utils.ToPtr(int32(ranking.RelevancyStrictness.ValueInt64()))
 		}
 	}
 
 	// Faceting block
-	if !model.Faceting.IsNull() {
+	if isKnown(model.Faceting) {
 		var faceting FacetingModel
 		diags.Append(model.Faceting.As(ctx, &faceting, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !faceting.AttributesForFaceting.IsNull() {
+		if isKnown(faceting.AttributesForFaceting) {
 			settings.AttributesForFaceting = expandStringList(ctx, faceting.AttributesForFaceting)
 		}
-		if !faceting.MaxFacetHits.IsNull() {
+		if isKnown(faceting.MaxFacetHits) {
 			settings.MaxFacetHits = utils.ToPtr(int32(faceting.MaxFacetHits.ValueInt64()))
 		}
-		if !faceting.MaxValuesPerFacet.IsNull() {
+		if isKnown(faceting.MaxValuesPerFacet) {
 			settings.MaxValuesPerFacet = utils.ToPtr(int32(faceting.MaxValuesPerFacet.ValueInt64()))
 		}
-		if !faceting.SortFacetValuesBy.IsNull() {
+		if isKnown(faceting.SortFacetValuesBy) {
 			settings.SortFacetValuesBy = utils.ToPtr(faceting.SortFacetValuesBy.ValueString())
 		}
 	}
 
 	// Highlighting block
-	if !model.Highlighting.IsNull() {
+	if isKnown(model.Highlighting) {
 		var hl HighlightingModel
 		diags.Append(model.Highlighting.As(ctx, &hl, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !hl.AttributesToHighlight.IsNull() {
+		if isKnown(hl.AttributesToHighlight) {
 			settings.AttributesToHighlight = expandStringList(ctx, hl.AttributesToHighlight)
 		}
-		if !hl.AttributesToSnippet.IsNull() {
+		if isKnown(hl.AttributesToSnippet) {
 			settings.AttributesToSnippet = expandStringList(ctx, hl.AttributesToSnippet)
 		}
-		if !hl.HighlightPreTag.IsNull() {
+		if isKnown(hl.HighlightPreTag) {
 			settings.HighlightPreTag = utils.ToPtr(hl.HighlightPreTag.ValueString())
 		}
-		if !hl.HighlightPostTag.IsNull() {
+		if isKnown(hl.HighlightPostTag) {
 			settings.HighlightPostTag = utils.ToPtr(hl.HighlightPostTag.ValueString())
 		}
-		if !hl.SnippetEllipsisText.IsNull() {
+		if isKnown(hl.SnippetEllipsisText) {
 			settings.SnippetEllipsisText = utils.ToPtr(hl.SnippetEllipsisText.ValueString())
 		}
-		if !hl.RestrictHighlightAndSnippetArrays.IsNull() {
+		if isKnown(hl.RestrictHighlightAndSnippetArrays) {
 			settings.RestrictHighlightAndSnippetArrays = utils.ToPtr(hl.RestrictHighlightAndSnippetArrays.ValueBool())
 		}
 	}
 
 	// Pagination block
-	if !model.Pagination.IsNull() {
+	if isKnown(model.Pagination) {
 		var pag PaginationModel
 		diags.Append(model.Pagination.As(ctx, &pag, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !pag.HitsPerPage.IsNull() {
+		if isKnown(pag.HitsPerPage) {
 			settings.HitsPerPage = utils.ToPtr(int32(pag.HitsPerPage.ValueInt64()))
 		}
-		if !pag.PaginationLimitedTo.IsNull() {
+		if isKnown(pag.PaginationLimitedTo) {
 			settings.PaginationLimitedTo = utils.ToPtr(int32(pag.PaginationLimitedTo.ValueInt64()))
 		}
 	}
 
 	// Typos block
-	if !model.Typos.IsNull() {
+	if isKnown(model.Typos) {
 		var typos TyposModel
 		diags.Append(model.Typos.As(ctx, &typos, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !typos.TypoTolerance.IsNull() {
+		if isKnown(typos.TypoTolerance) {
 			settings.TypoTolerance = expandTypoTolerance(typos.TypoTolerance.ValueString())
 		}
-		if !typos.MinWordSizeFor1Typo.IsNull() {
+		if isKnown(typos.MinWordSizeFor1Typo) {
 			settings.MinWordSizefor1Typo = utils.ToPtr(int32(typos.MinWordSizeFor1Typo.ValueInt64()))
 		}
-		if !typos.MinWordSizeFor2Typos.IsNull() {
+		if isKnown(typos.MinWordSizeFor2Typos) {
 			settings.MinWordSizefor2Typos = utils.ToPtr(int32(typos.MinWordSizeFor2Typos.ValueInt64()))
 		}
-		if !typos.AllowTyposOnNumericTokens.IsNull() {
+		if isKnown(typos.AllowTyposOnNumericTokens) {
 			settings.AllowTyposOnNumericTokens = utils.ToPtr(typos.AllowTyposOnNumericTokens.ValueBool())
 		}
-		if !typos.DisableTypoToleranceOnAttributes.IsNull() {
+		if isKnown(typos.DisableTypoToleranceOnAttributes) {
 			settings.DisableTypoToleranceOnAttributes = expandStringList(ctx, typos.DisableTypoToleranceOnAttributes)
 		}
-		if !typos.DisableTypoToleranceOnWords.IsNull() {
+		if isKnown(typos.DisableTypoToleranceOnWords) {
 			settings.DisableTypoToleranceOnWords = expandStringList(ctx, typos.DisableTypoToleranceOnWords)
 		}
 	}
 
 	// Languages block
-	if !model.Languages.IsNull() {
+	if isKnown(model.Languages) {
 		var lang LanguagesModel
 		diags.Append(model.Languages.As(ctx, &lang, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !lang.IndexLanguages.IsNull() {
+		if isKnown(lang.IndexLanguages) {
 			settings.IndexLanguages = expandSupportedLanguageList(ctx, lang.IndexLanguages)
 		}
-		if !lang.QueryLanguages.IsNull() {
+		if isKnown(lang.QueryLanguages) {
 			settings.QueryLanguages = expandSupportedLanguageList(ctx, lang.QueryLanguages)
 		}
-		if !lang.IgnorePluralsLanguages.IsNull() {
+		if isKnown(lang.IgnorePluralsLanguages) {
 			settings.IgnorePlurals = search.ArrayOfSupportedLanguageAsIgnorePlurals(expandSupportedLanguageList(ctx, lang.IgnorePluralsLanguages))
-		} else if !lang.IgnorePlurals.IsNull() {
+		} else if isKnown(lang.IgnorePlurals) {
 			settings.IgnorePlurals = search.BoolAsIgnorePlurals(lang.IgnorePlurals.ValueBool())
 		}
-		if !lang.RemoveStopWordsLanguages.IsNull() {
+		if isKnown(lang.RemoveStopWordsLanguages) {
 			settings.RemoveStopWords = search.ArrayOfSupportedLanguageAsRemoveStopWords(expandSupportedLanguageList(ctx, lang.RemoveStopWordsLanguages))
-		} else if !lang.RemoveStopWords.IsNull() {
+		} else if isKnown(lang.RemoveStopWords) {
 			settings.RemoveStopWords = search.BoolAsRemoveStopWords(lang.RemoveStopWords.ValueBool())
 		}
-		if !lang.DecompoundQuery.IsNull() {
+		if isKnown(lang.DecompoundQuery) {
 			settings.DecompoundQuery = utils.ToPtr(lang.DecompoundQuery.ValueBool())
 		}
-		if !lang.RemoveWordsIfNoResults.IsNull() {
+		if isKnown(lang.RemoveWordsIfNoResults) {
 			v := search.RemoveWordsIfNoResults(lang.RemoveWordsIfNoResults.ValueString())
 			settings.RemoveWordsIfNoResults = &v
 		}
-		if !lang.AttributesToTransliterate.IsNull() {
+		if isKnown(lang.AttributesToTransliterate) {
 			settings.AttributesToTransliterate = expandStringList(ctx, lang.AttributesToTransliterate)
 		}
-		if !lang.CamelCaseAttributes.IsNull() {
+		if isKnown(lang.CamelCaseAttributes) {
 			settings.CamelCaseAttributes = expandStringList(ctx, lang.CamelCaseAttributes)
 		}
-		if !lang.DecompoundedAttributes.IsNull() {
+		if isKnown(lang.DecompoundedAttributes) {
 			var decompounded map[string]any
 			if err := json.Unmarshal([]byte(lang.DecompoundedAttributes.ValueString()), &decompounded); err != nil {
 				diags.AddError("Invalid decompounded_attributes", "Failed to parse JSON: "+err.Error())
@@ -196,7 +201,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 			}
 			settings.DecompoundedAttributes = decompounded
 		}
-		if !lang.CustomNormalization.IsNull() {
+		if isKnown(lang.CustomNormalization) {
 			var customNorm map[string]map[string]string
 			if err := json.Unmarshal([]byte(lang.CustomNormalization.ValueString()), &customNorm); err != nil {
 				diags.AddError("Invalid custom_normalization", "Failed to parse JSON: "+err.Error())
@@ -204,89 +209,89 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 			}
 			settings.CustomNormalization = &customNorm
 		}
-		if !lang.KeepDiacriticsOnCharacters.IsNull() {
+		if isKnown(lang.KeepDiacriticsOnCharacters) {
 			settings.KeepDiacriticsOnCharacters = utils.ToPtr(lang.KeepDiacriticsOnCharacters.ValueString())
 		}
 	}
 
 	// Query Strategy block
-	if !model.QueryStrategy.IsNull() {
+	if isKnown(model.QueryStrategy) {
 		var qs QueryStrategyModel
 		diags.Append(model.QueryStrategy.As(ctx, &qs, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !qs.QueryType.IsNull() {
+		if isKnown(qs.QueryType) {
 			v := search.QueryType(qs.QueryType.ValueString())
 			settings.QueryType = &v
 		}
-		if !qs.AdvancedSyntax.IsNull() {
+		if isKnown(qs.AdvancedSyntax) {
 			settings.AdvancedSyntax = utils.ToPtr(qs.AdvancedSyntax.ValueBool())
 		}
-		if !qs.AdvancedSyntaxFeatures.IsNull() {
+		if isKnown(qs.AdvancedSyntaxFeatures) {
 			settings.AdvancedSyntaxFeatures = expandAdvancedSyntaxFeaturesList(ctx, qs.AdvancedSyntaxFeatures)
 		}
-		if !qs.OptionalWords.IsNull() {
+		if isKnown(qs.OptionalWords) {
 			words := expandStringList(ctx, qs.OptionalWords)
 			optWords := search.ArrayOfStringAsOptionalWords(words)
 			settings.OptionalWords = *utils.NewNullable(optWords)
 		}
-		if !qs.DisablePrefixOnAttributes.IsNull() {
+		if isKnown(qs.DisablePrefixOnAttributes) {
 			settings.DisablePrefixOnAttributes = expandStringList(ctx, qs.DisablePrefixOnAttributes)
 		}
-		if !qs.DisableExactOnAttributes.IsNull() {
+		if isKnown(qs.DisableExactOnAttributes) {
 			settings.DisableExactOnAttributes = expandStringList(ctx, qs.DisableExactOnAttributes)
 		}
-		if !qs.ExactOnSingleWordQuery.IsNull() {
+		if isKnown(qs.ExactOnSingleWordQuery) {
 			v := search.ExactOnSingleWordQuery(qs.ExactOnSingleWordQuery.ValueString())
 			settings.ExactOnSingleWordQuery = &v
 		}
-		if !qs.AlternativesAsExact.IsNull() {
+		if isKnown(qs.AlternativesAsExact) {
 			settings.AlternativesAsExact = expandAlternativesAsExactList(ctx, qs.AlternativesAsExact)
 		}
 	}
 
 	// Performance block
-	if !model.Performance.IsNull() {
+	if isKnown(model.Performance) {
 		var perf PerformanceModel
 		diags.Append(model.Performance.As(ctx, &perf, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !perf.NumericAttributesForFiltering.IsNull() {
+		if isKnown(perf.NumericAttributesForFiltering) {
 			settings.NumericAttributesForFiltering = expandStringList(ctx, perf.NumericAttributesForFiltering)
 		}
-		if !perf.AllowCompressionOfIntegerArray.IsNull() {
+		if isKnown(perf.AllowCompressionOfIntegerArray) {
 			settings.AllowCompressionOfIntegerArray = utils.ToPtr(perf.AllowCompressionOfIntegerArray.ValueBool())
 		}
 	}
 
 	// Advanced block
-	if !model.Advanced.IsNull() {
+	if isKnown(model.Advanced) {
 		var adv AdvancedModel
 		diags.Append(model.Advanced.As(ctx, &adv, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
 			return nil, diags
 		}
 
-		if !adv.Distinct.IsNull() {
+		if isKnown(adv.Distinct) {
 			settings.Distinct = search.Int32AsDistinct(int32(adv.Distinct.ValueInt64()))
 		}
-		if !adv.MinProximity.IsNull() {
+		if isKnown(adv.MinProximity) {
 			settings.MinProximity = utils.ToPtr(int32(adv.MinProximity.ValueInt64()))
 		}
-		if !adv.ReplaceSynonymsInHighlight.IsNull() {
+		if isKnown(adv.ReplaceSynonymsInHighlight) {
 			settings.ReplaceSynonymsInHighlight = utils.ToPtr(adv.ReplaceSynonymsInHighlight.ValueBool())
 		}
-		if !adv.SeparatorsToIndex.IsNull() {
+		if isKnown(adv.SeparatorsToIndex) {
 			settings.SeparatorsToIndex = utils.ToPtr(adv.SeparatorsToIndex.ValueString())
 		}
-		if !adv.ResponseFields.IsNull() {
+		if isKnown(adv.ResponseFields) {
 			settings.ResponseFields = expandStringList(ctx, adv.ResponseFields)
 		}
-		if !adv.UserData.IsNull() {
+		if isKnown(adv.UserData) {
 			var userData any
 			if err := json.Unmarshal([]byte(adv.UserData.ValueString()), &userData); err != nil {
 				diags.AddError("Invalid user_data", "Failed to parse JSON: "+err.Error())
@@ -294,19 +299,19 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 			}
 			settings.UserData = userData
 		}
-		if !adv.EnableRules.IsNull() {
+		if isKnown(adv.EnableRules) {
 			settings.EnableRules = utils.ToPtr(adv.EnableRules.ValueBool())
 		}
-		if !adv.EnablePersonalization.IsNull() {
+		if isKnown(adv.EnablePersonalization) {
 			settings.EnablePersonalization = utils.ToPtr(adv.EnablePersonalization.ValueBool())
 		}
-		if !adv.Replicas.IsNull() {
+		if isKnown(adv.Replicas) {
 			settings.Replicas = expandStringList(ctx, adv.Replicas)
 		}
-		if !adv.EnableReRanking.IsNull() {
+		if isKnown(adv.EnableReRanking) {
 			settings.EnableReRanking = utils.ToPtr(adv.EnableReRanking.ValueBool())
 		}
-		if !adv.ReRankingApplyFilter.IsNull() {
+		if isKnown(adv.ReRankingApplyFilter) {
 			var reRankingFilter search.ReRankingApplyFilter
 			if err := json.Unmarshal([]byte(adv.ReRankingApplyFilter.ValueString()), &reRankingFilter); err != nil {
 				diags.AddError("Invalid re_ranking_apply_filter", "Failed to parse JSON: "+err.Error())
@@ -314,11 +319,11 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 			}
 			settings.ReRankingApplyFilter = &reRankingFilter
 		}
-		if !adv.Mode.IsNull() {
+		if isKnown(adv.Mode) {
 			v := search.Mode(adv.Mode.ValueString())
 			settings.Mode = &v
 		}
-		if !adv.SemanticSearch.IsNull() {
+		if isKnown(adv.SemanticSearch) {
 			var semanticSearch search.SemanticSearch
 			if err := json.Unmarshal([]byte(adv.SemanticSearch.ValueString()), &semanticSearch); err != nil {
 				diags.AddError("Invalid semantic_search", "Failed to parse JSON: "+err.Error())
@@ -326,7 +331,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 			}
 			settings.SemanticSearch = &semanticSearch
 		}
-		if !adv.AttributeCriteriaComputedByMinProximity.IsNull() {
+		if isKnown(adv.AttributeCriteriaComputedByMinProximity) {
 			settings.AttributeCriteriaComputedByMinProximity = utils.ToPtr(adv.AttributeCriteriaComputedByMinProximity.ValueBool())
 		}
 	}
