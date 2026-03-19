@@ -8,7 +8,7 @@
 
 </div>
 
-## Quick Start
+## 🚀 Quick Start
 
 ```hcl
 terraform {
@@ -54,21 +54,21 @@ resource "algolia_index" "products" {
 }
 ```
 
-## Resources & Data Sources
+## 📚 Resources & Data Sources
 
 | Name                          | Description                      |
 |-------------------------------|----------------------------------|
 | `algolia_index` (resource)    | Create and manage index settings |
 | `algolia_index` (data source) | Read existing index settings     |
 
-## Configuration
+## ⚙️ Configuration
 
 | Attribute | Env Variable      | Description            |
 |-----------|-------------------|------------------------|
 | `app_id`  | `ALGOLIA_APP_ID`  | Algolia Application ID |
 | `api_key` | `ALGOLIA_API_KEY` | Algolia Admin API Key  |
 
-## Index Settings Blocks
+## 🧩 Index Settings Blocks
 
 Settings are organized into logical blocks:
 
@@ -85,24 +85,13 @@ Settings are organized into logical blocks:
 | `performance`    | `numeric_attributes_for_filtering`, `allow_compression_of_integer_array`    |
 | `advanced`       | `distinct`, `replicas`, `mode`, `enable_re_ranking`                         |
 
-## Import
+## 📥 Import
 
 ```bash
 terraform import algolia_index.products existing_index_name
 ```
 
-## Deletion Protection
-
-Indexes are created with `deletion_protection = true` by default. To destroy an index, first set it to `false` and apply:
-
-```hcl
-resource "algolia_index" "products" {
-  name                = "products"
-  deletion_protection = false
-}
-```
-
-## Development
+## 🛠️ Development
 
 ```bash
 make build      # compile
