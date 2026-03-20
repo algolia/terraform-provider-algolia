@@ -4,9 +4,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -34,7 +31,7 @@ func indexResourceSchema() schema.Schema {
 				Description: "The name of the primary index (for replicas).",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					useStateForKnownString(),
 				},
 			},
 			"entries": schema.Int64Attribute{
@@ -49,7 +46,7 @@ func indexResourceSchema() schema.Schema {
 				Description: "The creation date of the index.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					useStateForKnownString(),
 				},
 			},
 			"updated_at": schema.StringAttribute{
@@ -110,7 +107,7 @@ func attributesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"attributes_to_retrieve": schema.ListAttribute{
@@ -119,7 +116,7 @@ func attributesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"unretrievable_attributes": schema.ListAttribute{
@@ -128,7 +125,7 @@ func attributesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"attribute_for_distinct": schema.StringAttribute{
@@ -136,7 +133,7 @@ func attributesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 	}
@@ -150,7 +147,7 @@ func rankingBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"custom_ranking": schema.ListAttribute{
@@ -159,7 +156,7 @@ func rankingBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"relevancy_strictness": schema.Int64Attribute{
@@ -167,7 +164,7 @@ func rankingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 	}
@@ -181,7 +178,7 @@ func facetingBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"max_facet_hits": schema.Int64Attribute{
@@ -189,7 +186,7 @@ func facetingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"max_values_per_facet": schema.Int64Attribute{
@@ -197,7 +194,7 @@ func facetingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"sort_facet_values_by": schema.StringAttribute{
@@ -208,7 +205,7 @@ func facetingBlockSchema() map[string]schema.Attribute {
 				stringvalidator.OneOf("count", "alpha"),
 			},
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 	}
@@ -222,7 +219,7 @@ func highlightingBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"attributes_to_snippet": schema.ListAttribute{
@@ -231,7 +228,7 @@ func highlightingBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"highlight_pre_tag": schema.StringAttribute{
@@ -239,7 +236,7 @@ func highlightingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"highlight_post_tag": schema.StringAttribute{
@@ -247,7 +244,7 @@ func highlightingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"snippet_ellipsis_text": schema.StringAttribute{
@@ -255,7 +252,7 @@ func highlightingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"restrict_highlight_and_snippet_arrays": schema.BoolAttribute{
@@ -263,7 +260,7 @@ func highlightingBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 	}
@@ -276,7 +273,7 @@ func paginationBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"pagination_limited_to": schema.Int64Attribute{
@@ -284,7 +281,7 @@ func paginationBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 	}
@@ -300,7 +297,7 @@ func typosBlockSchema() map[string]schema.Attribute {
 				stringvalidator.OneOf("true", "false", "min", "strict"),
 			},
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"min_word_size_for_1_typo": schema.Int64Attribute{
@@ -308,7 +305,7 @@ func typosBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"min_word_size_for_2_typos": schema.Int64Attribute{
@@ -316,7 +313,7 @@ func typosBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"allow_typos_on_numeric_tokens": schema.BoolAttribute{
@@ -324,7 +321,7 @@ func typosBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"disable_typo_tolerance_on_attributes": schema.ListAttribute{
@@ -333,7 +330,7 @@ func typosBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"disable_typo_tolerance_on_words": schema.ListAttribute{
@@ -342,7 +339,7 @@ func typosBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 	}
@@ -356,7 +353,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"query_languages": schema.ListAttribute{
@@ -365,7 +362,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"ignore_plurals": schema.BoolAttribute{
@@ -373,7 +370,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"ignore_plurals_languages": schema.ListAttribute{
@@ -382,7 +379,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"remove_stop_words": schema.BoolAttribute{
@@ -390,7 +387,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"remove_stop_words_languages": schema.ListAttribute{
@@ -399,7 +396,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"decompound_query": schema.BoolAttribute{
@@ -407,7 +404,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"remove_words_if_no_results": schema.StringAttribute{
@@ -418,7 +415,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 				stringvalidator.OneOf("none", "lastWords", "firstWords", "allOptional"),
 			},
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"attributes_to_transliterate": schema.ListAttribute{
@@ -427,7 +424,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"camel_case_attributes": schema.ListAttribute{
@@ -436,7 +433,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"decompounded_attributes": schema.StringAttribute{
@@ -444,7 +441,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"custom_normalization": schema.StringAttribute{
@@ -452,7 +449,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"keep_diacritics_on_characters": schema.StringAttribute{
@@ -460,7 +457,7 @@ func languagesBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 	}
@@ -476,7 +473,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 				stringvalidator.OneOf("prefixLast", "prefixAll", "prefixNone"),
 			},
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"advanced_syntax": schema.BoolAttribute{
@@ -484,7 +481,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"advanced_syntax_features": schema.ListAttribute{
@@ -493,7 +490,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"optional_words": schema.ListAttribute{
@@ -502,7 +499,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"disable_prefix_on_attributes": schema.ListAttribute{
@@ -511,7 +508,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"disable_exact_on_attributes": schema.ListAttribute{
@@ -520,7 +517,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"exact_on_single_word_query": schema.StringAttribute{
@@ -531,7 +528,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 				stringvalidator.OneOf("attribute", "none", "word"),
 			},
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"alternatives_as_exact": schema.ListAttribute{
@@ -540,7 +537,7 @@ func queryStrategyBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 	}
@@ -554,7 +551,7 @@ func performanceBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"allow_compression_of_integer_array": schema.BoolAttribute{
@@ -562,7 +559,7 @@ func performanceBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 	}
@@ -575,7 +572,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"min_proximity": schema.Int64Attribute{
@@ -583,7 +580,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+				useStateForKnownInt64(),
 			},
 		},
 		"replace_synonyms_in_highlight": schema.BoolAttribute{
@@ -591,7 +588,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"separators_to_index": schema.StringAttribute{
@@ -599,7 +596,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"response_fields": schema.ListAttribute{
@@ -608,7 +605,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"user_data": schema.StringAttribute{
@@ -616,7 +613,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"enable_rules": schema.BoolAttribute{
@@ -624,7 +621,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"enable_personalization": schema.BoolAttribute{
@@ -632,7 +629,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"replicas": schema.ListAttribute{
@@ -641,7 +638,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Computed:    true,
 			ElementType: types.StringType,
 			PlanModifiers: []planmodifier.List{
-				listplanmodifier.UseStateForUnknown(),
+				useStateForKnownList(),
 			},
 		},
 		"enable_re_ranking": schema.BoolAttribute{
@@ -649,7 +646,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 		"re_ranking_apply_filter": schema.StringAttribute{
@@ -657,7 +654,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"mode": schema.StringAttribute{
@@ -668,7 +665,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 				stringvalidator.OneOf("neuralSearch", "keywordSearch"),
 			},
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"semantic_search": schema.StringAttribute{
@@ -676,7 +673,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+				useStateForKnownString(),
 			},
 		},
 		"attribute_criteria_computed_by_min_proximity": schema.BoolAttribute{
@@ -684,7 +681,7 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			Optional:    true,
 			Computed:    true,
 			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+				useStateForKnownBool(),
 			},
 		},
 	}
