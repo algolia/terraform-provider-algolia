@@ -2,7 +2,10 @@ package index
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -294,6 +297,19 @@ func preservePlannedValues(ctx context.Context, plan, state *IndexResourceModel)
 			if !planVal.IsNull() && !planVal.IsUnknown() && stateVal.IsNull() {
 				stateAttrs[k] = planVal
 				changed = true
+				continue
+			}
+			// For JSON-encoded string fields, preserve the planned value if
+			// the API returned semantically equivalent JSON (e.g. different
+			// array element ordering).
+			planStr, planIsStr := planVal.(types.String)
+			stateStr, stateIsStr := stateVal.(types.String)
+			if planIsStr && stateIsStr && !planStr.IsNull() && !stateStr.IsNull() &&
+				!planStr.IsUnknown() && !stateStr.IsUnknown() &&
+				planStr.ValueString() != stateStr.ValueString() &&
+				jsonSemanticallyEqual(planStr.ValueString(), stateStr.ValueString()) {
+				stateAttrs[k] = planVal
+				changed = true
 			}
 		}
 
@@ -362,5 +378,54 @@ func restoreNullBlocks(m *IndexResourceModel, nb nullBlocks) {
 	}
 	if nb.advanced {
 		m.Advanced = types.ObjectNull(advancedAttrTypes)
+	}
+}
+
+// jsonSemanticallyEqual returns true if two strings are both valid JSON and
+// represent the same data structure, ignoring key order, whitespace, and
+// array element order (the Algolia API may return array elements in a
+// different order than what was sent).
+func jsonSemanticallyEqual(a, b string) bool {
+	var va, vb any
+	if err := json.Unmarshal([]byte(a), &va); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(b), &vb); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(normalizeJSON(va), normalizeJSON(vb))
+}
+
+// normalizeJSON recursively sorts arrays of strings/numbers and normalizes
+// maps so that JSON comparison is order-independent.
+func normalizeJSON(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		m := make(map[string]any, len(val))
+		for k, v := range val {
+			m[k] = normalizeJSON(v)
+		}
+		return m
+	case []any:
+		normalized := make([]any, len(val))
+		for i, item := range val {
+			normalized[i] = normalizeJSON(item)
+		}
+		// Sort the slice if all elements are strings.
+		allStrings := true
+		for _, item := range normalized {
+			if _, ok := item.(string); !ok {
+				allStrings = false
+				break
+			}
+		}
+		if allStrings {
+			sort.Slice(normalized, func(i, j int) bool {
+				return normalized[i].(string) < normalized[j].(string)
+			})
+		}
+		return normalized
+	default:
+		return v
 	}
 }
