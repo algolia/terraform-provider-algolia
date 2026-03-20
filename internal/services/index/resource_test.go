@@ -178,6 +178,153 @@ func TestAccIndexResource_import(t *testing.T) {
 	})
 }
 
+func TestAccIndexResource_importFullSettings(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_fullSettings(indexName),
+			},
+			{
+				ResourceName:  "algolia_index.test",
+				ImportState:   true,
+				ImportStateId: indexName,
+				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			{
+				Config: testAccIndexResourceConfig_fullSettings(indexName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_index.test", "attributes.searchable_attributes.0", "title"),
+					resource.TestCheckResourceAttr("algolia_index.test", "ranking.custom_ranking.0", "desc(popularity)"),
+					resource.TestCheckResourceAttr("algolia_index.test", "faceting.attributes_for_faceting.0", "category"),
+					resource.TestCheckResourceAttr("algolia_index.test", "highlighting.highlight_pre_tag", "<em>"),
+					resource.TestCheckResourceAttr("algolia_index.test", "pagination.hits_per_page", "25"),
+					resource.TestCheckResourceAttr("algolia_index.test", "typos.typo_tolerance", "true"),
+					resource.TestCheckResourceAttr("algolia_index.test", "languages.query_languages.0", "en"),
+					resource.TestCheckResourceAttr("algolia_index.test", "query_strategy.query_type", "prefixLast"),
+					resource.TestCheckResourceAttr("algolia_index.test", "performance.allow_compression_of_integer_array", "false"),
+					resource.TestCheckResourceAttr("algolia_index.test", "advanced.distinct", "1"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccIndexResource_importJsonFields(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_jsonFields(indexName),
+			},
+			{
+				ResourceName:  "algolia_index.test",
+				ImportState:   true,
+				ImportStateId: indexName,
+				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			{
+				Config: testAccIndexResourceConfig_jsonFields(indexName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("algolia_index.test", "languages.decompounded_attributes"),
+					resource.TestCheckResourceAttrSet("algolia_index.test", "languages.custom_normalization"),
+					resource.TestCheckResourceAttrSet("algolia_index.test", "advanced.user_data"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccIndexResource_importUnionTypes(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_unionTypes(indexName),
+			},
+			{
+				ResourceName:  "algolia_index.test",
+				ImportState:   true,
+				ImportStateId: indexName,
+				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			{
+				Config: testAccIndexResourceConfig_unionTypes(indexName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_index.test", "typos.typo_tolerance", "min"),
+					resource.TestCheckResourceAttr("algolia_index.test", "advanced.distinct", "2"),
+					resource.TestCheckResourceAttr("algolia_index.test", "languages.ignore_plurals_languages.#", "2"),
+					resource.TestCheckResourceAttr("algolia_index.test", "languages.remove_stop_words_languages.#", "2"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccIndexResource_importPartialBlocks(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_update_step1(indexName),
+			},
+			{
+				ResourceName:  "algolia_index.test",
+				ImportState:   true,
+				ImportStateId: indexName,
+				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			{
+				Config: testAccIndexResourceConfig_update_step1(indexName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_index.test", "pagination.hits_per_page", "20"),
+					resource.TestCheckResourceAttr("algolia_index.test", "attributes.searchable_attributes.0", "title"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "ranking.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "faceting.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "highlighting.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "typos.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "languages.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "query_strategy.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "performance.%"),
+					resource.TestCheckNoResourceAttr("algolia_index.test", "advanced.%"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccIndexResource_importNonexistent(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_basic(indexName),
+			},
+			{
+				ResourceName:  "algolia_index.test",
+				ImportState:   true,
+				ImportStateId: "tf-test-nonexistent-index-9999999",
+				ExpectError:   regexp.MustCompile(`(?i)error reading index`),
+			},
+		},
+	})
+}
+
 func testAccIndexResourceConfig_basic(name string) string {
 	return fmt.Sprintf(`
 resource "algolia_index" "test" {
@@ -293,6 +440,50 @@ func testAccIndexResourceConfig_deletionProtection(name string) string {
 resource "algolia_index" "test" {
   name                = %[1]q
   deletion_protection = true
+}
+`, name)
+}
+
+func testAccIndexResourceConfig_jsonFields(name string) string {
+	return fmt.Sprintf(`
+resource "algolia_index" "test" {
+  name                = %[1]q
+  deletion_protection = false
+
+  languages {
+    decompounded_attributes = jsonencode({ de = ["name", "description"] })
+    custom_normalization    = jsonencode({ default = { "ä" = "ae", "ö" = "oe" } })
+  }
+
+  advanced {
+    user_data = jsonencode({ version = 2, environment = "test", tags = ["a", "b", "c"] })
+  }
+}
+`, name)
+}
+
+func testAccIndexResourceConfig_unionTypes(name string) string {
+	return fmt.Sprintf(`
+resource "algolia_index" "test" {
+  name                = %[1]q
+  deletion_protection = false
+
+  attributes {
+    attribute_for_distinct = "url"
+  }
+
+  typos {
+    typo_tolerance = "min"
+  }
+
+  languages {
+    ignore_plurals_languages    = ["en", "fr"]
+    remove_stop_words_languages = ["en", "fr"]
+  }
+
+  advanced {
+    distinct = 2
+  }
 }
 `, name)
 }
