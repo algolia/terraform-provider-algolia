@@ -13,6 +13,7 @@ import (
 
 	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
+	querysuggestions "github.com/algolia/terraform-provider-algolia/internal/services/query_suggestions"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 )
 
@@ -106,6 +107,8 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	data := &providertypes.ProviderData{
 		Client:      client,
 		AgentClient: agentClient,
+		AppID:       appID,
+		APIKey:      apiKey,
 	}
 
 	resp.ResourceData = data
@@ -116,6 +119,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 	return []func() resource.Resource{
 		index.NewResource,
 		agent.NewResource,
+		querysuggestions.NewResource,
 	}
 }
 
@@ -123,5 +127,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 	return []func() datasource.DataSource{
 		index.NewDataSource,
 		agent.NewDataSource,
+		querysuggestions.NewDataSource,
 	}
 }

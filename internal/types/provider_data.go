@@ -8,4 +8,6 @@ import (
 type ProviderData struct {
 	Client      *search.APIClient
 	AgentClient interface{} // *agent.Client — stored as interface{} to break import cycle
+	AppID       string
+	APIKey      string
 }
