@@ -1,0 +1,272 @@
+package agent
+
+import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+func agentResourceSchema() schema.Schema {
+	return schema.Schema{
+		Description: "Manages an Algolia Agent Studio agent.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Description: "The unique identifier (UUID) of the agent.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"name": schema.StringAttribute{
+				Description: "The agent display name.",
+				Required:    true,
+			},
+			"description": schema.StringAttribute{
+				Description: "A summary of the agent's purpose.",
+				Optional:    true,
+			},
+			"instructions": schema.StringAttribute{
+				Description: "The agent prompt: defines the agent's role, tone, and goals.",
+				Required:    true,
+			},
+			"system_prompt": schema.StringAttribute{
+				Description: "System-level rules and constraints. Prepended before instructions.",
+				Optional:    true,
+			},
+			"provider_id": schema.StringAttribute{
+				Description: "The LLM provider identifier (UUID).",
+				Optional:    true,
+			},
+			"model": schema.StringAttribute{
+				Description: "The LLM model name.",
+				Optional:    true,
+			},
+			"template_type": schema.StringAttribute{
+				Description: "Template classification for the agent.",
+				Optional:    true,
+			},
+			"config": schema.StringAttribute{
+				Description: "JSON-encoded configuration parameters (e.g. temperature, max_tokens).",
+				Optional:    true,
+			},
+			"publish": schema.BoolAttribute{
+				Description: "Whether to publish the agent after create/update. When false, the agent stays in draft status.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"deletion_protection": schema.BoolAttribute{
+				Description: "When true, prevents accidental deletion of the agent. Must be set to false before destroying.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(true),
+			},
+			"status": schema.StringAttribute{
+				Description: "The agent status: draft or published.",
+				Computed:    true,
+			},
+			"created_at": schema.StringAttribute{
+				Description: "ISO 8601 timestamp of when the agent was created.",
+				Computed:    true,
+			},
+			"updated_at": schema.StringAttribute{
+				Description: "ISO 8601 timestamp of when the agent was last updated.",
+				Computed:    true,
+			},
+		},
+		Blocks: map[string]schema.Block{
+			"tool_algolia_search":    toolAlgoliaSearchBlockSchema(),
+			"tool_algolia_recommend": toolAlgoliaRecommendBlockSchema(),
+			"tool_client_side":       toolClientSideBlockSchema(),
+			"tool_mcp":               toolMCPBlockSchema(),
+		},
+	}
+}
+
+func toolAlgoliaSearchBlockSchema() schema.Block {
+	return schema.ListNestedBlock{
+		Description: "Algolia search index tool configuration.",
+		NestedObject: schema.NestedBlockObject{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Tool name (3-32 characters).",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(3, 32),
+					},
+				},
+			},
+			Blocks: map[string]schema.Block{
+				"index": schema.ListNestedBlock{
+					Description: "Search index configurations.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"name": schema.StringAttribute{
+								Description: "The Algolia index name (1-100 characters).",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.LengthBetween(1, 100),
+								},
+							},
+							"description": schema.StringAttribute{
+								Description: "Description of the index (1-200 characters).",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.LengthBetween(1, 200),
+								},
+							},
+							"enhanced_description": schema.StringAttribute{
+								Description: "Enhanced description for the index.",
+								Optional:    true,
+							},
+							"search_parameters": schema.StringAttribute{
+								Description: "JSON-encoded Algolia search parameters.",
+								Optional:    true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func toolAlgoliaRecommendBlockSchema() schema.Block {
+	return schema.ListNestedBlock{
+		Description: "Algolia recommend tool configuration.",
+		NestedObject: schema.NestedBlockObject{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Tool name (3-32 characters).",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(3, 32),
+					},
+				},
+				"predefined_recommend_parameters": schema.StringAttribute{
+					Description: "JSON-encoded predefined recommend parameters.",
+					Optional:    true,
+				},
+			},
+			Blocks: map[string]schema.Block{
+				"allowed_config": schema.ListNestedBlock{
+					Description: "Allowed recommend configurations.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"index": schema.StringAttribute{
+								Description: "The Algolia index name (1-100 characters).",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.LengthBetween(1, 100),
+								},
+							},
+							"model_name": schema.StringAttribute{
+								Description: "The recommend model name (1-100 characters).",
+								Required:    true,
+								Validators: []validator.String{
+									stringvalidator.LengthBetween(1, 100),
+								},
+							},
+							"description": schema.StringAttribute{
+								Description: "Description of the recommend configuration.",
+								Optional:    true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func toolClientSideBlockSchema() schema.Block {
+	return schema.ListNestedBlock{
+		Description: "Client-side tool configuration.",
+		NestedObject: schema.NestedBlockObject{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Tool name (3-32 characters).",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(3, 32),
+					},
+				},
+				"description": schema.StringAttribute{
+					Description: "Description of the tool (1-200 characters).",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 200),
+					},
+				},
+				"input_schema": schema.StringAttribute{
+					Description: "JSON-encoded input schema for the tool.",
+					Required:    true,
+				},
+			},
+		},
+	}
+}
+
+func toolMCPBlockSchema() schema.Block {
+	return schema.ListNestedBlock{
+		Description: "MCP server tool configuration.",
+		NestedObject: schema.NestedBlockObject{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Tool name (3-32 characters).",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(3, 32),
+					},
+				},
+				"url": schema.StringAttribute{
+					Description: "MCP server URL (1-512 characters).",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(1, 512),
+					},
+				},
+				"transport": schema.StringAttribute{
+					Description: "Transport protocol. Currently only streamable_http is supported.",
+					Required:    true,
+					Validators: []validator.String{
+						stringvalidator.OneOf("streamable_http"),
+					},
+				},
+				"headers": schema.MapAttribute{
+					Description: "Additional headers to send with MCP requests.",
+					Optional:    true,
+					ElementType: types.StringType,
+				},
+			},
+			Blocks: map[string]schema.Block{
+				"allowed_tool": schema.ListNestedBlock{
+					Description: "Allowed MCP tools configuration.",
+					NestedObject: schema.NestedBlockObject{
+						Attributes: map[string]schema.Attribute{
+							"name": schema.StringAttribute{
+								Description: "The MCP tool name.",
+								Required:    true,
+							},
+							"requires_approval": schema.BoolAttribute{
+								Description: "Whether the tool requires user approval before execution.",
+								Optional:    true,
+							},
+							"alias": schema.StringAttribute{
+								Description: "Alias for the tool (3-32 characters).",
+								Optional:    true,
+								Validators: []validator.String{
+									stringvalidator.LengthBetween(3, 32),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}

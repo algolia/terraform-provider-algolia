@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -80,7 +81,7 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	_, err = r.client.WaitForTask(indexName, setResp.TaskID)
+	_, err = r.client.WaitForTask(indexName, setResp.TaskID, search.WithMaxRetries(24), search.WithTimeout(func(_ int) time.Duration { return 5 * time.Second }))
 	if err != nil {
 		resp.Diagnostics.AddError("Error waiting for index creation", "Could not wait for task: "+err.Error())
 		return
@@ -150,7 +151,7 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	_, err = r.client.WaitForTask(indexName, setResp.TaskID)
+	_, err = r.client.WaitForTask(indexName, setResp.TaskID, search.WithMaxRetries(24), search.WithTimeout(func(_ int) time.Duration { return 5 * time.Second }))
 	if err != nil {
 		resp.Diagnostics.AddError("Error waiting for index update", "Could not wait for task: "+err.Error())
 		return
@@ -195,7 +196,7 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	_, err = r.client.WaitForTask(indexName, delResp.TaskID)
+	_, err = r.client.WaitForTask(indexName, delResp.TaskID, search.WithMaxRetries(24), search.WithTimeout(func(_ int) time.Duration { return 5 * time.Second }))
 	if err != nil {
 		resp.Diagnostics.AddError("Error waiting for index deletion", "Could not wait for task: "+err.Error())
 		return
