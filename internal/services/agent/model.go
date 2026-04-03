@@ -30,6 +30,31 @@ type AgentResourceModel struct {
 	UpdatedAt types.String `tfsdk:"updated_at"`
 }
 
+// AgentDataSourceModel describes the Terraform data source model for algolia_agent.
+type AgentDataSourceModel struct {
+	ID           types.String `tfsdk:"id"`
+	Name         types.String `tfsdk:"name"`
+	Description  types.String `tfsdk:"description"`
+	Instructions types.String `tfsdk:"instructions"`
+	SystemPrompt types.String `tfsdk:"system_prompt"`
+	ProviderID   types.String `tfsdk:"provider_id"`
+	Model        types.String `tfsdk:"model"`
+	TemplateType types.String `tfsdk:"template_type"`
+	Config       types.String `tfsdk:"config"`
+	Publish      types.Bool   `tfsdk:"publish"`
+
+	// Tool blocks
+	ToolAlgoliaSearch    types.List `tfsdk:"tool_algolia_search"`
+	ToolAlgoliaRecommend types.List `tfsdk:"tool_algolia_recommend"`
+	ToolClientSide       types.List `tfsdk:"tool_client_side"`
+	ToolMCP              types.List `tfsdk:"tool_mcp"`
+
+	// Computed
+	Status    types.String `tfsdk:"status"`
+	CreatedAt types.String `tfsdk:"created_at"`
+	UpdatedAt types.String `tfsdk:"updated_at"`
+}
+
 // ToolAlgoliaSearchModel represents an algolia_search_index tool.
 type ToolAlgoliaSearchModel struct {
 	Name    types.String `tfsdk:"name"`

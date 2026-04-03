@@ -8,6 +8,16 @@ terraform {
 
 provider "algolia" {}
 
+variable "agent_provider_id" {
+  description = "Agent Studio provider UUID to use when publishing the agent."
+  type        = string
+}
+
+variable "agent_model" {
+  description = "Model identifier supported by the selected Agent Studio provider."
+  type        = string
+}
+
 # The products index already exists — import it first:
 #   terraform import algolia_index.products products
 # Then `terraform apply` won't re-apply settings (no diff).
@@ -66,8 +76,8 @@ resource "algolia_agent" "example" {
   instructions = "You are a helpful support agent. Answer questions using the search tools provided."
 
   system_prompt = "Always be polite and concise."
-  provider_id   = "af3bd4f8-99bf-4d10-b69c-382a06509e0f"
-  model         = "gpt-4.1-mini"
+  provider_id   = var.agent_provider_id
+  model         = var.agent_model
 
   publish             = true
   deletion_protection = false

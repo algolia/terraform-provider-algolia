@@ -6,7 +6,6 @@ import (
 
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -55,7 +54,7 @@ func (d *agentDataSource) Configure(_ context.Context, req datasource.ConfigureR
 }
 
 func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var model AgentResourceModel
+	var model AgentDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -70,14 +69,10 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	resp.Diagnostics.Append(flattenAgentResponse(ctx, apiResp, &model)...)
+	resp.Diagnostics.Append(hydrateAgentDataSourceState(ctx, apiResp, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Set plan-only fields for data source.
-	model.Publish = types.BoolValue(apiResp.Status == "published")
-	model.DeletionProtection = types.BoolValue(true)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &model)...)
 }

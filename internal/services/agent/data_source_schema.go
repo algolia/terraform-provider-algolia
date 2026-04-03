@@ -46,11 +46,7 @@ func agentDataSourceSchema() datasourceschema.Schema {
 				Computed:    true,
 			},
 			"publish": datasourceschema.BoolAttribute{
-				Description: "Whether the agent is published.",
-				Computed:    true,
-			},
-			"deletion_protection": datasourceschema.BoolAttribute{
-				Description: "Whether deletion protection is enabled.",
+				Description: "Whether the remote agent is currently published.",
 				Computed:    true,
 			},
 			"status": datasourceschema.StringAttribute{
@@ -105,15 +101,15 @@ func toolAlgoliaRecommendDataSourceBlockSchema() datasourceschema.Block {
 		Description: "Algolia recommend tool configuration.",
 		NestedObject: datasourceschema.NestedBlockObject{
 			Attributes: map[string]datasourceschema.Attribute{
-				"name":                              datasourceschema.StringAttribute{Computed: true},
+				"name":                            datasourceschema.StringAttribute{Computed: true},
 				"predefined_recommend_parameters": datasourceschema.StringAttribute{Computed: true},
 			},
 			Blocks: map[string]datasourceschema.Block{
 				"allowed_config": datasourceschema.ListNestedBlock{
 					NestedObject: datasourceschema.NestedBlockObject{
 						Attributes: map[string]datasourceschema.Attribute{
-							"index":      datasourceschema.StringAttribute{Computed: true},
-							"model_name": datasourceschema.StringAttribute{Computed: true},
+							"index":       datasourceschema.StringAttribute{Computed: true},
+							"model_name":  datasourceschema.StringAttribute{Computed: true},
 							"description": datasourceschema.StringAttribute{Computed: true},
 						},
 					},
