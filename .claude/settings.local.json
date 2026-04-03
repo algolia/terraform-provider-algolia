@@ -2,11 +2,7 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:www.algolia.com)",
-      "Bash(curl -s -L \"https://www.algolia.com/doc/rest-api/agent-studio/agents/get-agent\")",
-      "Bash(curl -s -L \"https://www.algolia.com/doc/rest-api/agent-studio/agents/update-agent\")",
-      "Bash(curl -s -L \"https://www.algolia.com/doc/rest-api/agent-studio/agents/delete-agent\")",
-      "Bash(curl -s -L \"https://www.algolia.com/doc/rest-api/agent-studio/agents/list-agents\")",
-      "Bash(curl -s -L \"https://www.algolia.com/doc/rest-api/agent-studio/*\")",
+      "Bash(curl -s -L \"https://www.algolia.com/doc/*\")",
       "Bash(go doc:*)",
       "Bash(go build:*)",
       "Bash(go test:*)",
