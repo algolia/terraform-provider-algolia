@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -80,8 +81,7 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	_, err = r.client.WaitForTask(indexName, setResp.TaskID)
-	if err != nil {
+	if err = waitForIndexTask(r.client, indexName, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index creation", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -150,8 +150,7 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	_, err = r.client.WaitForTask(indexName, setResp.TaskID)
-	if err != nil {
+	if err = waitForIndexTask(r.client, indexName, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index update", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -195,8 +194,7 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	_, err = r.client.WaitForTask(indexName, delResp.TaskID)
-	if err != nil {
+	if err = waitForIndexTask(r.client, indexName, delResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index deletion", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -379,6 +377,29 @@ func restoreNullBlocks(m *IndexResourceModel, nb nullBlocks) {
 	if nb.advanced {
 		m.Advanced = types.ObjectNull(advancedAttrTypes)
 	}
+}
+
+// waitForIndexTask polls GetTask until the task reaches "published" status or
+// 30 minutes elapse, using exponential backoff capped at 10 seconds. This
+// replaces the SDK's built-in WaitForTask whose retry-count options were not
+// being applied, causing it to time out on large indexes.
+func waitForIndexTask(client *search.APIClient, indexName string, taskID int64) error {
+	deadline := time.Now().Add(30 * time.Minute)
+	interval := 2 * time.Second
+	for time.Now().Before(deadline) {
+		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		if err != nil {
+			return err
+		}
+		if resp.Status == search.TASK_STATUS_PUBLISHED {
+			return nil
+		}
+		time.Sleep(interval)
+		if interval < 10*time.Second {
+			interval += time.Second
+		}
+	}
+	return fmt.Errorf("task %d on index %q did not complete within 30 minutes", taskID, indexName)
 }
 
 // jsonSemanticallyEqual returns true if two strings are both valid JSON and

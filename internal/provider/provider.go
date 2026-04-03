@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 )
@@ -100,8 +101,11 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	agentClient := agent.NewClient(appID, apiKey)
+
 	data := &providertypes.ProviderData{
-		Client: client,
+		Client:      client,
+		AgentClient: agentClient,
 	}
 
 	resp.ResourceData = data
@@ -111,11 +115,13 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		index.NewResource,
+		agent.NewResource,
 	}
 }
 
 func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		index.NewDataSource,
+		agent.NewDataSource,
 	}
 }
