@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -211,12 +212,17 @@ func flattenAlgoliaSearchTool(_ context.Context, toolMap map[string]any) (*ToolA
 			idx.EnhancedDescription = types.StringNull()
 		}
 		if v, ok := idxMap["searchParameters"]; ok && v != nil {
-			b, err := json.Marshal(v)
-			if err != nil {
-				diags.AddError("Error marshaling searchParameters", err.Error())
-				return nil, diags
+			stripped := stripNullValues(v)
+			if stripped == nil {
+				idx.SearchParameters = types.StringNull()
+			} else {
+				b, err := json.Marshal(stripped)
+				if err != nil {
+					diags.AddError("Error marshaling searchParameters", err.Error())
+					return nil, diags
+				}
+				idx.SearchParameters = types.StringValue(string(b))
 			}
-			idx.SearchParameters = types.StringValue(string(b))
 		} else {
 			idx.SearchParameters = types.StringNull()
 		}
@@ -328,7 +334,14 @@ func flattenMCPTool(_ context.Context, toolMap map[string]any) (*ToolMCPModel, d
 	// Allowed tools
 	if rawAllowed, ok := toolMap["allowedTools"].(map[string]any); ok && len(rawAllowed) > 0 {
 		var allowedTools []MCPAllowedToolModel
-		for name, rawCfg := range rawAllowed {
+		allowedToolNames := make([]string, 0, len(rawAllowed))
+		for name := range rawAllowed {
+			allowedToolNames = append(allowedToolNames, name)
+		}
+		sort.Strings(allowedToolNames)
+
+		for _, name := range allowedToolNames {
+			rawCfg := rawAllowed[name]
 			at := MCPAllowedToolModel{
 				Name: types.StringValue(name),
 			}
@@ -367,4 +380,43 @@ func getString(m map[string]any, key string) string {
 		return v
 	}
 	return ""
+}
+
+// stripNullValues recursively removes null (nil) values from a JSON-decoded
+// structure. The Algolia API returns full search parameter schemas with every
+// optional field set to null; stripping those keeps the stored JSON compact
+// and consistent with what the user actually wrote.
+func stripNullValues(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, vv := range val {
+			if vv == nil {
+				continue
+			}
+			if stripped := stripNullValues(vv); stripped != nil {
+				result[k] = stripped
+			}
+		}
+		if len(result) == 0 {
+			return nil
+		}
+		return result
+	case []any:
+		result := make([]any, 0, len(val))
+		for _, vv := range val {
+			if vv == nil {
+				continue
+			}
+			if stripped := stripNullValues(vv); stripped != nil {
+				result = append(result, stripped)
+			}
+		}
+		if len(result) == 0 {
+			return nil
+		}
+		return result
+	default:
+		return v
+	}
 }

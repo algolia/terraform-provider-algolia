@@ -1,7 +1,7 @@
 default: build
 
 build:
-	go build -v ./...
+	go build -v -o terraform-provider-algolia .
 
 install: build
 	go install -v ./...

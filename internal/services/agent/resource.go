@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -107,6 +108,12 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	apiResp, err := r.client.GetAgent(ctx, agentID)
 	if err != nil {
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+			tflog.Warn(ctx, "Agent not found; removing from state", map[string]interface{}{"id": agentID})
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading agent", "Could not read agent "+agentID+": "+err.Error())
 		return
 	}

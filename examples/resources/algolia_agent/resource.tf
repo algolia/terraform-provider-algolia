@@ -89,14 +89,14 @@ resource "algolia_agent" "example" {
       })
     }
 
-    index {
-      name        = algolia_index.faq.name
-      description = "Frequently asked questions — search by question, answer, or category"
-      search_parameters = jsonencode({
-        attributesToRetrieve = ["question", "answer", "category", "url"]
-        hitsPerPage          = 5
-      })
-    }
+    # index {
+    #   name        = algolia_index.faq.name
+    #   description = "Frequently asked questions — search by question, answer, or category"
+    #   search_parameters = jsonencode({
+    #     attributesToRetrieve = ["question", "answer", "category", "url"]
+    #     hitsPerPage          = 5
+    #   })
+    # }
   }
 
   tool_client_side {

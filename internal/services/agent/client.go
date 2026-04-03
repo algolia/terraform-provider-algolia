@@ -9,6 +9,16 @@ import (
 	"net/http"
 )
 
+// APIError represents a non-2xx response from the Agent Studio API.
+type APIError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("API error (HTTP %d): %s", e.StatusCode, e.Body)
+}
+
 // Client is a lightweight HTTP client for the Algolia Agent Studio API.
 type Client struct {
 	appID  string
@@ -68,7 +78,10 @@ func (c *Client) do(req *http.Request, result any) error {
 	}
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
 	}
 
 	if result != nil && len(respBody) > 0 {
