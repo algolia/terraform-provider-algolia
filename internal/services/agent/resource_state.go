@@ -64,6 +64,18 @@ func validatePublishTransition(state, plan AgentResourceModel) error {
 	return nil
 }
 
+func shouldPublishAfterUpdate(state, plan AgentResourceModel) bool {
+	if plan.Publish.IsNull() || plan.Publish.IsUnknown() || !plan.Publish.ValueBool() {
+		return false
+	}
+
+	if state.Status.IsNull() || state.Status.IsUnknown() {
+		return true
+	}
+
+	return state.Status.ValueString() != "published"
+}
+
 func remotePublishValue(status string) types.Bool {
 	return types.BoolValue(status == "published")
 }

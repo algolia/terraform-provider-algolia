@@ -86,6 +86,49 @@ func TestValidatePublishTransition_AllowsDraftUpdates(t *testing.T) {
 	}
 }
 
+func TestShouldPublishAfterUpdate(t *testing.T) {
+	testCases := []struct {
+		name  string
+		state AgentResourceModel
+		plan  AgentResourceModel
+		want  bool
+	}{
+		{
+			name:  "draft to published requires publish call",
+			state: AgentResourceModel{Status: types.StringValue("draft")},
+			plan:  AgentResourceModel{Publish: types.BoolValue(true)},
+			want:  true,
+		},
+		{
+			name:  "already published skips publish call",
+			state: AgentResourceModel{Status: types.StringValue("published")},
+			plan:  AgentResourceModel{Publish: types.BoolValue(true)},
+			want:  false,
+		},
+		{
+			name:  "publish false skips publish call",
+			state: AgentResourceModel{Status: types.StringValue("draft")},
+			plan:  AgentResourceModel{Publish: types.BoolValue(false)},
+			want:  false,
+		},
+		{
+			name:  "unknown state publishes defensively",
+			state: AgentResourceModel{Status: types.StringUnknown()},
+			plan:  AgentResourceModel{Publish: types.BoolValue(true)},
+			want:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldPublishAfterUpdate(tc.state, tc.plan)
+			if got != tc.want {
+				t.Fatalf("expected %t, got %t", tc.want, got)
+			}
+		})
+	}
+}
+
 func TestAgentResourceSchema_LocalFlagsSupportDefaults(t *testing.T) {
 	schema := agentResourceSchema()
 

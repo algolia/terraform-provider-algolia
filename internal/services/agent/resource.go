@@ -158,8 +158,8 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Publish if requested.
-	if plan.Publish.ValueBool() {
+	// Only publish on update when transitioning from draft to published.
+	if shouldPublishAfterUpdate(state, plan) {
 		apiResp, err = r.client.PublishAgent(ctx, agentID)
 		if err != nil {
 			resp.Diagnostics.AddError("Error publishing agent", "Agent updated but could not be published: "+err.Error())
