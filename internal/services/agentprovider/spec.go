@@ -1,9 +1,6 @@
 package agentprovider
 
 import (
-	"fmt"
-	"slices"
-
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -92,16 +89,6 @@ func providerSpecByName(name string) (providerSpec, bool) {
 	return providerSpec{}, false
 }
 
-func providerSpecByBlockName(name string) (providerSpec, bool) {
-	for _, spec := range providerSpecs {
-		if spec.BlockName == name {
-			return spec, true
-		}
-	}
-
-	return providerSpec{}, false
-}
-
 func providerBlockAttrTypes(spec providerSpec) map[string]attr.Type {
 	attrTypes := make(map[string]attr.Type, len(spec.Fields))
 	for _, field := range spec.Fields {
@@ -122,12 +109,4 @@ func providerBlockNames() []string {
 	}
 
 	return names
-}
-
-func providerBlockIndex(blockName string) int {
-	return slices.Index(providerBlockNames(), blockName)
-}
-
-func providerBlockPathString(blockName string) string {
-	return fmt.Sprintf("%s.%d", blockName, providerBlockIndex(blockName))
 }
