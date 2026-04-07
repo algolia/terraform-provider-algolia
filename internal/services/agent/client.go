@@ -124,6 +124,28 @@ type AgentResponse struct {
 	LastUsedAt   *string `json:"lastUsedAt"`
 }
 
+// ProviderRequest is the request body for creating or updating a provider.
+type ProviderRequest struct {
+	Name         *string        `json:"name,omitempty"`
+	ProviderName *string        `json:"providerName,omitempty"`
+	Input        map[string]any `json:"input,omitempty"`
+}
+
+// ProviderResponse is the response from the Agent Studio providers API.
+type ProviderResponse struct {
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	ProviderName string         `json:"providerName"`
+	Input        map[string]any `json:"input"`
+	CreatedAt    string         `json:"createdAt"`
+	UpdatedAt    string         `json:"updatedAt"`
+	LastUsedAt   *string        `json:"lastUsedAt"`
+}
+
+type listProvidersResponse struct {
+	Data []ProviderResponse `json:"data"`
+}
+
 // CreateAgent creates a new agent.
 func (c *Client) CreateAgent(ctx context.Context, req *AgentRequest) (*AgentResponse, error) {
 	httpReq, err := c.newRequest(ctx, http.MethodPost, "/agents", req)
@@ -187,4 +209,118 @@ func (c *Client) PublishAgent(ctx context.Context, agentID string) (*AgentRespon
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// CreateProvider creates a new provider.
+func (c *Client) CreateProvider(ctx context.Context, req *ProviderRequest) (*ProviderResponse, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodPost, "/providers", req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ProviderResponse
+	if err := c.do(httpReq, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// GetProvider retrieves a provider by ID.
+func (c *Client) GetProvider(ctx context.Context, providerID string) (*ProviderResponse, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/providers/"+providerID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ProviderResponse
+	if err := c.do(httpReq, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// UpdateProvider updates an existing provider.
+func (c *Client) UpdateProvider(ctx context.Context, providerID string, req *ProviderRequest) (*ProviderResponse, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodPatch, "/providers/"+providerID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ProviderResponse
+	if err := c.do(httpReq, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// DeleteProvider deletes a provider by ID.
+func (c *Client) DeleteProvider(ctx context.Context, providerID string) error {
+	httpReq, err := c.newRequest(ctx, http.MethodDelete, "/providers/"+providerID, nil)
+	if err != nil {
+		return err
+	}
+
+	return c.do(httpReq, nil)
+}
+
+// ListProviders lists all providers for the app.
+func (c *Client) ListProviders(ctx context.Context) ([]ProviderResponse, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/providers", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp listProvidersResponse
+	if err := c.do(httpReq, &resp); err != nil {
+		return nil, err
+	}
+
+	return resp.Data, nil
+}
+
+// GetProviderModels retrieves the available models for a provider.
+func (c *Client) GetProviderModels(ctx context.Context, providerID string) ([]string, error) {
+	httpReq, err := c.newRequest(ctx, http.MethodGet, "/providers/"+providerID+"/models", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload json.RawMessage
+	if err := c.do(httpReq, &payload); err != nil {
+		return nil, err
+	}
+
+	var models []string
+	if err := json.Unmarshal(payload, &models); err == nil {
+		return models, nil
+	}
+
+	var wrapped struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &wrapped); err != nil {
+		return nil, fmt.Errorf("unmarshaling provider models response: %w", err)
+	}
+
+	models = make([]string, 0, len(wrapped.Data))
+	for _, model := range wrapped.Data {
+		if value := firstNonEmptyString(model["id"], model["name"], model["slug"], model["model"]); value != "" {
+			models = append(models, value)
+		}
+	}
+
+	return models, nil
+}
+
+func firstNonEmptyString(values ...any) string {
+	for _, value := range values {
+		if stringValue, ok := value.(string); ok && stringValue != "" {
+			return stringValue
+		}
+	}
+
+	return ""
 }

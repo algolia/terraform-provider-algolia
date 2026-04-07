@@ -7,5 +7,5 @@ import (
 // ProviderData holds the configured Algolia clients for use by resources and data sources.
 type ProviderData struct {
 	Client      *search.APIClient
-	AgentClient interface{} // *agent.Client — stored as interface{} to break import cycle
+	AgentClient interface{} // *agent.Client — shared Agent Studio client stored as interface{} to break import cycles
 }

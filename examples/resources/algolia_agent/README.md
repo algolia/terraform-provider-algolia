@@ -2,7 +2,7 @@
 
 This example creates an Algolia Agent Studio agent backed by two indexes (`products` and `faq`), with an Algolia search tool and a client-side tool for order status lookups.
 
-`publish = true` requires a real Agent Studio provider and model. The example now takes both as Terraform variables instead of relying on a hard-coded provider ID.
+`publish = true` requires a real Agent Studio provider and model. The example now creates the provider with Terraform and takes only the explicit model as input.
 
 ## Prerequisites
 
@@ -40,31 +40,7 @@ export ALGOLIA_API_KEY=<your-admin-api-key>
 export OPENAI_API_KEY=<your-openai-api-key>
 ```
 
-### 4. Create or locate an Agent Studio provider
-
-You can create a provider in the Agent Studio UI, or directly through the API. Example for OpenAI:
-
-```bash
-curl -X POST "https://${ALGOLIA_APP_ID}.algolia.net/agent-studio/1/providers" \
-  -H "X-Algolia-API-Key: ${ALGOLIA_API_KEY}" \
-  -H "X-Algolia-Application-Id: ${ALGOLIA_APP_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "terraform-example-openai",
-    "providerName": "openai",
-    "input": {
-      "apiKey": "'"${OPENAI_API_KEY}"'"
-    }
-  }'
-```
-
-Then list the models that provider supports and pick one:
-
-```bash
-curl "https://${ALGOLIA_APP_ID}.algolia.net/agent-studio/1/providers/<provider-id>/models" \
-  -H "X-Algolia-API-Key: ${ALGOLIA_API_KEY}" \
-  -H "X-Algolia-Application-Id: ${ALGOLIA_APP_ID}"
-```
+### 4. Pick a supported model
 
 For OpenAI providers, `gpt-4.1-mini` is a good default when available.
 
@@ -81,14 +57,16 @@ Skip this step if the `products` index doesn't exist yet — Terraform will crea
 ```bash
 # Preview what Terraform will do
 terraform plan \
-  -var="agent_provider_id=<provider-id>" \
+  -var="openai_api_key=${OPENAI_API_KEY}" \
   -var="agent_model=<model>"
 
 # Apply
 terraform apply \
-  -var="agent_provider_id=<provider-id>" \
+  -var="openai_api_key=${OPENAI_API_KEY}" \
   -var="agent_model=<model>"
 ```
+
+If you already manage a provider outside Terraform, you can still pass its UUID with `-var="agent_provider_id=<provider-id>"` and Terraform will use that instead of creating a new provider-backed reference for the agent.
 
 ## Cleanup
 
