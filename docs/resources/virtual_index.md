@@ -31,7 +31,7 @@ Manages an Algolia virtual replica index and its settings.
 - `pagination` (Block, Optional) Configuration for pagination. (see [below for nested schema](#nestedblock--pagination))
 - `performance` (Block, Optional) Configuration for performance settings. (see [below for nested schema](#nestedblock--performance))
 - `query_strategy` (Block, Optional) Configuration for query strategy. (see [below for nested schema](#nestedblock--query_strategy))
-- `ranking` (Block, Optional) Configuration for ranking and custom ranking. (see [below for nested schema](#nestedblock--ranking))
+- `ranking` (Block, Optional) Configuration for virtual replica ranking behavior. (see [below for nested schema](#nestedblock--ranking))
 - `typos` (Block, Optional) Configuration for typo tolerance. (see [below for nested schema](#nestedblock--typos))
 
 ### Read-Only
@@ -156,7 +156,6 @@ Optional:
 Optional:
 
 - `custom_ranking` (List of String) The custom ranking criteria.
-- `ranking` (List of String) The ranking criteria.
 - `relevancy_strictness` (Number) The relevancy strictness for ranking.
 
 

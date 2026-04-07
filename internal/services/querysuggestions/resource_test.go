@@ -81,6 +81,28 @@ func TestAccQuerySuggestionsResource_drift(t *testing.T) {
 	})
 }
 
+func TestAccQuerySuggestionsDataSource_basic(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	sourceIndexName := fmt.Sprintf("tf-qs-ds-source-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	qsIndexName := fmt.Sprintf("tf-qs-ds-index-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckQuerySuggestionsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccQuerySuggestionsDataSourceConfig(sourceIndexName, qsIndexName, "mobile"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.algolia_query_suggestions.test", "index_name", qsIndexName),
+					resource.TestCheckResourceAttr("data.algolia_query_suggestions.test", "region", "us"),
+					resource.TestCheckResourceAttr("data.algolia_query_suggestions.test", "source_indices.0.analytics_tags.0", "mobile"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckQuerySuggestionsDestroy(s *terraform.State) error {
 	client, err := suggestions.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), suggestions.US)
 	if err != nil {
@@ -206,4 +228,13 @@ resource "algolia_query_suggestions" "test" {
   }
 }
 `, sourceIndexName, qsIndexName, analyticsTag)
+}
+
+func testAccQuerySuggestionsDataSourceConfig(sourceIndexName, qsIndexName, analyticsTag string) string {
+	return testAccQuerySuggestionsConfig(sourceIndexName, qsIndexName, analyticsTag) + `
+
+data "algolia_query_suggestions" "test" {
+  index_name = algolia_query_suggestions.test.index_name
+}
+`
 }

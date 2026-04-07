@@ -82,6 +82,29 @@ func TestAccSynonymResource_drift(t *testing.T) {
 	})
 }
 
+func TestAccSynonymDataSource_basic(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-synonym-ds-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	objectID := "brand-synonym"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckSynonymDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSynonymDataSourceConfig(indexName, objectID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.algolia_synonym.test", "index_name", indexName),
+					resource.TestCheckResourceAttr("data.algolia_synonym.test", "object_id", objectID),
+					resource.TestCheckResourceAttr("data.algolia_synonym.test", "type", "synonym"),
+					resource.TestCheckResourceAttr("data.algolia_synonym.test", "synonyms.#", "2"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckSynonymDestroy(s *terraform.State) error {
 	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 	if err != nil {
@@ -205,4 +228,14 @@ resource "algolia_synonym" "test" {
   synonyms   = ["ios phone", "apple phone"]
 }
 `, indexName, objectID)
+}
+
+func testAccSynonymDataSourceConfig(indexName, objectID string) string {
+	return testAccSynonymRegularConfig(indexName, objectID) + `
+
+data "algolia_synonym" "test" {
+  index_name = algolia_synonym.test.index_name
+  object_id  = algolia_synonym.test.object_id
+}
+`
 }

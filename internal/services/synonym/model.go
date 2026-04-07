@@ -15,3 +15,4 @@ type SynonymResourceModel struct {
 	Replacements types.Set    `tfsdk:"replacements"`
 }
 
+type SynonymDataSourceModel = SynonymResourceModel

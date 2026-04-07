@@ -74,6 +74,40 @@ func TestHydrateImportedAgentProviderResourceState_LeavesSensitiveFieldsNull(t *
 	}
 }
 
+func TestHydrateAgentProviderDataSourceState_OmitsSensitiveFields(t *testing.T) {
+	ctx := context.Background()
+	model := &AgentProviderDataSourceModel{}
+
+	resp := &agentstudio.ProviderResponse{
+		ID:           "provider-789",
+		Name:         "OpenAI DS",
+		ProviderName: "openai",
+		Input: map[string]any{
+			"apiKey":  "masked",
+			"baseUrl": "https://api.openai.com/v1",
+		},
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-02T00:00:00Z",
+	}
+
+	diags := hydrateAgentProviderDataSourceState(ctx, resp, model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags.Errors())
+	}
+
+	if got := model.ProviderID.ValueString(); got != "provider-789" {
+		t.Fatalf("expected provider_id to be hydrated, got %q", got)
+	}
+
+	block := model.OpenAI.Attributes()
+	if _, ok := block["api_key"]; ok {
+		t.Fatal("expected data source openai block to omit api_key")
+	}
+	if got := block["base_url"].(types.String).ValueString(); got != "https://api.openai.com/v1" {
+		t.Fatalf("expected remote base_url, got %q", got)
+	}
+}
+
 func TestValidateAgentProviderConfig_RequiresExactlyOneMatchingBlock(t *testing.T) {
 	ctx := context.Background()
 	diags := validateAgentProviderConfig(ctx, AgentProviderResourceModel{
@@ -140,6 +174,34 @@ func TestAgentProviderModelsDataSourceSchema(t *testing.T) {
 	modelsAttr, ok := schema.Attributes["models"].(datasourceschema.ListAttribute)
 	if !ok || !modelsAttr.Computed {
 		t.Fatal("expected models to be a computed list attribute")
+	}
+}
+
+func TestAgentProviderDataSourceSchema_HidesSensitiveFields(t *testing.T) {
+	schema := agentProviderDataSourceSchema()
+
+	providerIDAttr, ok := schema.Attributes["provider_id"].(datasourceschema.StringAttribute)
+	if !ok || !providerIDAttr.Required {
+		t.Fatal("expected provider_id to be a required string attribute")
+	}
+
+	openAIBlock, ok := schema.Blocks["openai"].(datasourceschema.SingleNestedBlock)
+	if !ok {
+		t.Fatal("expected openai block to be registered")
+	}
+	if _, ok := openAIBlock.Attributes["api_key"]; ok {
+		t.Fatal("expected openai data source block to omit api_key")
+	}
+	if _, ok := openAIBlock.Attributes["base_url"]; !ok {
+		t.Fatal("expected openai data source block to include base_url")
+	}
+
+	googleBlock, ok := schema.Blocks["google_genai"].(datasourceschema.SingleNestedBlock)
+	if !ok {
+		t.Fatal("expected google_genai block to be registered")
+	}
+	if len(googleBlock.Attributes) != 0 {
+		t.Fatal("expected google_genai data source block to omit sensitive-only fields")
 	}
 }
 
