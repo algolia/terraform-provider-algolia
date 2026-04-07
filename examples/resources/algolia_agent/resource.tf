@@ -8,6 +8,32 @@ terraform {
 
 provider "algolia" {}
 
+variable "agent_provider_id" {
+  description = "Deprecated override for an existing Agent Studio provider UUID."
+  type        = string
+  default     = null
+}
+
+variable "agent_model" {
+  description = "Model identifier supported by the selected Agent Studio provider."
+  type        = string
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API key used to create the Agent Studio provider in Terraform."
+  type        = string
+  sensitive   = true
+}
+
+resource "algolia_agent_provider" "openai" {
+  name          = "terraform-example-openai"
+  provider_name = "openai"
+
+  openai {
+    api_key = var.openai_api_key
+  }
+}
+
 # The products index already exists — import it first:
 #   terraform import algolia_index.products products
 # Then `terraform apply` won't re-apply settings (no diff).
@@ -66,8 +92,8 @@ resource "algolia_agent" "example" {
   instructions = "You are a helpful support agent. Answer questions using the search tools provided."
 
   system_prompt = "Always be polite and concise."
-  provider_id   = "af3bd4f8-99bf-4d10-b69c-382a06509e0f"
-  model         = "gpt-4.1-mini"
+  provider_id   = coalesce(var.agent_provider_id, algolia_agent_provider.openai.id)
+  model         = var.agent_model
 
   publish             = true
   deletion_protection = false

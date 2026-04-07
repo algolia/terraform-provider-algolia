@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -88,7 +87,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 	}
 
-	resp.Diagnostics.Append(flattenAgentResponse(ctx, apiResp, &plan)...)
+	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, apiResp, plan.DeletionProtection, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -118,17 +117,10 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Preserve plan-only fields that are not returned by the API.
-	publish := state.Publish
-	deletionProtection := state.DeletionProtection
-
-	resp.Diagnostics.Append(flattenAgentResponse(ctx, apiResp, &state)...)
+	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, apiResp, state.DeletionProtection, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	state.Publish = publish
-	state.DeletionProtection = deletionProtection
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -137,6 +129,17 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	var plan AgentResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state AgentResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := validatePublishTransition(state, plan); err != nil {
+		resp.Diagnostics.AddError("Unpublish Not Supported", err.Error())
 		return
 	}
 
@@ -155,8 +158,8 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Publish if requested.
-	if plan.Publish.ValueBool() {
+	// Only publish on update when transitioning from draft to published.
+	if shouldPublishAfterUpdate(state, plan) {
 		apiResp, err = r.client.PublishAgent(ctx, agentID)
 		if err != nil {
 			resp.Diagnostics.AddError("Error publishing agent", "Agent updated but could not be published: "+err.Error())
@@ -164,7 +167,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 
-	resp.Diagnostics.Append(flattenAgentResponse(ctx, apiResp, &plan)...)
+	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, apiResp, plan.DeletionProtection, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -181,7 +184,7 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	agentID := state.ID.ValueString()
 
-	if !state.DeletionProtection.IsNull() && state.DeletionProtection.ValueBool() {
+	if deletionProtectionValue(state.DeletionProtection).ValueBool() {
 		resp.Diagnostics.AddError(
 			"Deletion Protection Enabled",
 			fmt.Sprintf("Cannot delete agent %q because deletion_protection is enabled. "+
@@ -199,5 +202,17 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 }
 
 func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	apiResp, err := r.client.GetAgent(ctx, req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error importing agent", "Could not import agent "+req.ID+": "+err.Error())
+		return
+	}
+
+	var state AgentResourceModel
+	resp.Diagnostics.Append(hydrateImportedAgentResourceState(ctx, apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

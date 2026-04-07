@@ -2,7 +2,9 @@ package agent_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"testing"
@@ -30,6 +32,13 @@ func testAccCheckAgentDestroy(s *terraform.State) error {
 		if err == nil {
 			return fmt.Errorf("agent %s still exists", rs.Primary.ID)
 		}
+
+		var apiErr *agent.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+			continue
+		}
+
+		return fmt.Errorf("checking agent %s destroy state: %w", rs.Primary.ID, err)
 	}
 	return nil
 }
@@ -58,6 +67,7 @@ func TestAccAgentResource_basic(t *testing.T) {
 
 func TestAccAgentResource_publish(t *testing.T) {
 	agentName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	testAccRequireOpenAIKey(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -159,10 +169,106 @@ func TestAccAgentResource_import(t *testing.T) {
 				ResourceName:            "algolia_agent.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"deletion_protection", "publish"},
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: testAccAgentResourceConfig_basic(agentName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "publish", "false"),
+					resource.TestCheckResourceAttr("algolia_agent.test", "deletion_protection", "false"),
+				),
 			},
 		},
 	})
+}
+
+func TestAccAgentResource_importPublished(t *testing.T) {
+	agentName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	testAccRequireOpenAIKey(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAgentResourceConfig_published(agentName),
+			},
+			{
+				ResourceName:            "algolia_agent.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: testAccAgentResourceConfig_published(agentName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "publish", "true"),
+					resource.TestCheckResourceAttr("algolia_agent.test", "status", "published"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccAgentResource_publishCannotUnpublish(t *testing.T) {
+	agentName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	testAccRequireOpenAIKey(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAgentResourceConfig_published(agentName),
+			},
+			{
+				Config:      testAccAgentResourceConfig_unpublished(agentName),
+				ExpectError: regexp.MustCompile(`(?i)unpublish.*not supported`),
+			},
+			{
+				Config: testAccAgentResourceConfig_published(agentName),
+			},
+		},
+	})
+}
+
+func TestAccAgentResource_updatePublished(t *testing.T) {
+	agentName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	testAccRequireOpenAIKey(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAgentResourceConfig_published(agentName),
+			},
+			{
+				Config: testAccAgentResourceConfig_publishedUpdated(agentName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "description", "Updated while still published"),
+					resource.TestCheckResourceAttr("algolia_agent.test", "status", "published"),
+					resource.TestCheckResourceAttr("algolia_agent.test", "publish", "true"),
+				),
+			},
+		},
+	})
+}
+
+func testAccRequireOpenAIKey(t *testing.T) {
+	t.Helper()
+
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
+	}
+
+	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" {
+		t.Skip("ALGOLIA_APP_ID and ALGOLIA_API_KEY must be set for acceptance tests")
+	}
+
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("OPENAI_API_KEY must be set to test published agents")
+	}
 }
 
 // --- Config helpers ---
@@ -179,15 +285,69 @@ resource "algolia_agent" "test" {
 
 func testAccAgentResourceConfig_published(name string) string {
 	return fmt.Sprintf(`
+resource "algolia_agent_provider" "test" {
+  name          = "tf-provider-%[1]s"
+  provider_name = "openai"
+
+  openai {
+    api_key = %[2]q
+  }
+}
+
 resource "algolia_agent" "test" {
-  name                = %[1]q
+  name                = %[3]q
   instructions        = "You are a helpful test agent."
-  provider_id         = "af3bd4f8-99bf-4d10-b69c-382a06509e0f"
+  provider_id         = algolia_agent_provider.test.id
   model               = "gpt-4.1-mini"
   publish             = true
   deletion_protection = false
 }
-`, name)
+`, name, os.Getenv("OPENAI_API_KEY"), name)
+}
+
+func testAccAgentResourceConfig_unpublished(name string) string {
+	return fmt.Sprintf(`
+resource "algolia_agent_provider" "test" {
+  name          = "tf-provider-%[1]s"
+  provider_name = "openai"
+
+  openai {
+    api_key = %[2]q
+  }
+}
+
+resource "algolia_agent" "test" {
+  name                = %[3]q
+  instructions        = "You are a helpful test agent."
+  provider_id         = algolia_agent_provider.test.id
+  model               = "gpt-4.1-mini"
+  publish             = false
+  deletion_protection = false
+}
+`, name, os.Getenv("OPENAI_API_KEY"), name)
+}
+
+func testAccAgentResourceConfig_publishedUpdated(name string) string {
+	return fmt.Sprintf(`
+resource "algolia_agent_provider" "test" {
+  name          = "tf-provider-%[1]s"
+  provider_name = "openai"
+
+  openai {
+    api_key = %[2]q
+  }
+}
+
+resource "algolia_agent" "test" {
+  name                = %[3]q
+  description         = "Updated while still published"
+  instructions        = "You are a helpful test agent."
+  provider_id         = algolia_agent_provider.test.id
+  model               = "gpt-4.1-mini"
+  publish             = true
+  deletion_protection = false
+}
+`, name, os.Getenv("OPENAI_API_KEY"), name)
 }
 
 func testAccAgentResourceConfig_updated(name string) string {
