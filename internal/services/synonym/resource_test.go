@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
@@ -52,6 +53,35 @@ func TestAccSynonymResource_basic(t *testing.T) {
 	})
 }
 
+func TestAccSynonymResource_drift(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-synonym-drift-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	objectID := "brand-synonym"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckSynonymDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSynonymRegularConfig(indexName, objectID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_synonym.test", "type", "synonym"),
+					resource.TestCheckResourceAttr("algolia_synonym.test", "synonyms.#", "2"),
+				),
+			},
+			{
+				PreConfig: testAccMutateSynonym(t, indexName, objectID, []string{"android phone", "google phone"}),
+				Config:    testAccSynonymRegularConfig(indexName, objectID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_synonym.test", "type", "synonym"),
+					resource.TestCheckResourceAttr("algolia_synonym.test", "synonyms.#", "2"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckSynonymDestroy(s *terraform.State) error {
 	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 	if err != nil {
@@ -83,6 +113,64 @@ func testAccRequireCredentials(t *testing.T) {
 
 	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" {
 		t.Skip("ALGOLIA_APP_ID and ALGOLIA_API_KEY must be set for acceptance tests")
+	}
+}
+
+func testAccMutateSynonym(t *testing.T, indexName, objectID string, synonyms []string) func() {
+	t.Helper()
+
+	return func() {
+		t.Helper()
+
+		client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			t.Fatalf("create Algolia client: %v", err)
+		}
+
+		current, err := client.GetSynonym(client.NewApiGetSynonymRequest(indexName, objectID))
+		if err != nil {
+			t.Fatalf("read synonym %s/%s before mutation: %v", indexName, objectID, err)
+		}
+
+		current.SetSynonyms(synonyms)
+		saveResp, err := client.SaveSynonym(client.NewApiSaveSynonymRequest(indexName, objectID, current))
+		if err != nil {
+			t.Fatalf("mutate synonym %s/%s: %v", indexName, objectID, err)
+		}
+
+		testAccWaitForSynonymMutation(t, client, indexName, objectID, saveResp.TaskID, synonyms)
+	}
+}
+
+func testAccWaitForSynonymMutation(t *testing.T, client *search.APIClient, indexName, objectID string, taskID int64, expected []string) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		task, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		if err == nil && task.Status == search.TASK_STATUS_PUBLISHED {
+			synonym, err := client.GetSynonym(client.NewApiGetSynonymRequest(indexName, objectID))
+			if err == nil {
+				got := synonym.GetSynonyms()
+				if len(got) == len(expected) {
+					match := true
+					for i := range got {
+						if got[i] != expected[i] {
+							match = false
+							break
+						}
+					}
+					if match {
+						return
+					}
+				}
+			}
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("synonym %s/%s mutation did not become visible", indexName, objectID)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

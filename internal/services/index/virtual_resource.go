@@ -8,7 +8,6 @@ import (
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -213,7 +212,17 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 }
 
 func (r *virtualIndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	var state VirtualIndexResourceModel
+	state.Name = types.StringValue(req.ID)
+	state.DeletionProtection = types.BoolValue(true)
+
+	diags := r.readVirtualIndex(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *VirtualIndexResourceModel) diag.Diagnostics {

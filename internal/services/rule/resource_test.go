@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
@@ -51,6 +52,33 @@ func TestAccRuleResource_basic(t *testing.T) {
 	})
 }
 
+func TestAccRuleResource_drift(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-rule-drift-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	objectID := "brand-rule"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRuleDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRuleResourceConfig(indexName, objectID, "rule description", `{"query":"iphone"}`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_rule.test", "description", "rule description"),
+				),
+			},
+			{
+				PreConfig: testAccMutateRule(t, indexName, objectID, "drifted rule description", "galaxy"),
+				Config:    testAccRuleResourceConfig(indexName, objectID, "rule description", `{"query":"iphone"}`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_rule.test", "description", "rule description"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckRuleDestroy(s *terraform.State) error {
 	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 	if err != nil {
@@ -82,6 +110,65 @@ func testAccRequireCredentials(t *testing.T) {
 
 	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" {
 		t.Skip("ALGOLIA_APP_ID and ALGOLIA_API_KEY must be set for acceptance tests")
+	}
+}
+
+func testAccMutateRule(t *testing.T, indexName, objectID, description, query string) func() {
+	t.Helper()
+
+	return func() {
+		t.Helper()
+
+		client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			t.Fatalf("create Algolia client: %v", err)
+		}
+
+		current, err := client.GetRule(client.NewApiGetRuleRequest(indexName, objectID))
+		if err != nil {
+			t.Fatalf("read rule %s/%s before mutation: %v", indexName, objectID, err)
+		}
+
+		current.SetDescription(description)
+		consequence := current.GetConsequence()
+		params := consequence.GetParams()
+		params.SetQuery(search.StringAsConsequenceQuery(query))
+		consequence.SetParams(&params)
+		current.SetConsequence(&consequence)
+
+		saveResp, err := client.SaveRule(client.NewApiSaveRuleRequest(indexName, objectID, current))
+		if err != nil {
+			t.Fatalf("mutate rule %s/%s: %v", indexName, objectID, err)
+		}
+
+		testAccWaitForRuleMutation(t, client, indexName, objectID, saveResp.TaskID, description, query)
+	}
+}
+
+func testAccWaitForRuleMutation(t *testing.T, client *search.APIClient, indexName, objectID string, taskID int64, description, query string) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		task, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		if err == nil && task.Status == search.TASK_STATUS_PUBLISHED {
+			rule, err := client.GetRule(client.NewApiGetRuleRequest(indexName, objectID))
+			if err == nil && rule.GetDescription() == description {
+				consequence := rule.GetConsequence()
+				params, ok := consequence.GetParamsOk()
+				if ok && params != nil {
+					consequenceQuery, ok := params.GetQueryOk()
+					if ok && consequenceQuery != nil && consequenceQuery.GetActualInstance() == query {
+						return
+					}
+				}
+			}
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("rule %s/%s mutation did not become visible", indexName, objectID)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

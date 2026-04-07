@@ -53,16 +53,16 @@ func virtualIndexResourceSchema() schema.Schema {
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"attributes": schema.SingleNestedBlock{Description: "Configuration for searchable and retrievable attributes.", Attributes: attributesBlockSchema()},
-			"ranking": schema.SingleNestedBlock{Description: "Configuration for ranking and custom ranking.", Attributes: rankingBlockSchema()},
-			"faceting": schema.SingleNestedBlock{Description: "Configuration for faceting behavior.", Attributes: facetingBlockSchema()},
-			"highlighting": schema.SingleNestedBlock{Description: "Configuration for highlighting and snippeting.", Attributes: highlightingBlockSchema()},
-			"pagination": schema.SingleNestedBlock{Description: "Configuration for pagination.", Attributes: paginationBlockSchema()},
-			"typos": schema.SingleNestedBlock{Description: "Configuration for typo tolerance.", Attributes: typosBlockSchema()},
-			"languages": schema.SingleNestedBlock{Description: "Configuration for language-specific settings.", Attributes: languagesBlockSchema()},
+			"attributes":     schema.SingleNestedBlock{Description: "Configuration for searchable and retrievable attributes.", Attributes: attributesBlockSchema()},
+			"ranking":        schema.SingleNestedBlock{Description: "Configuration for virtual replica ranking behavior.", Attributes: virtualRankingBlockSchema()},
+			"faceting":       schema.SingleNestedBlock{Description: "Configuration for faceting behavior.", Attributes: facetingBlockSchema()},
+			"highlighting":   schema.SingleNestedBlock{Description: "Configuration for highlighting and snippeting.", Attributes: highlightingBlockSchema()},
+			"pagination":     schema.SingleNestedBlock{Description: "Configuration for pagination.", Attributes: paginationBlockSchema()},
+			"typos":          schema.SingleNestedBlock{Description: "Configuration for typo tolerance.", Attributes: typosBlockSchema()},
+			"languages":      schema.SingleNestedBlock{Description: "Configuration for language-specific settings.", Attributes: languagesBlockSchema()},
 			"query_strategy": schema.SingleNestedBlock{Description: "Configuration for query strategy.", Attributes: queryStrategyBlockSchema()},
-			"performance": schema.SingleNestedBlock{Description: "Configuration for performance settings.", Attributes: performanceBlockSchema()},
-			"advanced": schema.SingleNestedBlock{Description: "Configuration for advanced settings.", Attributes: advancedBlockSchema()},
+			"performance":    schema.SingleNestedBlock{Description: "Configuration for performance settings.", Attributes: performanceBlockSchema()},
+			"advanced":       schema.SingleNestedBlock{Description: "Configuration for advanced settings.", Attributes: advancedBlockSchema()},
 		},
 	}
 }
@@ -97,17 +97,30 @@ func virtualIndexDataSourceSchema() datasourceschema.Schema {
 			},
 		},
 		Blocks: map[string]datasourceschema.Block{
-			"attributes": datasourceschema.SingleNestedBlock{Description: "Configuration for searchable and retrievable attributes.", Attributes: attributesDataSourceBlockSchema()},
-			"ranking": datasourceschema.SingleNestedBlock{Description: "Configuration for ranking and custom ranking.", Attributes: rankingDataSourceBlockSchema()},
-			"faceting": datasourceschema.SingleNestedBlock{Description: "Configuration for faceting behavior.", Attributes: facetingDataSourceBlockSchema()},
-			"highlighting": datasourceschema.SingleNestedBlock{Description: "Configuration for highlighting and snippeting.", Attributes: highlightingDataSourceBlockSchema()},
-			"pagination": datasourceschema.SingleNestedBlock{Description: "Configuration for pagination.", Attributes: paginationDataSourceBlockSchema()},
-			"typos": datasourceschema.SingleNestedBlock{Description: "Configuration for typo tolerance.", Attributes: typosDataSourceBlockSchema()},
-			"languages": datasourceschema.SingleNestedBlock{Description: "Configuration for language-specific settings.", Attributes: languagesDataSourceBlockSchema()},
+			"attributes":     datasourceschema.SingleNestedBlock{Description: "Configuration for searchable and retrievable attributes.", Attributes: attributesDataSourceBlockSchema()},
+			"ranking":        datasourceschema.SingleNestedBlock{Description: "Configuration for virtual replica ranking behavior.", Attributes: virtualRankingDataSourceBlockSchema()},
+			"faceting":       datasourceschema.SingleNestedBlock{Description: "Configuration for faceting behavior.", Attributes: facetingDataSourceBlockSchema()},
+			"highlighting":   datasourceschema.SingleNestedBlock{Description: "Configuration for highlighting and snippeting.", Attributes: highlightingDataSourceBlockSchema()},
+			"pagination":     datasourceschema.SingleNestedBlock{Description: "Configuration for pagination.", Attributes: paginationDataSourceBlockSchema()},
+			"typos":          datasourceschema.SingleNestedBlock{Description: "Configuration for typo tolerance.", Attributes: typosDataSourceBlockSchema()},
+			"languages":      datasourceschema.SingleNestedBlock{Description: "Configuration for language-specific settings.", Attributes: languagesDataSourceBlockSchema()},
 			"query_strategy": datasourceschema.SingleNestedBlock{Description: "Configuration for query strategy.", Attributes: queryStrategyDataSourceBlockSchema()},
-			"performance": datasourceschema.SingleNestedBlock{Description: "Configuration for performance settings.", Attributes: performanceDataSourceBlockSchema()},
-			"advanced": datasourceschema.SingleNestedBlock{Description: "Configuration for advanced settings.", Attributes: advancedDataSourceBlockSchema()},
+			"performance":    datasourceschema.SingleNestedBlock{Description: "Configuration for performance settings.", Attributes: performanceDataSourceBlockSchema()},
+			"advanced":       datasourceschema.SingleNestedBlock{Description: "Configuration for advanced settings.", Attributes: advancedDataSourceBlockSchema()},
 		},
 	}
 }
 
+func virtualRankingBlockSchema() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"custom_ranking":       rankingBlockSchema()["custom_ranking"],
+		"relevancy_strictness": rankingBlockSchema()["relevancy_strictness"],
+	}
+}
+
+func virtualRankingDataSourceBlockSchema() map[string]datasourceschema.Attribute {
+	return map[string]datasourceschema.Attribute{
+		"custom_ranking":       rankingDataSourceBlockSchema()["custom_ranking"],
+		"relevancy_strictness": rankingDataSourceBlockSchema()["relevancy_strictness"],
+	}
+}

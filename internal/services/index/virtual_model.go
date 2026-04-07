@@ -1,6 +1,14 @@
 package index
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+var virtualRankingAttrTypes = map[string]attr.Type{
+	"custom_ranking":       types.ListType{ElemType: types.StringType},
+	"relevancy_strictness": types.Int64Type,
+}
 
 type VirtualIndexResourceModel struct {
 	Name               types.String `tfsdk:"name"`
@@ -51,7 +59,7 @@ func virtualToIndexModel(model VirtualIndexResourceModel) IndexResourceModel {
 		CreatedAt:          model.CreatedAt,
 		UpdatedAt:          model.UpdatedAt,
 		Attributes:         model.Attributes,
-		Ranking:            model.Ranking,
+		Ranking:            virtualRankingToIndexObject(model.Ranking),
 		Faceting:           model.Faceting,
 		Highlighting:       model.Highlighting,
 		Pagination:         model.Pagination,
@@ -72,7 +80,7 @@ func virtualFromIndexModel(indexModel IndexResourceModel, model *VirtualIndexRes
 	model.CreatedAt = indexModel.CreatedAt
 	model.UpdatedAt = indexModel.UpdatedAt
 	model.Attributes = indexModel.Attributes
-	model.Ranking = indexModel.Ranking
+	model.Ranking = indexToVirtualRankingObject(indexModel.Ranking)
 	model.Faceting = indexModel.Faceting
 	model.Highlighting = indexModel.Highlighting
 	model.Pagination = indexModel.Pagination
@@ -91,7 +99,7 @@ func virtualDataSourceFromIndexModel(indexModel IndexResourceModel, model *Virtu
 	model.CreatedAt = indexModel.CreatedAt
 	model.UpdatedAt = indexModel.UpdatedAt
 	model.Attributes = indexModel.Attributes
-	model.Ranking = indexModel.Ranking
+	model.Ranking = indexToVirtualRankingObject(indexModel.Ranking)
 	model.Faceting = indexModel.Faceting
 	model.Highlighting = indexModel.Highlighting
 	model.Pagination = indexModel.Pagination
@@ -102,3 +110,66 @@ func virtualDataSourceFromIndexModel(indexModel IndexResourceModel, model *Virtu
 	model.Advanced = indexModel.Advanced
 }
 
+func virtualRankingToIndexObject(value types.Object) types.Object {
+	if value.IsNull() {
+		return types.ObjectNull(rankingAttrTypes)
+	}
+	if value.IsUnknown() {
+		return types.ObjectUnknown(rankingAttrTypes)
+	}
+
+	attrs := value.Attributes()
+	fullAttrs := map[string]attr.Value{
+		"ranking": types.ListNull(types.StringType),
+	}
+
+	if customRanking, ok := attrs["custom_ranking"]; ok {
+		fullAttrs["custom_ranking"] = customRanking
+	} else {
+		fullAttrs["custom_ranking"] = types.ListNull(types.StringType)
+	}
+
+	if strictness, ok := attrs["relevancy_strictness"]; ok {
+		fullAttrs["relevancy_strictness"] = strictness
+	} else {
+		fullAttrs["relevancy_strictness"] = types.Int64Null()
+	}
+
+	result, diags := types.ObjectValue(rankingAttrTypes, fullAttrs)
+	if diags.HasError() {
+		return types.ObjectNull(rankingAttrTypes)
+	}
+
+	return result
+}
+
+func indexToVirtualRankingObject(value types.Object) types.Object {
+	if value.IsNull() {
+		return types.ObjectNull(virtualRankingAttrTypes)
+	}
+	if value.IsUnknown() {
+		return types.ObjectUnknown(virtualRankingAttrTypes)
+	}
+
+	attrs := value.Attributes()
+	virtualAttrs := make(map[string]attr.Value, len(virtualRankingAttrTypes))
+
+	if customRanking, ok := attrs["custom_ranking"]; ok {
+		virtualAttrs["custom_ranking"] = customRanking
+	} else {
+		virtualAttrs["custom_ranking"] = types.ListNull(types.StringType)
+	}
+
+	if strictness, ok := attrs["relevancy_strictness"]; ok {
+		virtualAttrs["relevancy_strictness"] = strictness
+	} else {
+		virtualAttrs["relevancy_strictness"] = types.Int64Null()
+	}
+
+	result, diags := types.ObjectValue(virtualRankingAttrTypes, virtualAttrs)
+	if diags.HasError() {
+		return types.ObjectNull(virtualRankingAttrTypes)
+	}
+
+	return result
+}
