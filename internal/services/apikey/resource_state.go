@@ -1,0 +1,151 @@
+package apikey
+
+import (
+	"context"
+	"sort"
+	"time"
+
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+func buildAPIKeyRequest(model *APIKeyResourceModel, now time.Time) (*search.ApiKey, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	acls, aclDiags := setToSortedStrings(context.Background(), model.ACL)
+	diags.Append(aclDiags...)
+	if diags.HasError() {
+		return nil, diags
+	}
+
+	aclValues := make([]search.Acl, 0, len(acls))
+	for _, acl := range acls {
+		aclValues = append(aclValues, search.Acl(acl))
+	}
+
+	apiKey := search.NewApiKey(aclValues)
+
+	if !model.Description.IsNull() && !model.Description.IsUnknown() {
+		apiKey.SetDescription(model.Description.ValueString())
+	}
+
+	indexes, indexDiags := setToSortedStrings(context.Background(), model.Indexes)
+	diags.Append(indexDiags...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	if len(indexes) > 0 {
+		apiKey.SetIndexes(indexes)
+	}
+
+	referers, refererDiags := setToSortedStrings(context.Background(), model.Referers)
+	diags.Append(refererDiags...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	if len(referers) > 0 {
+		apiKey.SetReferers(referers)
+	}
+
+	if !model.MaxHitsPerQuery.IsNull() && !model.MaxHitsPerQuery.IsUnknown() && model.MaxHitsPerQuery.ValueInt64() > 0 {
+		value := int32(model.MaxHitsPerQuery.ValueInt64())
+		apiKey.SetMaxHitsPerQuery(value)
+	}
+
+	if !model.MaxQueriesPerIPPerHour.IsNull() && !model.MaxQueriesPerIPPerHour.IsUnknown() && model.MaxQueriesPerIPPerHour.ValueInt64() > 0 {
+		value := int32(model.MaxQueriesPerIPPerHour.ValueInt64())
+		apiKey.SetMaxQueriesPerIPPerHour(value)
+	}
+
+	if !model.ExpiresAt.IsNull() && !model.ExpiresAt.IsUnknown() {
+		expiresAt, err := time.Parse(time.RFC3339, model.ExpiresAt.ValueString())
+		if err != nil {
+			diags.AddError("Invalid expires_at", "Could not parse expires_at as RFC3339: "+err.Error())
+			return nil, diags
+		}
+
+		validity := int32(expiresAt.Sub(now).Seconds())
+		if validity < 0 {
+			diags.AddError("Invalid expires_at", "expires_at must be in the future.")
+			return nil, diags
+		}
+
+		apiKey.SetValidity(validity)
+	}
+
+	return apiKey, diags
+}
+
+func hydrateAPIKeyModel(resp *search.GetApiKeyResponse, preserved *APIKeyResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	preservedExpiry := types.StringNull()
+	if preserved != nil {
+		preservedExpiry = preserved.ExpiresAt
+	}
+
+	aclValues := make([]attr.Value, 0, len(resp.GetAcl()))
+	for _, acl := range resp.GetAcl() {
+		aclValues = append(aclValues, types.StringValue(string(acl)))
+	}
+
+	indexValues := make([]attr.Value, 0, len(resp.GetIndexes()))
+	indexes := append([]string(nil), resp.GetIndexes()...)
+	sort.Strings(indexes)
+	for _, index := range indexes {
+		indexValues = append(indexValues, types.StringValue(index))
+	}
+
+	refererValues := make([]attr.Value, 0, len(resp.GetReferers()))
+	referers := append([]string(nil), resp.GetReferers()...)
+	sort.Strings(referers)
+	for _, referer := range referers {
+		refererValues = append(refererValues, types.StringValue(referer))
+	}
+
+	preserved.ID = types.StringValue(resp.GetValue())
+	preserved.ACL = types.SetValueMust(types.StringType, aclValues)
+	preserved.Description = nullableString(resp.GetDescriptionOk())
+	preserved.ExpiresAt = preservedExpiry
+	preserved.Indexes = types.SetValueMust(types.StringType, indexValues)
+	preserved.Referers = types.SetValueMust(types.StringType, refererValues)
+	preserved.MaxHitsPerQuery = nullableInt32(resp.GetMaxHitsPerQueryOk())
+	preserved.MaxQueriesPerIPPerHour = nullableInt32(resp.GetMaxQueriesPerIPPerHourOk())
+	preserved.CreatedAt = types.StringValue(time.UnixMilli(resp.GetCreatedAt()).UTC().Format(time.RFC3339))
+
+	return diags
+}
+
+func setToSortedStrings(ctx context.Context, value types.Set) ([]string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if value.IsNull() || value.IsUnknown() {
+		return nil, diags
+	}
+
+	var values []string
+	diags.Append(value.ElementsAs(ctx, &values, false)...)
+	if diags.HasError() {
+		return nil, diags
+	}
+
+	sort.Strings(values)
+	return values, diags
+}
+
+func nullableString(value *string, ok bool) types.String {
+	if !ok || value == nil || *value == "" {
+		return types.StringNull()
+	}
+
+	return types.StringValue(*value)
+}
+
+func nullableInt32(value *int32, ok bool) types.Int64 {
+	if !ok || value == nil {
+		return types.Int64Null()
+	}
+
+	return types.Int64Value(int64(*value))
+}
