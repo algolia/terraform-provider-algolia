@@ -71,6 +71,37 @@ func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentstu
 	return diags
 }
 
+func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentstudio.ProviderResponse, model *AgentProviderDataSourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	model.ProviderID = types.StringValue(resp.ID)
+	model.ID = types.StringValue(resp.ID)
+	model.Name = types.StringValue(resp.Name)
+	model.ProviderName = types.StringValue(resp.ProviderName)
+	model.CreatedAt = types.StringValue(resp.CreatedAt)
+	model.UpdatedAt = types.StringValue(resp.UpdatedAt)
+	model.LastUsedAt = nullableString(resp.LastUsedAt)
+
+	for _, spec := range providerSpecs {
+		setDataSourceProviderBlockValue(model, spec, providerDataSourceBlockNull(spec))
+	}
+
+	spec, ok := providerSpecByName(resp.ProviderName)
+	if !ok {
+		diags.AddError("Unsupported Provider Type", "Received unknown provider type "+resp.ProviderName+" from the Agent Studio API.")
+		return diags
+	}
+
+	blockValue, blockDiags := providerDataSourceBlockValueFromResponse(resp.Input, spec)
+	diags.Append(blockDiags...)
+	if diags.HasError() {
+		return diags
+	}
+
+	setDataSourceProviderBlockValue(model, spec, blockValue)
+	return diags
+}
+
 func providerRequestFromModel(model AgentProviderResourceModel) (*agentstudio.ProviderRequest, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -143,6 +174,17 @@ func providerBlockValueFromResponse(input map[string]any, spec providerSpec, pre
 	return types.ObjectValue(providerBlockAttrTypes(spec), attrValues)
 }
 
+func providerDataSourceBlockValueFromResponse(input map[string]any, spec providerSpec) (types.Object, diag.Diagnostics) {
+	attrTypes := providerDataSourceBlockAttrTypes(spec)
+	attrValues := make(map[string]attr.Value, len(attrTypes))
+
+	for _, field := range nonSensitiveProviderFields(spec) {
+		attrValues[field.TerraformName] = stringFromAny(input[field.APIName])
+	}
+
+	return types.ObjectValue(attrTypes, attrValues)
+}
+
 func expandProviderInput(spec providerSpec, block types.Object) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -183,4 +225,19 @@ func stringFromAny(value any) types.String {
 	}
 
 	return types.StringValue(stringValue)
+}
+
+func setDataSourceProviderBlockValue(model *AgentProviderDataSourceModel, spec providerSpec, value types.Object) {
+	switch spec.BlockName {
+	case "openai":
+		model.OpenAI = value
+	case "azure_openai":
+		model.AzureOpenAI = value
+	case "google_genai":
+		model.GoogleGenAI = value
+	case "anthropic":
+		model.Anthropic = value
+	case "openai_compatible":
+		model.OpenAICompatible = value
+	}
 }

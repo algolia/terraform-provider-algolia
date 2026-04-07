@@ -110,3 +110,29 @@ func providerBlockNames() []string {
 
 	return names
 }
+
+func nonSensitiveProviderFields(spec providerSpec) []providerFieldSpec {
+	fields := make([]providerFieldSpec, 0, len(spec.Fields))
+	for _, field := range spec.Fields {
+		if field.Sensitive {
+			continue
+		}
+
+		fields = append(fields, field)
+	}
+
+	return fields
+}
+
+func providerDataSourceBlockAttrTypes(spec providerSpec) map[string]attr.Type {
+	attrTypes := make(map[string]attr.Type, len(spec.Fields))
+	for _, field := range nonSensitiveProviderFields(spec) {
+		attrTypes[field.TerraformName] = types.StringType
+	}
+
+	return attrTypes
+}
+
+func providerDataSourceBlockNull(spec providerSpec) types.Object {
+	return types.ObjectNull(providerDataSourceBlockAttrTypes(spec))
+}

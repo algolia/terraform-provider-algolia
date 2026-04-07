@@ -137,6 +137,10 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		index.NewDataSource,
 		index.NewVirtualDataSource,
 		agent.NewDataSource,
+		agentprovider.NewDataSource,
 		agentprovider.NewModelsDataSource,
+		rule.NewDataSource,
+		synonym.NewDataSource,
+		querysuggestions.NewDataSource,
 	}
 }

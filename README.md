@@ -56,10 +56,24 @@ resource "algolia_index" "products" {
 
 ## 📚 Resources & Data Sources
 
-| Name                          | Description                      |
-|-------------------------------|----------------------------------|
-| `algolia_index` (resource)    | Create and manage index settings |
-| `algolia_index` (data source) | Read existing index settings     |
+| Name                                   | Description                                         |
+|----------------------------------------|-----------------------------------------------------|
+| `algolia_index` (resource)             | Create and manage index settings                    |
+| `algolia_virtual_index` (resource)     | Manage virtual replica settings                     |
+| `algolia_api_key` (resource)           | Manage scoped Algolia API keys                      |
+| `algolia_rule` (resource)              | Manage index rules                                  |
+| `algolia_synonym` (resource)           | Manage individual synonym objects                   |
+| `algolia_query_suggestions` (resource) | Manage Query Suggestions configurations             |
+| `algolia_agent_provider` (resource)    | Manage Agent Studio LLM providers                   |
+| `algolia_agent` (resource)             | Manage Agent Studio agents                          |
+| `algolia_index` (data source)          | Read existing index settings                        |
+| `algolia_virtual_index` (data source)  | Read virtual replica settings                       |
+| `algolia_rule` (data source)           | Read a rule by index and object ID                  |
+| `algolia_synonym` (data source)        | Read a synonym object by index and object ID        |
+| `algolia_query_suggestions` (data source) | Read a Query Suggestions configuration           |
+| `algolia_agent_provider` (data source) | Read Agent Studio provider metadata and endpoints   |
+| `algolia_agent_provider_models` (data source) | List available models for an Agent Studio provider |
+| `algolia_agent` (data source)          | Read Agent Studio agents                            |
 
 ## ⚙️ Configuration
 

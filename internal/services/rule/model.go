@@ -16,6 +16,8 @@ type RuleResourceModel struct {
 	Validity    types.List   `tfsdk:"validity"`
 }
 
+type RuleDataSourceModel = RuleResourceModel
+
 var (
 	conditionModelAttrTypes = map[string]attr.Type{
 		"pattern":      types.StringType,
@@ -46,4 +48,3 @@ var (
 	}
 	validityModelType = types.ObjectType{AttrTypes: validityModelAttrTypes}
 )
-

@@ -14,6 +14,8 @@ type QuerySuggestionsResourceModel struct {
 	Exclude       types.Set    `tfsdk:"exclude"`
 }
 
+type QuerySuggestionsDataSourceModel = QuerySuggestionsResourceModel
+
 var (
 	facetModelAttrTypes = map[string]attr.Type{
 		"attribute": types.StringType,
@@ -32,4 +34,3 @@ var (
 	}
 	sourceIndexModelType = types.ObjectType{AttrTypes: sourceIndexModelAttrTypes}
 )
-

@@ -81,6 +81,28 @@ func TestAccAgentProviderModelsDataSource_openai(t *testing.T) {
 	})
 }
 
+func TestAccAgentProviderDataSource_openai(t *testing.T) {
+	testAccRequireOpenAIKey(t)
+
+	providerName := fmt.Sprintf("tf-provider-ds-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentProviderDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAgentProviderDataSourceConfigOpenAI(providerName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.algolia_agent_provider.test", "provider_id", "algolia_agent_provider.test", "id"),
+					resource.TestCheckResourceAttr("data.algolia_agent_provider.test", "name", providerName),
+					resource.TestCheckResourceAttr("data.algolia_agent_provider.test", "provider_name", "openai"),
+					resource.TestCheckResourceAttr("data.algolia_agent_provider.test", "openai.base_url", "https://api.openai.com/v1"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccAgentProviderResource_googleGenAI(t *testing.T) {
 	testAccRequireGoogleGenAIKey(t)
 
@@ -198,6 +220,24 @@ resource "algolia_agent_provider" "test" {
 }
 
 data "algolia_agent_provider_models" "test" {
+  provider_id = algolia_agent_provider.test.id
+}
+`, name, os.Getenv("OPENAI_API_KEY"))
+}
+
+func testAccAgentProviderDataSourceConfigOpenAI(name string) string {
+	return fmt.Sprintf(`
+resource "algolia_agent_provider" "test" {
+  name          = %[1]q
+  provider_name = "openai"
+
+  openai {
+    api_key  = %[2]q
+    base_url = "https://api.openai.com/v1"
+  }
+}
+
+data "algolia_agent_provider" "test" {
   provider_id = algolia_agent_provider.test.id
 }
 `, name, os.Getenv("OPENAI_API_KEY"))

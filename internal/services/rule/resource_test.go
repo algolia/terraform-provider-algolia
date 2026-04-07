@@ -79,6 +79,29 @@ func TestAccRuleResource_drift(t *testing.T) {
 	})
 }
 
+func TestAccRuleDataSource_basic(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-rule-ds-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	objectID := "brand-rule"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRuleDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRuleDataSourceConfig(indexName, objectID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.algolia_rule.test", "index_name", indexName),
+					resource.TestCheckResourceAttr("data.algolia_rule.test", "object_id", objectID),
+					resource.TestCheckResourceAttr("data.algolia_rule.test", "description", "rule description"),
+					resource.TestCheckResourceAttr("data.algolia_rule.test", "consequence.0.promote.0.object_ids.#", "2"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckRuleDestroy(s *terraform.State) error {
 	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 	if err != nil {
@@ -210,4 +233,14 @@ resource "algolia_rule" "test" {
   }
 }
 `, indexName, objectID, description, paramsJSON)
+}
+
+func testAccRuleDataSourceConfig(indexName, objectID string) string {
+	return testAccRuleResourceConfig(indexName, objectID, "rule description", `{"query":"iphone"}`) + `
+
+data "algolia_rule" "test" {
+  index_name = algolia_rule.test.index_name
+  object_id  = algolia_rule.test.object_id
+}
+`
 }

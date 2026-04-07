@@ -33,7 +33,7 @@ Use this data source to read the settings of an existing Algolia virtual replica
 - `performance` (Block, Read-only) Configuration for performance settings. (see [below for nested schema](#nestedblock--performance))
 - `primary_index_name` (String) The primary index linked to this virtual replica.
 - `query_strategy` (Block, Read-only) Configuration for query strategy. (see [below for nested schema](#nestedblock--query_strategy))
-- `ranking` (Block, Read-only) Configuration for ranking and custom ranking. (see [below for nested schema](#nestedblock--ranking))
+- `ranking` (Block, Read-only) Configuration for virtual replica ranking behavior. (see [below for nested schema](#nestedblock--ranking))
 - `typos` (Block, Read-only) Configuration for typo tolerance. (see [below for nested schema](#nestedblock--typos))
 - `updated_at` (String) The last update date of the virtual index.
 
@@ -152,7 +152,6 @@ Read-Only:
 Read-Only:
 
 - `custom_ranking` (List of String) The custom ranking criteria.
-- `ranking` (List of String) The ranking criteria.
 - `relevancy_strictness` (Number) The relevancy strictness for ranking.
 
 
