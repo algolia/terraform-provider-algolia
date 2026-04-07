@@ -13,13 +13,13 @@ func TestBuildApiKeyRequest(t *testing.T) {
 	now := time.Date(2026, time.April, 7, 12, 0, 0, 0, time.UTC)
 
 	model := APIKeyResourceModel{
-		ACL:                      types.SetValueMust(types.StringType, []attr.Value{types.StringValue("search"), types.StringValue("browse")}),
-		Description:              types.StringValue("test key"),
-		ExpiresAt:                types.StringValue("2026-04-07T13:00:00Z"),
-		Indexes:                  types.SetValueMust(types.StringType, []attr.Value{types.StringValue("products")}),
-		Referers:                 types.SetValueMust(types.StringType, []attr.Value{types.StringValue("https://example.com/*")}),
-		MaxHitsPerQuery:          types.Int64Value(100),
-		MaxQueriesPerIPPerHour:   types.Int64Value(200),
+		ACL:                    types.SetValueMust(types.StringType, []attr.Value{types.StringValue("search"), types.StringValue("browse")}),
+		Description:            types.StringValue("test key"),
+		ExpiresAt:              types.StringValue("2026-04-07T13:00:00Z"),
+		Indexes:                types.SetValueMust(types.StringType, []attr.Value{types.StringValue("products")}),
+		Referers:               types.SetValueMust(types.StringType, []attr.Value{types.StringValue("https://example.com/*")}),
+		MaxHitsPerQuery:        types.Int64Value(100),
+		MaxQueriesPerIPPerHour: types.Int64Value(200),
 	}
 
 	apiKey, diags := buildAPIKeyRequest(&model, now)
@@ -80,5 +80,52 @@ func TestHydrateAPIKeyModelPreservesConfiguredExpiry(t *testing.T) {
 	}
 	if got := model.CreatedAt.ValueString(); got == "" {
 		t.Fatal("created_at should be set")
+	}
+}
+
+func TestAPIKeyResponseMatches_WithExpiringKeyTolerance(t *testing.T) {
+	now := time.Date(2026, time.April, 7, 12, 0, 0, 0, time.UTC)
+	expiresAt := now.Add(2 * time.Hour)
+
+	expected := search.NewApiKey([]search.Acl{search.ACL_BROWSE, search.ACL_SEARCH})
+	expected.SetDescription("updated key")
+	expected.SetIndexes([]string{"products_*"})
+	expected.SetReferers([]string{"https://example.com/*"})
+	expected.SetMaxHitsPerQuery(200)
+	expected.SetMaxQueriesPerIPPerHour(1000)
+	expected.SetValidity(int32(expiresAt.Sub(now).Seconds()))
+
+	response := search.NewGetApiKeyResponse(
+		"key-value",
+		now.UnixMilli(),
+		[]search.Acl{search.ACL_SEARCH, search.ACL_BROWSE},
+		search.WithGetApiKeyResponseDescription("updated key"),
+		search.WithGetApiKeyResponseIndexes([]string{"products_*"}),
+		search.WithGetApiKeyResponseReferers([]string{"https://example.com/*"}),
+		search.WithGetApiKeyResponseMaxHitsPerQuery(200),
+		search.WithGetApiKeyResponseMaxQueriesPerIPPerHour(1000),
+		search.WithGetApiKeyResponseValidity(int32(expiresAt.Sub(now).Seconds()-3)),
+	)
+
+	if !apiKeyResponseMatches(response, expected, &expiresAt, now) {
+		t.Fatal("expected API key response to match within validity tolerance")
+	}
+}
+
+func TestAPIKeyResponseMatches_DetectsMismatch(t *testing.T) {
+	now := time.Date(2026, time.April, 7, 12, 0, 0, 0, time.UTC)
+
+	expected := search.NewApiKey([]search.Acl{search.ACL_SEARCH})
+	expected.SetDescription("expected")
+
+	response := search.NewGetApiKeyResponse(
+		"key-value",
+		now.UnixMilli(),
+		[]search.Acl{search.ACL_SEARCH},
+		search.WithGetApiKeyResponseDescription("actual"),
+	)
+
+	if apiKeyResponseMatches(response, expected, nil, now) {
+		t.Fatal("expected API key response mismatch to be detected")
 	}
 }

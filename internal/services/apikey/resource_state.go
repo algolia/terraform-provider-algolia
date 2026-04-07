@@ -2,6 +2,7 @@ package apikey
 
 import (
 	"context"
+	"math"
 	"sort"
 	"time"
 
@@ -76,6 +77,84 @@ func buildAPIKeyRequest(model *APIKeyResourceModel, now time.Time) (*search.ApiK
 	}
 
 	return apiKey, diags
+}
+
+func parseExpiresAt(model *APIKeyResourceModel) (*time.Time, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if model == nil || model.ExpiresAt.IsNull() || model.ExpiresAt.IsUnknown() {
+		return nil, diags
+	}
+
+	expiresAt, err := time.Parse(time.RFC3339, model.ExpiresAt.ValueString())
+	if err != nil {
+		diags.AddError("Invalid expires_at", "Could not parse expires_at as RFC3339: "+err.Error())
+		return nil, diags
+	}
+
+	return &expiresAt, diags
+}
+
+func apiKeyResponseMatches(response *search.GetApiKeyResponse, expected *search.ApiKey, expiresAt *time.Time, now time.Time) bool {
+	if response == nil || expected == nil {
+		return false
+	}
+
+	if expected.GetDescription() != response.GetDescription() {
+		return false
+	}
+
+	if expected.GetMaxHitsPerQuery() != response.GetMaxHitsPerQuery() {
+		return false
+	}
+
+	if expected.GetMaxQueriesPerIPPerHour() != response.GetMaxQueriesPerIPPerHour() {
+		return false
+	}
+
+	if !slicesEqualUnordered(expected.GetAcl(), response.GetAcl()) {
+		return false
+	}
+
+	if !slicesEqualUnordered(expected.GetIndexes(), response.GetIndexes()) {
+		return false
+	}
+
+	if !slicesEqualUnordered(expected.GetReferers(), response.GetReferers()) {
+		return false
+	}
+
+	actualValidity, hasActualValidity := response.GetValidityOk()
+	if expiresAt == nil {
+		return !hasActualValidity || actualValidity == nil || *actualValidity == 0
+	}
+
+	if !hasActualValidity || actualValidity == nil {
+		return false
+	}
+
+	expectedValidity := int32(expiresAt.Sub(now).Seconds())
+	return int32(math.Abs(float64(*actualValidity-expectedValidity))) <= 5
+}
+
+func slicesEqualUnordered[T ~string](left, right []T) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	leftValues := append([]T(nil), left...)
+	rightValues := append([]T(nil), right...)
+
+	sort.Slice(leftValues, func(i, j int) bool { return leftValues[i] < leftValues[j] })
+	sort.Slice(rightValues, func(i, j int) bool { return rightValues[i] < rightValues[j] })
+
+	for i := range leftValues {
+		if leftValues[i] != rightValues[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func hydrateAPIKeyModel(resp *search.GetApiKeyResponse, preserved *APIKeyResourceModel) diag.Diagnostics {

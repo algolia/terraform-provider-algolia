@@ -138,12 +138,33 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
+	expiresAt, expiryDiags := parseExpiresAt(&plan)
+	resp.Diagnostics.Append(expiryDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if _, err := r.client.UpdateApiKey(r.client.NewApiUpdateApiKeyRequest(key, apiKey)); err != nil {
 		resp.Diagnostics.AddError("Error updating API key", "Could not update API key "+key+": "+err.Error())
 		return
 	}
 
-	if _, err := r.client.WaitForApiKey(key, search.API_KEY_OPERATION_UPDATE, search.WithApiKey(apiKey)); err != nil {
+	if _, err := search.CreateIterable(
+		func(*search.GetApiKeyResponse, error) (*search.GetApiKeyResponse, error) {
+			return r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key))
+		},
+		func(apiResp *search.GetApiKeyResponse, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+
+			return apiKeyResponseMatches(apiResp, apiKey, expiresAt, r.now().UTC()), nil
+		},
+		search.WithTimeout(func(count int) time.Duration {
+			return time.Duration(min(200*count, 5000)) * time.Millisecond
+		}),
+		search.WithMaxRetries(50),
+	); err != nil {
 		resp.Diagnostics.AddError("Error waiting for API key update", "Could not confirm API key update: "+err.Error())
 		return
 	}
