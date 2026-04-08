@@ -7,7 +7,7 @@ This file provides guidance to AI coding agents working with code in this reposi
 ```bash
 make build                    # compile the provider
 make test                     # run unit tests only (no Algolia credentials needed)
-make testacc                  # run acceptance tests (requires ALGOLIA_APP_ID & ALGOLIA_API_KEY)
+make testacc                  # run acceptance tests (requires ALGOLIA_APP_ID & ALGOLIA_API_KEY; some resources also require ALGOLIA_ANALYTICS_REGION)
 make lint                     # run golangci-lint
 make generate                 # regenerate docs via tfplugindocs
 
@@ -18,7 +18,7 @@ go test ./internal/services/index/ -run TestExpandTypoTolerance -v
 go test ./... -v -timeout 120m
 ```
 
-Acceptance tests require `TF_ACC=1` and valid `ALGOLIA_APP_ID`/`ALGOLIA_API_KEY` environment variables. Without these, they are skipped automatically.
+Acceptance tests require `TF_ACC=1` and valid `ALGOLIA_APP_ID`/`ALGOLIA_API_KEY` environment variables. Region-routed services such as Query Suggestions and Personalization also require `ALGOLIA_ANALYTICS_REGION`. Personalization acceptance tests are additionally gated behind `ALGOLIA_RUN_PERSONALIZATION_ACC=1` because the API enforces a daily strategy-save quota. Without the required environment variables, tests are skipped automatically.
 
 ## Architecture
 
@@ -31,7 +31,8 @@ This is a Terraform provider built on the **Terraform Plugin Framework** (not th
 - `main.go` — Entry point, serves the provider via `providerserver.Serve`
 - `internal/provider/` — Provider definition (schema, configure, resource/datasource registration)
 - `internal/types/` — Shared `ProviderData` struct (extracted to break import cycle between provider and services)
-- `internal/services/index/` — The `algolia_index` resource and data source (all index-related logic lives here)
+- `internal/analyticsregion/` — Shared helpers for region-routed Algolia APIs such as Query Suggestions and Personalization
+- `internal/services/` — Service packages by API surface, including `index`, `agent`, `agentprovider`, `apikey`, `personalization`, `querysuggestions`, `rule`, and `synonym`
 
 ### Index Service Files (internal/services/index/)
 
@@ -64,3 +65,4 @@ The index package follows a clear separation:
 2. Implement model, schema, expand/flatten, resource, and data source files
 3. Register in `internal/provider/provider.go` (Resources/DataSources methods)
 4. Use `*providertypes.ProviderData` from `internal/types/` to access the Algolia client
+5. If the API is region-routed, use `internal/analyticsregion` plus `ProviderData.AnalyticsRegion` instead of embedding per-resource region config
