@@ -49,6 +49,7 @@ The index package follows a clear separation:
 ### Key Design Patterns
 
 **Union types:** Algolia's API has union types (`TypoTolerance`, `Distinct`, `IgnorePlurals`, `RemoveStopWords`, `OptionalWords`, `ReRankingApplyFilter`). These are mapped to simpler Terraform types:
+
 - `TypoTolerance` (bool|enum) → `types.String` with values `"true"/"false"/"min"/"strict"`
 - `Distinct` (bool|int32) → `types.Int64` where 0=false, 1=true, 2+=group sizes
 - `IgnorePlurals`/`RemoveStopWords` (bool|[]language) → split into two fields: a `types.Bool` and a `types.List` for languages
