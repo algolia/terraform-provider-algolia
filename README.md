@@ -114,7 +114,9 @@ terraform import algolia_index.products existing_index_name
 ```bash
 make build      # compile
 make test       # unit tests
-make testacc    # acceptance tests (requires ALGOLIA_APP_ID & ALGOLIA_API_KEY)
+make testacc    # acceptance tests (requires ALGOLIA_APP_ID & ALGOLIA_API_KEY; some resources also require ALGOLIA_ANALYTICS_REGION)
 make lint       # golangci-lint
 make generate   # regenerate docs
 ```
+
+Query Suggestions and Personalization acceptance tests also require `ALGOLIA_ANALYTICS_REGION`. Personalization acceptance tests are opt-in via `ALGOLIA_RUN_PERSONALIZATION_ACC=1` because the API enforces a daily strategy-save quota.
