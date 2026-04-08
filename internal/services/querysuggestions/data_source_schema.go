@@ -1,9 +1,7 @@
 package querysuggestions
 
 import (
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -12,20 +10,12 @@ func querySuggestionsDataSourceSchema() datasourceschema.Schema {
 		Description: "Use this data source to read an Algolia Query Suggestions configuration.",
 		Attributes: map[string]datasourceschema.Attribute{
 			"id": datasourceschema.StringAttribute{
-				Description: "Terraform identifier in the form <region>/<index_name>.",
+				Description: "Terraform identifier in the form <index_name>.",
 				Computed:    true,
 			},
 			"index_name": datasourceschema.StringAttribute{
 				Description: "The Query Suggestions index name.",
 				Required:    true,
-			},
-			"region": datasourceschema.StringAttribute{
-				Description: "Region for the Query Suggestions API. Supported values: us, eu. Defaults to us when omitted.",
-				Optional:    true,
-				Computed:    true,
-				Validators: []validator.String{
-					stringvalidator.OneOf("us", "eu"),
-				},
 			},
 			"languages": datasourceschema.SetAttribute{
 				Description: "Languages used to deduplicate singular and plural suggestions.",

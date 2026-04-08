@@ -23,12 +23,11 @@ Manages an Algolia Query Suggestions configuration.
 
 - `exclude` (Set of String) Words and patterns to exclude from the Query Suggestions index.
 - `languages` (Set of String) Languages used to deduplicate singular and plural suggestions.
-- `region` (String) Region for the Query Suggestions API. Supported values: us, eu.
 - `source_indices` (Block List) Source indices used to generate the Query Suggestions index. (see [below for nested schema](#nestedblock--source_indices))
 
 ### Read-Only
 
-- `id` (String) Terraform identifier in the form <region>/<index_name>.
+- `id` (String) Terraform identifier in the form <index_name>.
 
 <a id="nestedblock--source_indices"></a>
 ### Nested Schema for `source_indices`

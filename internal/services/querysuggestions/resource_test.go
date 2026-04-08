@@ -7,6 +7,7 @@ import (
 	"time"
 
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
+	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -33,19 +34,16 @@ func TestAccQuerySuggestionsResource_basic(t *testing.T) {
 				Config: testAccQuerySuggestionsConfig(sourceIndexName, qsIndexName, "mobile"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_query_suggestions.test", "index_name", qsIndexName),
-					resource.TestCheckResourceAttr("algolia_query_suggestions.test", "region", "us"),
 				),
 			},
 			{
 				Config: testAccQuerySuggestionsConfig(sourceIndexName, qsIndexName, "desktop"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("algolia_query_suggestions.test", "region", "us"),
-				),
+				Check:  resource.ComposeAggregateTestCheckFunc(),
 			},
 			{
 				ResourceName:      "algolia_query_suggestions.test",
 				ImportState:       true,
-				ImportStateId:     "us/" + qsIndexName,
+				ImportStateId:     qsIndexName,
 				ImportStateVerify: true,
 			},
 		},
@@ -95,7 +93,6 @@ func TestAccQuerySuggestionsDataSource_basic(t *testing.T) {
 				Config: testAccQuerySuggestionsDataSourceConfig(sourceIndexName, qsIndexName, "mobile"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.algolia_query_suggestions.test", "index_name", qsIndexName),
-					resource.TestCheckResourceAttr("data.algolia_query_suggestions.test", "region", "us"),
 					resource.TestCheckResourceAttr("data.algolia_query_suggestions.test", "source_indices.0.analytics_tags.0", "mobile"),
 				),
 			},
@@ -104,7 +101,7 @@ func TestAccQuerySuggestionsDataSource_basic(t *testing.T) {
 }
 
 func testAccCheckQuerySuggestionsDestroy(s *terraform.State) error {
-	client, err := suggestions.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), suggestions.US)
+	client, err := analyticsregion.NewQuerySuggestionsClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.EnvVar))
 	if err != nil {
 		return err
 	}
@@ -131,8 +128,8 @@ func testAccRequireCredentials(t *testing.T) {
 		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
 	}
 
-	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" {
-		t.Skip("ALGOLIA_APP_ID and ALGOLIA_API_KEY must be set for acceptance tests")
+	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" || os.Getenv(analyticsregion.EnvVar) == "" {
+		t.Skip("ALGOLIA_APP_ID, ALGOLIA_API_KEY, and ALGOLIA_ANALYTICS_REGION must be set for acceptance tests")
 	}
 }
 
@@ -142,7 +139,7 @@ func testAccMutateQuerySuggestions(t *testing.T, sourceIndexName, qsIndexName, e
 	return func() {
 		t.Helper()
 
-		client, err := suggestions.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), suggestions.US)
+		client, err := analyticsregion.NewQuerySuggestionsClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.EnvVar))
 		if err != nil {
 			t.Fatalf("create Query Suggestions client: %v", err)
 		}
@@ -206,7 +203,6 @@ resource "algolia_index" "source" {
 
 resource "algolia_query_suggestions" "test" {
   index_name = %[2]q
-  region     = "us"
   languages  = ["en"]
   exclude    = ["free"]
 

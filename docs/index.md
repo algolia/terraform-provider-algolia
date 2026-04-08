@@ -47,5 +47,6 @@ variable "algolia_api_key" {
 
 ### Optional
 
+- `analytics_region` (String) Analytics region for Algolia APIs that require regional routing, such as Query Suggestions and Personalization. Can also be set via the ALGOLIA_ANALYTICS_REGION environment variable.
 - `api_key` (String, Sensitive) The Algolia Admin API Key. Can also be set via the ALGOLIA_API_KEY environment variable.
 - `app_id` (String) The Algolia Application ID. Can also be set via the ALGOLIA_APP_ID environment variable.

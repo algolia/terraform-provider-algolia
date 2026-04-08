@@ -8,7 +8,6 @@ import (
 type QuerySuggestionsResourceModel struct {
 	ID            types.String `tfsdk:"id"`
 	IndexName     types.String `tfsdk:"index_name"`
-	Region        types.String `tfsdk:"region"`
 	SourceIndices types.List   `tfsdk:"source_indices"`
 	Languages     types.Set    `tfsdk:"languages"`
 	Exclude       types.Set    `tfsdk:"exclude"`

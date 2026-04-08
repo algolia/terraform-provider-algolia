@@ -42,15 +42,14 @@ func buildConfigurationWithIndex(model *QuerySuggestionsResourceModel) (*suggest
 	return config, diags
 }
 
-func hydrateQuerySuggestionsModel(resp *suggestions.ConfigurationResponse, region string, model *QuerySuggestionsResourceModel) diag.Diagnostics {
+func hydrateQuerySuggestionsModel(resp *suggestions.ConfigurationResponse, model *QuerySuggestionsResourceModel) diag.Diagnostics {
 	sourceIndices, diags := flattenSourceIndices(resp.GetSourceIndices())
 	if diags.HasError() {
 		return diags
 	}
 
-	model.ID = types.StringValue(querySuggestionsResourceID(region, resp.GetIndexName()))
+	model.ID = types.StringValue(querySuggestionsResourceID(resp.GetIndexName()))
 	model.IndexName = types.StringValue(resp.GetIndexName())
-	model.Region = types.StringValue(region)
 	model.SourceIndices = sourceIndices
 	model.Languages = stringSetFromSlice(languagesFromAPI(resp.GetLanguages()))
 	model.Exclude = stringSetFromSlice(resp.GetExclude())
@@ -58,17 +57,17 @@ func hydrateQuerySuggestionsModel(resp *suggestions.ConfigurationResponse, regio
 	return diags
 }
 
-func parseImportID(id string) (string, string, error) {
-	index := strings.Index(id, "/")
-	if index <= 0 || index == len(id)-1 {
-		return "", "", fmt.Errorf("expected import ID in the form <region>/<index_name>")
+func parseImportID(id string) (string, error) {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" || strings.Contains(trimmed, "/") {
+		return "", fmt.Errorf("expected import ID in the form <index_name>")
 	}
 
-	return id[:index], id[index+1:], nil
+	return trimmed, nil
 }
 
-func querySuggestionsResourceID(region, indexName string) string {
-	return region + "/" + indexName
+func querySuggestionsResourceID(indexName string) string {
+	return indexName
 }
 
 func expandSourceIndices(list types.List) ([]suggestions.SourceIndex, diag.Diagnostics) {
