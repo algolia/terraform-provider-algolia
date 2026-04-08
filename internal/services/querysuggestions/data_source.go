@@ -15,8 +15,9 @@ var (
 )
 
 type querySuggestionsDataSource struct {
-	appID  string
-	apiKey string
+	appID           string
+	apiKey          string
+	analyticsRegion string
 }
 
 func NewDataSource() datasource.DataSource {
@@ -47,6 +48,7 @@ func (d *querySuggestionsDataSource) Configure(_ context.Context, req datasource
 
 	d.appID = data.AppID
 	d.apiKey = data.APIKey
+	d.analyticsRegion = data.AnalyticsRegion
 }
 
 func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -57,23 +59,19 @@ func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	resource := &querySuggestionsResource{
-		appID:  d.appID,
-		apiKey: d.apiKey,
+		appID:           d.appID,
+		apiKey:          d.apiKey,
+		analyticsRegion: d.analyticsRegion,
 	}
 
-	region := "us"
-	if !model.Region.IsNull() && !model.Region.IsUnknown() && model.Region.ValueString() != "" {
-		region = model.Region.ValueString()
-	}
-
-	client, diags := resource.clientForRegion(region)
+	client, diags := resource.client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	indexName := model.IndexName.ValueString()
-	tflog.Debug(ctx, "Reading Query Suggestions data source", map[string]any{"region": region, "index_name": indexName})
+	tflog.Debug(ctx, "Reading Query Suggestions data source", map[string]any{"region": d.analyticsRegion, "index_name": indexName})
 
 	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName))
 	if err != nil {
@@ -81,7 +79,7 @@ func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, region, &model)...)
+	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

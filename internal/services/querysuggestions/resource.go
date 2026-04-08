@@ -7,6 +7,7 @@ import (
 	"time"
 
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
+	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -20,8 +21,9 @@ var (
 )
 
 type querySuggestionsResource struct {
-	appID  string
-	apiKey string
+	appID           string
+	apiKey          string
+	analyticsRegion string
 }
 
 func NewResource() resource.Resource {
@@ -52,6 +54,7 @@ func (r *querySuggestionsResource) Configure(_ context.Context, req resource.Con
 
 	r.appID = data.AppID
 	r.apiKey = data.APIKey
+	r.analyticsRegion = data.AnalyticsRegion
 }
 
 func (r *querySuggestionsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -61,7 +64,7 @@ func (r *querySuggestionsResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	client, diags := r.clientForRegion(plan.Region.ValueString())
+	client, diags := r.client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -84,7 +87,7 @@ func (r *querySuggestionsResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, plan.Region.ValueString(), &plan)...)
+	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -99,7 +102,7 @@ func (r *querySuggestionsResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	client, diags := r.clientForRegion(state.Region.ValueString())
+	client, diags := r.client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -117,7 +120,7 @@ func (r *querySuggestionsResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, state.Region.ValueString(), &state)...)
+	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -132,7 +135,7 @@ func (r *querySuggestionsResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	client, diags := r.clientForRegion(plan.Region.ValueString())
+	client, diags := r.client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -159,7 +162,7 @@ func (r *querySuggestionsResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, plan.Region.ValueString(), &plan)...)
+	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -174,7 +177,7 @@ func (r *querySuggestionsResource) Delete(ctx context.Context, req resource.Dele
 		return
 	}
 
-	client, diags := r.clientForRegion(state.Region.ValueString())
+	client, diags := r.client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -191,13 +194,13 @@ func (r *querySuggestionsResource) Delete(ctx context.Context, req resource.Dele
 }
 
 func (r *querySuggestionsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	region, indexName, err := parseImportID(req.ID)
+	indexName, err := parseImportID(req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid import ID", err.Error())
 		return
 	}
 
-	client, diags := r.clientForRegion(region)
+	client, diags := r.client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -210,7 +213,7 @@ func (r *querySuggestionsResource) ImportState(ctx context.Context, req resource
 	}
 
 	var state QuerySuggestionsResourceModel
-	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, region, &state)...)
+	resp.Diagnostics.Append(hydrateQuerySuggestionsModel(apiResp, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -218,27 +221,16 @@ func (r *querySuggestionsResource) ImportState(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *querySuggestionsResource) clientForRegion(region string) (*suggestions.APIClient, diag.Diagnostics) {
+func (r *querySuggestionsResource) client() (*suggestions.APIClient, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	var apiRegion suggestions.Region
-	switch region {
-	case "us":
-		apiRegion = suggestions.US
-	case "eu":
-		apiRegion = suggestions.EU
-	default:
-		diags.AddError("Unsupported region", "Query Suggestions region must be one of: us, eu.")
-		return nil, diags
-	}
-
-	client, err := suggestions.NewClient(r.appID, r.apiKey, apiRegion)
+	client, err := analyticsregion.NewQuerySuggestionsClient(r.appID, r.apiKey, r.analyticsRegion)
 	if err != nil {
 		diags.AddError("Unable to create Query Suggestions client", err.Error())
 		return nil, diags
 	}
 
-	tflog.Debug(context.Background(), "Configured Query Suggestions client", map[string]any{"region": region})
+	tflog.Debug(context.Background(), "Configured Query Suggestions client", map[string]any{"region": r.analyticsRegion})
 	return client, diags
 }
 

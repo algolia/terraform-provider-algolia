@@ -2,10 +2,8 @@ package querysuggestions
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -16,7 +14,7 @@ func querySuggestionsResourceSchema() schema.Schema {
 		Description: "Manages an Algolia Query Suggestions configuration.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Terraform identifier in the form <region>/<index_name>.",
+				Description: "Terraform identifier in the form <index_name>.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -25,18 +23,6 @@ func querySuggestionsResourceSchema() schema.Schema {
 			"index_name": schema.StringAttribute{
 				Description: "The Query Suggestions index name.",
 				Required:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"region": schema.StringAttribute{
-				Description: "Region for the Query Suggestions API. Supported values: us, eu.",
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString("us"),
-				Validators: []validator.String{
-					stringvalidator.OneOf("us", "eu"),
-				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -110,4 +96,3 @@ func querySuggestionsResourceSchema() schema.Schema {
 		},
 	}
 }
-

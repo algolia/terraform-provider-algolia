@@ -13,6 +13,10 @@ Use this data source to read an Algolia Query Suggestions configuration.
 ## Example Usage
 
 ```terraform
+provider "algolia" {
+  analytics_region = "us"
+}
+
 resource "algolia_index" "source" {
   name                = "products"
   deletion_protection = false
@@ -20,7 +24,6 @@ resource "algolia_index" "source" {
 
 resource "algolia_query_suggestions" "example" {
   index_name = "products_query_suggestions"
-  region     = "us"
   languages  = ["en"]
 
   source_indices {
@@ -43,14 +46,10 @@ data "algolia_query_suggestions" "example" {
 
 - `index_name` (String) The Query Suggestions index name.
 
-### Optional
-
-- `region` (String) Region for the Query Suggestions API. Supported values: us, eu. Defaults to us when omitted.
-
 ### Read-Only
 
 - `exclude` (Set of String) Words and patterns to exclude from the Query Suggestions index.
-- `id` (String) Terraform identifier in the form <region>/<index_name>.
+- `id` (String) Terraform identifier in the form <index_name>.
 - `languages` (Set of String) Languages used to deduplicate singular and plural suggestions.
 - `source_indices` (Block List) Source indices used to generate the Query Suggestions index. (see [below for nested schema](#nestedblock--source_indices))
 

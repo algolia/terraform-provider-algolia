@@ -5,16 +5,20 @@ import (
 	"os"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	frameworkschema "github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agentprovider"
 	"github.com/algolia/terraform-provider-algolia/internal/services/apikey"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
+	"github.com/algolia/terraform-provider-algolia/internal/services/personalization"
 	"github.com/algolia/terraform-provider-algolia/internal/services/querysuggestions"
 	"github.com/algolia/terraform-provider-algolia/internal/services/rule"
 	"github.com/algolia/terraform-provider-algolia/internal/services/synonym"
@@ -28,8 +32,9 @@ type algoliaProvider struct {
 }
 
 type algoliaProviderModel struct {
-	AppID  types.String `tfsdk:"app_id"`
-	APIKey types.String `tfsdk:"api_key"`
+	AppID           types.String `tfsdk:"app_id"`
+	APIKey          types.String `tfsdk:"api_key"`
+	AnalyticsRegion types.String `tfsdk:"analytics_region"`
 }
 
 func New(version string) func() provider.Provider {
@@ -58,6 +63,13 @@ func (p *algoliaProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 				Optional:    true,
 				Sensitive:   true,
 			},
+			"analytics_region": schema.StringAttribute{
+				Description: "Analytics region for Algolia APIs that require regional routing, such as Query Suggestions and Personalization. Can also be set via the ALGOLIA_ANALYTICS_REGION environment variable.",
+				Optional:    true,
+				Validators: []frameworkschema.String{
+					stringvalidator.OneOf("us", "eu"),
+				},
+			},
 		},
 	}
 }
@@ -71,12 +83,16 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	appID := os.Getenv("ALGOLIA_APP_ID")
 	apiKey := os.Getenv("ALGOLIA_API_KEY")
+	analyticsRegion := os.Getenv(analyticsregion.EnvVar)
 
 	if !config.AppID.IsNull() {
 		appID = config.AppID.ValueString()
 	}
 	if !config.APIKey.IsNull() {
 		apiKey = config.APIKey.ValueString()
+	}
+	if !config.AnalyticsRegion.IsNull() {
+		analyticsRegion = config.AnalyticsRegion.ValueString()
 	}
 
 	if appID == "" {
@@ -97,6 +113,15 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	normalizedAnalyticsRegion, err := analyticsregion.Normalize(analyticsRegion)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Invalid analytics region",
+			err.Error(),
+		)
+		return
+	}
+
 	client, err := search.NewClient(appID, apiKey)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -109,10 +134,11 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	agentClient := agent.NewClient(appID, apiKey)
 
 	data := &providertypes.ProviderData{
-		AppID:       appID,
-		APIKey:      apiKey,
-		Client:      client,
-		AgentClient: agentClient,
+		AppID:           appID,
+		APIKey:          apiKey,
+		AnalyticsRegion: normalizedAnalyticsRegion,
+		Client:          client,
+		AgentClient:     agentClient,
 	}
 
 	resp.ResourceData = data
@@ -129,6 +155,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		synonym.NewResource,
 		index.NewVirtualResource,
 		querysuggestions.NewResource,
+		personalization.NewResource,
 	}
 }
 
@@ -142,5 +169,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		rule.NewDataSource,
 		synonym.NewDataSource,
 		querysuggestions.NewDataSource,
+		personalization.NewDataSource,
 	}
 }

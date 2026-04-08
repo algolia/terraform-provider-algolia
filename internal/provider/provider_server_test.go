@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	providerschema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
@@ -21,5 +23,21 @@ func TestProviderServerGetSchema(t *testing.T) {
 	}
 	if response == nil {
 		t.Fatal("expected non-nil schema response")
+	}
+}
+
+func TestProviderSchema_IncludesAnalyticsRegion(t *testing.T) {
+	p := &algoliaProvider{}
+
+	var resp frameworkprovider.SchemaResponse
+	p.Schema(context.Background(), frameworkprovider.SchemaRequest{}, &resp)
+
+	attr, ok := resp.Schema.Attributes["analytics_region"].(providerschema.StringAttribute)
+	if !ok {
+		t.Fatal("expected analytics_region to be a string attribute")
+	}
+
+	if !attr.Optional {
+		t.Fatal("expected analytics_region to be optional")
 	}
 }

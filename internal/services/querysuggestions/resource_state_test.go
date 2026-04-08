@@ -11,7 +11,6 @@ import (
 func TestBuildConfigurationWithIndex(t *testing.T) {
 	model := QuerySuggestionsResourceModel{
 		IndexName: types.StringValue("qs_products"),
-		Region:    types.StringValue("us"),
 		SourceIndices: types.ListValueMust(sourceIndexModelType, []attr.Value{
 			types.ObjectValueMust(sourceIndexModelAttrTypes, map[string]attr.Value{
 				"index_name":     types.StringValue("products"),
@@ -76,17 +75,28 @@ func TestHydrateQuerySuggestionsModel(t *testing.T) {
 		false,
 	)
 
-	model := QuerySuggestionsResourceModel{Region: types.StringValue("us")}
-	diags := hydrateQuerySuggestionsModel(resp, "us", &model)
+	model := QuerySuggestionsResourceModel{}
+	diags := hydrateQuerySuggestionsModel(resp, &model)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
 
-	if got := model.ID.ValueString(); got != "us/qs_products" {
-		t.Fatalf("id = %q, want composite id", got)
+	if got := model.ID.ValueString(); got != "qs_products" {
+		t.Fatalf("id = %q, want query suggestions index name", got)
 	}
 	if got := model.IndexName.ValueString(); got != "qs_products" {
 		t.Fatalf("index_name = %q, want qs_products", got)
 	}
 }
 
+func TestQuerySuggestionsSchemas_DoNotExposeRegion(t *testing.T) {
+	resourceSchema := querySuggestionsResourceSchema()
+	if _, ok := resourceSchema.Attributes["region"]; ok {
+		t.Fatal("expected query suggestions resource schema to omit region")
+	}
+
+	dataSourceSchema := querySuggestionsDataSourceSchema()
+	if _, ok := dataSourceSchema.Attributes["region"]; ok {
+		t.Fatal("expected query suggestions data source schema to omit region")
+	}
+}

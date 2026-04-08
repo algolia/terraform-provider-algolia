@@ -1,3 +1,7 @@
+provider "algolia" {
+  analytics_region = "us"
+}
+
 resource "algolia_index" "source" {
   name                = "products"
   deletion_protection = false
@@ -5,7 +9,6 @@ resource "algolia_index" "source" {
 
 resource "algolia_query_suggestions" "example" {
   index_name = "products_query_suggestions"
-  region     = "us"
   languages  = ["en"]
 
   source_indices {
