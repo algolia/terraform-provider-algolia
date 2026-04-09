@@ -71,18 +71,18 @@ func (r *agentProviderResource) ValidateConfig(ctx context.Context, req resource
 }
 
 func (r *agentProviderResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan AgentProviderResourceModel
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	var config AgentProviderResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	tflog.Debug(ctx, "Creating agent provider", map[string]any{
-		"name":          plan.Name.ValueString(),
-		"provider_name": plan.ProviderName.ValueString(),
+		"name":          config.Name.ValueString(),
+		"provider_name": config.ProviderName.ValueString(),
 	})
 
-	apiReq, diags := providerRequestFromModel(plan)
+	apiReq, diags := providerRequestFromModel(config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -94,12 +94,12 @@ func (r *agentProviderResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateAgentProviderResourceState(ctx, apiResp, plan, &plan)...)
+	resp.Diagnostics.Append(hydrateAgentProviderResourceState(ctx, apiResp, config, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
 func (r *agentProviderResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -140,10 +140,16 @@ func (r *agentProviderResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
+	var config AgentProviderResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	providerID := plan.ID.ValueString()
 	tflog.Debug(ctx, "Updating agent provider", map[string]any{"id": providerID})
 
-	apiReq, diags := providerRequestFromModelForUpdate(plan)
+	apiReq, diags := providerRequestFromModelForUpdate(config)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -155,12 +161,13 @@ func (r *agentProviderResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateAgentProviderResourceState(ctx, apiResp, plan, &plan)...)
+	config.ID = plan.ID
+	resp.Diagnostics.Append(hydrateAgentProviderResourceState(ctx, apiResp, config, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
 func (r *agentProviderResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

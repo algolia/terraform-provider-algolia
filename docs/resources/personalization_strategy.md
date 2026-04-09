@@ -14,7 +14,7 @@ Manages the Algolia app-level Personalization strategy.
 
 ```terraform
 provider "algolia" {
-  analytics_region = "us"
+  personalization_region = "us"
 }
 
 resource "algolia_personalization_strategy" "example" {
@@ -66,3 +66,11 @@ Required:
 
 - `facet_name` (String)
 - `score` (Number)
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+terraform import algolia_personalization_strategy.example default
+```

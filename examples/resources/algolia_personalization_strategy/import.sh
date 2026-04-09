@@ -1,0 +1,1 @@
+terraform import algolia_personalization_strategy.example default

@@ -32,9 +32,10 @@ type algoliaProvider struct {
 }
 
 type algoliaProviderModel struct {
-	AppID           types.String `tfsdk:"app_id"`
-	APIKey          types.String `tfsdk:"api_key"`
-	AnalyticsRegion types.String `tfsdk:"analytics_region"`
+	AppID                  types.String `tfsdk:"app_id"`
+	APIKey                 types.String `tfsdk:"api_key"`
+	QuerySuggestionsRegion types.String `tfsdk:"query_suggestions_region"`
+	PersonalizationRegion  types.String `tfsdk:"personalization_region"`
 }
 
 func New(version string) func() provider.Provider {
@@ -63,8 +64,15 @@ func (p *algoliaProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 				Optional:    true,
 				Sensitive:   true,
 			},
-			"analytics_region": schema.StringAttribute{
-				Description: "Analytics region for Algolia APIs that require regional routing, such as Query Suggestions and Personalization. Can also be set via the ALGOLIA_ANALYTICS_REGION environment variable.",
+			"query_suggestions_region": schema.StringAttribute{
+				Description: "Region for Query Suggestions (`us` or `eu`). Can also be set via the ALGOLIA_QUERY_SUGGESTIONS_REGION environment variable.",
+				Optional:    true,
+				Validators: []frameworkschema.String{
+					stringvalidator.OneOf("us", "eu"),
+				},
+			},
+			"personalization_region": schema.StringAttribute{
+				Description: "Region for Personalization (`us` or `eu`). Can also be set via the ALGOLIA_PERSONALIZATION_REGION environment variable.",
 				Optional:    true,
 				Validators: []frameworkschema.String{
 					stringvalidator.OneOf("us", "eu"),
@@ -83,7 +91,8 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	appID := os.Getenv("ALGOLIA_APP_ID")
 	apiKey := os.Getenv("ALGOLIA_API_KEY")
-	analyticsRegion := os.Getenv(analyticsregion.EnvVar)
+	querySuggestionsRegion := os.Getenv(analyticsregion.QuerySuggestionsEnvVar)
+	personalizationRegion := os.Getenv(analyticsregion.PersonalizationEnvVar)
 
 	if !config.AppID.IsNull() {
 		appID = config.AppID.ValueString()
@@ -91,8 +100,11 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	if !config.APIKey.IsNull() {
 		apiKey = config.APIKey.ValueString()
 	}
-	if !config.AnalyticsRegion.IsNull() {
-		analyticsRegion = config.AnalyticsRegion.ValueString()
+	if !config.QuerySuggestionsRegion.IsNull() {
+		querySuggestionsRegion = config.QuerySuggestionsRegion.ValueString()
+	}
+	if !config.PersonalizationRegion.IsNull() {
+		personalizationRegion = config.PersonalizationRegion.ValueString()
 	}
 
 	if appID == "" {
@@ -113,15 +125,6 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	normalizedAnalyticsRegion, err := analyticsregion.Normalize(analyticsRegion)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Invalid analytics region",
-			err.Error(),
-		)
-		return
-	}
-
 	client, err := search.NewClient(appID, apiKey)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -134,11 +137,12 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	agentClient := agent.NewClient(appID, apiKey)
 
 	data := &providertypes.ProviderData{
-		AppID:           appID,
-		APIKey:          apiKey,
-		AnalyticsRegion: normalizedAnalyticsRegion,
-		Client:          client,
-		AgentClient:     agentClient,
+		AppID:                  appID,
+		APIKey:                 apiKey,
+		QuerySuggestionsRegion: querySuggestionsRegion,
+		PersonalizationRegion:  personalizationRegion,
+		Client:                 client,
+		AgentClient:            agentClient,
 	}
 
 	resp.ResourceData = data

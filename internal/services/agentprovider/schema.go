@@ -69,6 +69,7 @@ func providerBlockSchema(spec providerSpec) schema.Block {
 			Description: description,
 			Optional:    true,
 			Sensitive:   field.Sensitive,
+			WriteOnly:   field.Sensitive,
 			Computed:    field.Computed,
 		}
 	}

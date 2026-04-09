@@ -10,8 +10,30 @@ import (
 )
 
 const (
-	EnvVar              = "ALGOLIA_ANALYTICS_REGION"
-	MissingRegionDetail = "set analytics_region in the provider configuration or use the ALGOLIA_ANALYTICS_REGION environment variable"
+	QuerySuggestionsEnvVar    = "ALGOLIA_QUERY_SUGGESTIONS_REGION"
+	QuerySuggestionsAttribute = "query_suggestions_region"
+	PersonalizationEnvVar     = "ALGOLIA_PERSONALIZATION_REGION"
+	PersonalizationAttribute  = "personalization_region"
+	validRegionValues         = "us, eu"
+)
+
+type serviceConfig struct {
+	name          string
+	attributeName string
+	envVar        string
+}
+
+var (
+	querySuggestionsConfig = serviceConfig{
+		name:          "Query Suggestions",
+		attributeName: QuerySuggestionsAttribute,
+		envVar:        QuerySuggestionsEnvVar,
+	}
+	personalizationConfig = serviceConfig{
+		name:          "Personalization",
+		attributeName: PersonalizationAttribute,
+		envVar:        PersonalizationEnvVar,
+	}
 )
 
 func Normalize(region string) (string, error) {
@@ -22,25 +44,25 @@ func Normalize(region string) (string, error) {
 	case "us", "eu":
 		return normalized, nil
 	default:
-		return "", fmt.Errorf("analytics region must be one of: us, eu")
+		return "", fmt.Errorf("region must be one of: %s", validRegionValues)
 	}
 }
 
-func Require(region string) (string, error) {
+func Require(region string, attributeName, envVar string) (string, error) {
 	normalized, err := Normalize(region)
 	if err != nil {
 		return "", err
 	}
 	if normalized == "" {
-		return "", errors.New(MissingRegionDetail)
+		return "", errors.New(missingRegionDetail(attributeName, envVar))
 	}
 	return normalized, nil
 }
 
 func NewQuerySuggestionsClient(appID, apiKey, region string) (*suggestions.APIClient, error) {
-	normalized, err := Require(region)
+	normalized, err := Require(region, querySuggestionsConfig.attributeName, querySuggestionsConfig.envVar)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s client requires a region: %w", querySuggestionsConfig.name, err)
 	}
 
 	var apiRegion suggestions.Region
@@ -50,16 +72,16 @@ func NewQuerySuggestionsClient(appID, apiKey, region string) (*suggestions.APICl
 	case "eu":
 		apiRegion = suggestions.EU
 	default:
-		return nil, fmt.Errorf("analytics region must be one of: us, eu")
+		return nil, fmt.Errorf("%s region must be one of: %s", querySuggestionsConfig.name, validRegionValues)
 	}
 
 	return suggestions.NewClient(appID, apiKey, apiRegion)
 }
 
 func NewPersonalizationClient(appID, apiKey, region string) (*personalization.APIClient, error) {
-	normalized, err := Require(region)
+	normalized, err := Require(region, personalizationConfig.attributeName, personalizationConfig.envVar)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s client requires a region: %w", personalizationConfig.name, err)
 	}
 
 	var apiRegion personalization.Region
@@ -69,8 +91,12 @@ func NewPersonalizationClient(appID, apiKey, region string) (*personalization.AP
 	case "eu":
 		apiRegion = personalization.EU
 	default:
-		return nil, fmt.Errorf("analytics region must be one of: us, eu")
+		return nil, fmt.Errorf("%s region must be one of: %s", personalizationConfig.name, validRegionValues)
 	}
 
 	return personalization.NewClient(appID, apiKey, apiRegion)
+}
+
+func missingRegionDetail(attributeName, envVar string) string {
+	return fmt.Sprintf("set %s in the provider configuration or use the %s environment variable", attributeName, envVar)
 }

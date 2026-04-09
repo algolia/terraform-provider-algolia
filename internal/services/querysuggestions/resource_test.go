@@ -101,7 +101,7 @@ func TestAccQuerySuggestionsDataSource_basic(t *testing.T) {
 }
 
 func testAccCheckQuerySuggestionsDestroy(s *terraform.State) error {
-	client, err := analyticsregion.NewQuerySuggestionsClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.EnvVar))
+	client, err := analyticsregion.NewQuerySuggestionsClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.QuerySuggestionsEnvVar))
 	if err != nil {
 		return err
 	}
@@ -128,8 +128,8 @@ func testAccRequireCredentials(t *testing.T) {
 		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
 	}
 
-	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" || os.Getenv(analyticsregion.EnvVar) == "" {
-		t.Skip("ALGOLIA_APP_ID, ALGOLIA_API_KEY, and ALGOLIA_ANALYTICS_REGION must be set for acceptance tests")
+	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" || os.Getenv(analyticsregion.QuerySuggestionsEnvVar) == "" {
+		t.Skip("ALGOLIA_APP_ID, ALGOLIA_API_KEY, and ALGOLIA_QUERY_SUGGESTIONS_REGION must be set for acceptance tests")
 	}
 }
 
@@ -139,7 +139,7 @@ func testAccMutateQuerySuggestions(t *testing.T, sourceIndexName, qsIndexName, e
 	return func() {
 		t.Helper()
 
-		client, err := analyticsregion.NewQuerySuggestionsClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.EnvVar))
+		client, err := analyticsregion.NewQuerySuggestionsClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.QuerySuggestionsEnvVar))
 		if err != nil {
 			t.Fatalf("create Query Suggestions client: %v", err)
 		}

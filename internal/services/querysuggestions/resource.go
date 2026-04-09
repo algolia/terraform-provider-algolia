@@ -21,9 +21,9 @@ var (
 )
 
 type querySuggestionsResource struct {
-	appID           string
-	apiKey          string
-	analyticsRegion string
+	appID                  string
+	apiKey                 string
+	querySuggestionsRegion string
 }
 
 func NewResource() resource.Resource {
@@ -54,7 +54,7 @@ func (r *querySuggestionsResource) Configure(_ context.Context, req resource.Con
 
 	r.appID = data.AppID
 	r.apiKey = data.APIKey
-	r.analyticsRegion = data.AnalyticsRegion
+	r.querySuggestionsRegion = data.QuerySuggestionsRegion
 }
 
 func (r *querySuggestionsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -224,13 +224,13 @@ func (r *querySuggestionsResource) ImportState(ctx context.Context, req resource
 func (r *querySuggestionsResource) client() (*suggestions.APIClient, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	client, err := analyticsregion.NewQuerySuggestionsClient(r.appID, r.apiKey, r.analyticsRegion)
+	client, err := analyticsregion.NewQuerySuggestionsClient(r.appID, r.apiKey, r.querySuggestionsRegion)
 	if err != nil {
 		diags.AddError("Unable to create Query Suggestions client", err.Error())
 		return nil, diags
 	}
 
-	tflog.Debug(context.Background(), "Configured Query Suggestions client", map[string]any{"region": r.analyticsRegion})
+	tflog.Debug(context.Background(), "Configured Query Suggestions client", map[string]any{"region": r.querySuggestionsRegion})
 	return client, diags
 }
 

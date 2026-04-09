@@ -14,7 +14,7 @@ Use this data source to read an Algolia Query Suggestions configuration.
 
 ```terraform
 provider "algolia" {
-  analytics_region = "us"
+  query_suggestions_region = "us"
 }
 
 resource "algolia_index" "source" {

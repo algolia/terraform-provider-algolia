@@ -15,7 +15,7 @@ The Algolia Terraform provider lets you configure and manage Algolia resources d
 
 ## Requirements
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.11
 - [Go](https://go.dev/doc/install) >= 1.25 (for building from source)
 
 ## Getting Started
@@ -79,7 +79,8 @@ resource "algolia_index" "products" {
 | ------------------ | -------------------------- | --------------------------------------------------------------- |
 | `app_id`           | `ALGOLIA_APP_ID`           | Algolia Application ID                                          |
 | `api_key`          | `ALGOLIA_API_KEY`          | Algolia Admin API Key                                           |
-| `analytics_region` | `ALGOLIA_ANALYTICS_REGION` | Region for Query Suggestions and Personalization (`us` or `eu`) |
+| `query_suggestions_region` | `ALGOLIA_QUERY_SUGGESTIONS_REGION` | Region for Query Suggestions (`us` or `eu`) |
+| `personalization_region` | `ALGOLIA_PERSONALIZATION_REGION` | Region for Personalization (`us` or `eu`) |
 
 ## Resources
 
@@ -115,9 +116,12 @@ Bring existing Algolia resources under Terraform management:
 
 ```bash
 terraform import algolia_index.products products
+terraform import algolia_virtual_index.products_relevant products_relevant
 terraform import algolia_api_key.search AB1CD2EF3G
 terraform import algolia_rule.promo products/my-rule-id
 terraform import algolia_synonym.brand products/my-synonym-id
+terraform import algolia_personalization_strategy.default default
+terraform import algolia_agent_provider.openai 00000000-0000-0000-0000-000000000000
 ```
 
 ## Contributing

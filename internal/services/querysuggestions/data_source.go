@@ -15,9 +15,9 @@ var (
 )
 
 type querySuggestionsDataSource struct {
-	appID           string
-	apiKey          string
-	analyticsRegion string
+	appID                  string
+	apiKey                 string
+	querySuggestionsRegion string
 }
 
 func NewDataSource() datasource.DataSource {
@@ -48,7 +48,7 @@ func (d *querySuggestionsDataSource) Configure(_ context.Context, req datasource
 
 	d.appID = data.AppID
 	d.apiKey = data.APIKey
-	d.analyticsRegion = data.AnalyticsRegion
+	d.querySuggestionsRegion = data.QuerySuggestionsRegion
 }
 
 func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -59,9 +59,9 @@ func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	resource := &querySuggestionsResource{
-		appID:           d.appID,
-		apiKey:          d.apiKey,
-		analyticsRegion: d.analyticsRegion,
+		appID:                  d.appID,
+		apiKey:                 d.apiKey,
+		querySuggestionsRegion: d.querySuggestionsRegion,
 	}
 
 	client, diags := resource.client()
@@ -71,7 +71,7 @@ func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	indexName := model.IndexName.ValueString()
-	tflog.Debug(ctx, "Reading Query Suggestions data source", map[string]any{"region": d.analyticsRegion, "index_name": indexName})
+	tflog.Debug(ctx, "Reading Query Suggestions data source", map[string]any{"region": d.querySuggestionsRegion, "index_name": indexName})
 
 	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName))
 	if err != nil {

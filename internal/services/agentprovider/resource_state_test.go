@@ -163,6 +163,38 @@ func TestAgentProviderResourceSchema_RegistersExpectedBlocks(t *testing.T) {
 	}
 }
 
+func TestAgentProviderResourceSchema_MarksSensitiveFieldsWriteOnly(t *testing.T) {
+	schema := agentProviderResourceSchema()
+
+	for _, spec := range providerSpecs {
+		block, ok := schema.Blocks[spec.BlockName].(resourceschema.SingleNestedBlock)
+		if !ok {
+			t.Fatalf("expected %q block to be a single nested block", spec.BlockName)
+		}
+
+		for _, field := range spec.Fields {
+			attr, ok := block.Attributes[field.TerraformName].(resourceschema.StringAttribute)
+			if !ok {
+				t.Fatalf("expected %q.%s to be a string attribute", spec.BlockName, field.TerraformName)
+			}
+
+			if field.Sensitive {
+				if !attr.Sensitive {
+					t.Fatalf("expected %q.%s to stay sensitive", spec.BlockName, field.TerraformName)
+				}
+				if !attr.WriteOnly {
+					t.Fatalf("expected %q.%s to be write-only", spec.BlockName, field.TerraformName)
+				}
+				continue
+			}
+
+			if attr.WriteOnly {
+				t.Fatalf("expected %q.%s to remain readable", spec.BlockName, field.TerraformName)
+			}
+		}
+	}
+}
+
 func TestAgentProviderModelsDataSourceSchema(t *testing.T) {
 	schema := agentProviderModelsDataSourceSchema()
 

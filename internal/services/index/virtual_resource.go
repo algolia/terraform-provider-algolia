@@ -112,9 +112,19 @@ func (r *virtualIndexResource) Read(ctx context.Context, req resource.ReadReques
 	nullBlocks := captureNullBlocks(&indexState)
 	stateSnapshot := indexState
 
-	diags := r.readVirtualIndex(ctx, &state)
+	diags := r.readIndexModel(ctx, &indexState)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	virtualFromIndexModel(indexState, &state)
+	if state.PrimaryIndexName.IsNull() || state.PrimaryIndexName.ValueString() == "" {
+		resp.Diagnostics.AddWarning(
+			"Virtual replica link removed outside Terraform",
+			fmt.Sprintf("Virtual index %q no longer reports a primary index. Removing it from state so Terraform can recreate the virtual replica on the next apply.", state.Name.ValueString()),
+		)
+		resp.State.RemoveResource(ctx)
 		return
 	}
 

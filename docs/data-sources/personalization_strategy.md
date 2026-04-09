@@ -14,7 +14,7 @@ Use this data source to read the Algolia app-level Personalization strategy.
 
 ```terraform
 provider "algolia" {
-  analytics_region = "us"
+  personalization_region = "us"
 }
 
 resource "algolia_personalization_strategy" "example" {

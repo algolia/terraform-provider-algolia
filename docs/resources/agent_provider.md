@@ -49,6 +49,8 @@ resource "algolia_agent_provider" "openai" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `anthropic` (Block, Optional) Anthropic provider credentials and optional endpoint configuration. (see [below for nested schema](#nestedblock--anthropic))
 - `azure_openai` (Block, Optional) Azure OpenAI provider configuration. (see [below for nested schema](#nestedblock--azure_openai))
 - `google_genai` (Block, Optional) Google Gemini provider credentials. (see [below for nested schema](#nestedblock--google_genai))
@@ -67,7 +69,9 @@ resource "algolia_agent_provider" "openai" {
 
 Optional:
 
-- `api_key` (String, Sensitive) Anthropic API key. Required when this provider block is configured.
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `api_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Anthropic API key. Required when this provider block is configured.
 - `base_url` (String) Optional custom Anthropic-compatible base URL.
 
 
@@ -76,7 +80,9 @@ Optional:
 
 Optional:
 
-- `api_key` (String, Sensitive) Azure OpenAI API key. Required when this provider block is configured.
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `api_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Azure OpenAI API key. Required when this provider block is configured.
 - `api_version` (String) Azure OpenAI API version. Required when this provider block is configured.
 - `base_url` (String) Azure OpenAI base URL. Required when this provider block is configured.
 - `deployment_name` (String) Azure OpenAI deployment name. Required when this provider block is configured.
@@ -87,7 +93,9 @@ Optional:
 
 Optional:
 
-- `api_key` (String, Sensitive) Google GenAI API key. Required when this provider block is configured.
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `api_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Google GenAI API key. Required when this provider block is configured.
 
 
 <a id="nestedblock--openai"></a>
@@ -95,7 +103,9 @@ Optional:
 
 Optional:
 
-- `api_key` (String, Sensitive) OpenAI API key. Required when this provider block is configured.
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `api_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) OpenAI API key. Required when this provider block is configured.
 - `base_url` (String) Optional custom OpenAI-compatible base URL.
 
 
@@ -104,5 +114,15 @@ Optional:
 
 Optional:
 
-- `api_key` (String, Sensitive) OpenAI-compatible API key. Required when this provider block is configured.
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `api_key` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) OpenAI-compatible API key. Required when this provider block is configured.
 - `base_url` (String) OpenAI-compatible provider base URL. Required when this provider block is configured.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+terraform import algolia_agent_provider.openai 00000000-0000-0000-0000-000000000000
+```

@@ -3,7 +3,7 @@
 ## Requirements
 
 - [Go](https://go.dev/doc/install) >= 1.25
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.11
 
 ## Building
 
@@ -28,7 +28,8 @@ Acceptance tests run against a real Algolia application and require the followin
 | --------------------------------- | ------------------ | -------------------------------------------------------------------- |
 | `ALGOLIA_APP_ID`                  | Yes                | Algolia Application ID                                               |
 | `ALGOLIA_API_KEY`                 | Yes                | Algolia Admin API Key                                                |
-| `ALGOLIA_ANALYTICS_REGION`        | For some resources | Region (`us` or `eu`) for Query Suggestions and Personalization      |
+| `ALGOLIA_QUERY_SUGGESTIONS_REGION`| For Query Suggestions | Region (`us` or `eu`) for Query Suggestions                       |
+| `ALGOLIA_PERSONALIZATION_REGION`  | For Personalization | Region (`us` or `eu`) for Personalization                         |
 | `ALGOLIA_RUN_PERSONALIZATION_ACC` | No                 | Set to `1` to enable Personalization tests (daily API quota applies) |
 
 To run a single test:

@@ -21,15 +21,15 @@ var (
 )
 
 type personalizationStrategyResource struct {
-	appID           string
-	apiKey          string
-	analyticsRegion string
+	appID                 string
+	apiKey                string
+	personalizationRegion string
 }
 
 type personalizationStrategyDataSource struct {
-	appID           string
-	apiKey          string
-	analyticsRegion string
+	appID                 string
+	apiKey                string
+	personalizationRegion string
 }
 
 func NewResource() resource.Resource {
@@ -64,7 +64,7 @@ func (r *personalizationStrategyResource) Configure(_ context.Context, req resou
 
 	r.appID = data.AppID
 	r.apiKey = data.APIKey
-	r.analyticsRegion = data.AnalyticsRegion
+	r.personalizationRegion = data.PersonalizationRegion
 }
 
 func (r *personalizationStrategyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -209,7 +209,7 @@ func (r *personalizationStrategyResource) ImportState(ctx context.Context, req r
 func (r *personalizationStrategyResource) client() (*api.APIClient, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	client, err := analyticsregion.NewPersonalizationClient(r.appID, r.apiKey, r.analyticsRegion)
+	client, err := analyticsregion.NewPersonalizationClient(r.appID, r.apiKey, r.personalizationRegion)
 	if err != nil {
 		diags.AddError("Unable to create Personalization client", err.Error())
 		return nil, diags
@@ -242,14 +242,14 @@ func (d *personalizationStrategyDataSource) Configure(_ context.Context, req dat
 
 	d.appID = data.AppID
 	d.apiKey = data.APIKey
-	d.analyticsRegion = data.AnalyticsRegion
+	d.personalizationRegion = data.PersonalizationRegion
 }
 
 func (d *personalizationStrategyDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	client, diags := (&personalizationStrategyResource{
-		appID:           d.appID,
-		apiKey:          d.apiKey,
-		analyticsRegion: d.analyticsRegion,
+		appID:                 d.appID,
+		apiKey:                d.apiKey,
+		personalizationRegion: d.personalizationRegion,
 	}).client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {

@@ -18,7 +18,3 @@ resource "algolia_query_suggestions" "example" {
     min_letters    = 3
   }
 }
-
-data "algolia_query_suggestions" "example" {
-  index_name = algolia_query_suggestions.example.index_name
-}

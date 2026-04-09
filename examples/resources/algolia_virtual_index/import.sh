@@ -1,0 +1,1 @@
+terraform import algolia_virtual_index.example products_price_desc

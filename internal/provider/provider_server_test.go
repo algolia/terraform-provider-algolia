@@ -26,18 +26,31 @@ func TestProviderServerGetSchema(t *testing.T) {
 	}
 }
 
-func TestProviderSchema_IncludesAnalyticsRegion(t *testing.T) {
+func TestProviderSchema_IncludesServiceSpecificRegions(t *testing.T) {
 	p := &algoliaProvider{}
 
 	var resp frameworkprovider.SchemaResponse
 	p.Schema(context.Background(), frameworkprovider.SchemaRequest{}, &resp)
 
-	attr, ok := resp.Schema.Attributes["analytics_region"].(providerschema.StringAttribute)
+	querySuggestionsAttr, ok := resp.Schema.Attributes["query_suggestions_region"].(providerschema.StringAttribute)
 	if !ok {
-		t.Fatal("expected analytics_region to be a string attribute")
+		t.Fatal("expected query_suggestions_region to be a string attribute")
 	}
 
-	if !attr.Optional {
-		t.Fatal("expected analytics_region to be optional")
+	if !querySuggestionsAttr.Optional {
+		t.Fatal("expected query_suggestions_region to be optional")
+	}
+
+	personalizationAttr, ok := resp.Schema.Attributes["personalization_region"].(providerschema.StringAttribute)
+	if !ok {
+		t.Fatal("expected personalization_region to be a string attribute")
+	}
+
+	if !personalizationAttr.Optional {
+		t.Fatal("expected personalization_region to be optional")
+	}
+
+	if _, ok := resp.Schema.Attributes["analytics_region"]; ok {
+		t.Fatal("expected analytics_region to be removed from the provider schema")
 	}
 }

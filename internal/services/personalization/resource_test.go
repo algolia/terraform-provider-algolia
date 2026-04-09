@@ -94,7 +94,7 @@ func TestAccPersonalizationStrategyDataSource_basic(t *testing.T) {
 }
 
 func testAccCheckPersonalizationStrategyDestroy(_ *terraform.State) error {
-	client, err := analyticsregion.NewPersonalizationClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.EnvVar))
+	client, err := analyticsregion.NewPersonalizationClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.PersonalizationEnvVar))
 	if err != nil {
 		return err
 	}
@@ -132,8 +132,8 @@ func testAccRequireCredentials(t *testing.T) {
 		t.Skip("Set ALGOLIA_RUN_PERSONALIZATION_ACC=1 to run Personalization acceptance tests; strategy saves are quota-limited per day")
 	}
 
-	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" || os.Getenv(analyticsregion.EnvVar) == "" {
-		t.Skip("ALGOLIA_APP_ID, ALGOLIA_API_KEY, and ALGOLIA_ANALYTICS_REGION must be set for acceptance tests")
+	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" || os.Getenv(analyticsregion.PersonalizationEnvVar) == "" {
+		t.Skip("ALGOLIA_APP_ID, ALGOLIA_API_KEY, and ALGOLIA_PERSONALIZATION_REGION must be set for acceptance tests")
 	}
 }
 
@@ -143,7 +143,7 @@ func testAccMutatePersonalizationStrategy(t *testing.T, impact, eventScore, face
 	return func() {
 		t.Helper()
 
-		client, err := analyticsregion.NewPersonalizationClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.EnvVar))
+		client, err := analyticsregion.NewPersonalizationClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"), os.Getenv(analyticsregion.PersonalizationEnvVar))
 		if err != nil {
 			t.Fatalf("create personalization client: %v", err)
 		}
