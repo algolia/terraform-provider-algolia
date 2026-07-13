@@ -155,6 +155,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		rule.NewResource,
 		synonym.NewResource,
 		dictionary.NewResource,
+		dictionary.NewSettingsResource,
 		index.NewVirtualResource,
 		querysuggestions.NewResource,
 		personalization.NewResource,
@@ -171,6 +172,7 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		rule.NewDataSource,
 		synonym.NewDataSource,
 		dictionary.NewDataSource,
+		dictionary.NewSettingsDataSource,
 		querysuggestions.NewDataSource,
 		personalization.NewDataSource,
 	}

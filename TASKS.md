@@ -38,7 +38,7 @@ Uses the existing `search` client — no new client wiring.
   - Client: `SetDictionaryEntries`/`BatchDictionaryEntries` (upsert), `SearchDictionaryEntries` (read), delete via batch with `deleteEntry` action.
   - Notes: entry ID + dictionary type (`stopwords`|`plurals`|`compounds`) form the composite import ID (`<type>/<objectID>`); language is per-entry.
   - Follow the Definition of Done.
-- [ ] **P1.2 — `algolia_dictionary_settings` (resource).** App-level `disableStandardEntries` per language.
+- [x] **P1.2 — `algolia_dictionary_settings` (resource).** App-level `disableStandardEntries` per language.
   - Client: `SetDictionarySettings` / `GetDictionarySettings`.
   - Notes: singleton per app — import ID can be the app ID; `Delete` resets to defaults.
 - [ ] **P1.3 — `algolia_allowed_sources` (resource).** API-access IP allowlist.
