@@ -109,6 +109,43 @@ resource "algolia_index" "products" {
 | [`algolia_agent_provider_models`](docs/data-sources/agent_provider_models.md)       | List models available for an Agent Studio provider |
 | [`algolia_agent`](docs/data-sources/agent.md)                                       | Read Agent Studio agent details                    |
 
+## API Coverage
+
+How far the provider reaches across Algolia's API surface. The three columns are a dependency chain — each stage depends on the one before it:
+
+- **Public API** — does Algolia expose a public REST API for this feature? Some features are dashboard-only (e.g. Collections) and have no API at all, so nothing downstream is possible. These can't be discovered from the OpenAPI specs, so they're tracked here manually.
+- **Go v4 client** — does the official [`algoliasearch-client-go/v4`](https://github.com/algolia/algoliasearch-client-go) client wrap it? Where it doesn't, the provider must ship a hand-rolled HTTP client (as it already does for Agent Studio).
+- **Terraform** — does this provider support it?
+
+| API surface / feature | Public API | Go v4 client | Terraform |
+| --- | :---: | :---: | --- |
+| **Search** — index settings | ✅ | ✅ | ✅ `algolia_index` |
+| **Search** — virtual (replica) index | ✅ | ✅ | ✅ `algolia_virtual_index` |
+| **Search** — API keys | ✅ | ✅ | ✅ `algolia_api_key` |
+| **Search** — rules | ✅ | ✅ | ✅ `algolia_rule` |
+| **Search** — synonyms | ✅ | ✅ | ✅ `algolia_synonym` |
+| **Search** — dictionaries | ✅ | ✅ | 🟡 Planned · P1 |
+| **Search** — allowed sources (IP allowlist) | ✅ | ✅ | 🟡 Planned · P1 |
+| **Search** — MCM clusters & user IDs | ✅ | ✅ | 🟡 Planned · P1 (read-only) |
+| **Search** — records · search · browse | ✅ | ✅ | ⛔ Out of scope (data-plane) |
+| **Query Suggestions** | ✅ | ✅ | ✅ `algolia_query_suggestions` |
+| **Personalization** — strategy | ✅ | ✅ | ✅ `algolia_personalization_strategy` |
+| **Advanced Personalization** | ✅ | ❌ not in v4 | 🟡 Planned · P3 (investigate) |
+| **Agent Studio** — agents & providers | ✅ | ❌ custom client | ✅ `algolia_agent`, `algolia_agent_provider` |
+| **Ingestion** (connectors) | ✅ | ✅ | 🟡 Planned · P2 |
+| **A/B Testing** | ✅ | ✅ | 🟡 Planned · P2 |
+| **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
+| **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
+| **Crawler** | ✅ | ❌ not in v4 | 🟡 Planned · P3 (needs custom client) |
+| **Analytics** | ✅ | ✅ | 🟡 Planned · P4 (read-only) |
+| **Monitoring** | ✅ | ✅ | 🟡 Planned · P4 (read-only) |
+| **Insights** (events) | ✅ | ✅ | ⛔ Out of scope (runtime) |
+| **Collections** _(example: dashboard-only)_ | ❌ none | ❌ | ❌ No public API |
+
+**Legend:** ✅ available · 🟡 planned (phase) · ⛔ out of scope (runtime / data-plane) · ❌ not available
+
+See [ROADMAP.md](ROADMAP.md) for the phased plan and scope rationale behind these statuses.
+
 ## Importing Existing Resources
 
 Bring existing Algolia resources under Terraform management:
