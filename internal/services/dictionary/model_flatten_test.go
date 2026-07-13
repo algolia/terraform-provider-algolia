@@ -88,6 +88,9 @@ func TestFlattenDictionaryEntryPlurals(t *testing.T) {
 	if !model.Word.IsNull() {
 		t.Fatalf("word = %v, want null", model.Word)
 	}
+	if !model.State.IsNull() {
+		t.Fatalf("state = %v, want null for plurals (stopwords-only field)", model.State)
+	}
 }
 
 func TestFlattenDictionaryEntryCompounds(t *testing.T) {
@@ -111,5 +114,8 @@ func TestFlattenDictionaryEntryCompounds(t *testing.T) {
 	elements := model.Decomposition.Elements()
 	if len(elements) != 2 {
 		t.Fatalf("decomposition = %#v, want 2 values", elements)
+	}
+	if !model.State.IsNull() {
+		t.Fatalf("state = %v, want null for compounds (stopwords-only field)", model.State)
 	}
 }

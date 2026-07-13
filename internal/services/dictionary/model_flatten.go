@@ -32,10 +32,17 @@ func flattenDictionaryEntry(dictionaryType search.DictionaryType, entry *search.
 	diags.Append(decompositionDiags...)
 	model.Decomposition = decomposition
 
-	if entry.State != nil {
+	// state is a stopwords-only concept. Only default it to "enabled" for
+	// stopwords; for plurals/compounds leave it null so the provider does not
+	// persist (and later re-send on Update via expand) a field the API does
+	// not use for those dictionaries.
+	switch {
+	case entry.State != nil:
 		model.State = types.StringValue(string(*entry.State))
-	} else {
+	case dictionaryType == search.DICTIONARY_TYPE_STOPWORDS:
 		model.State = types.StringValue(string(search.DICTIONARY_ENTRY_STATE_ENABLED))
+	default:
+		model.State = types.StringNull()
 	}
 
 	return diags

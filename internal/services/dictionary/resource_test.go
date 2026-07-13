@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
@@ -168,9 +169,20 @@ func testAccCheckDictionaryEntryDestroy(s *terraform.State) error {
 		dictionaryType := search.DictionaryType(rs.Primary.Attributes["dictionary"])
 		objectID := rs.Primary.Attributes["object_id"]
 
-		found, err := testAccFindDictionaryEntry(client, dictionaryType, objectID)
-		if err != nil {
-			return err
+		// SearchDictionaryEntries is backed by a search index that can lag
+		// briefly behind the delete task, so retry for a short window before
+		// declaring the entry undeleted (mirrors the read-after-write wait in
+		// the resource itself).
+		var found bool
+		for attempt := 0; attempt < 10; attempt++ {
+			found, err = testAccFindDictionaryEntry(client, dictionaryType, objectID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				break
+			}
+			time.Sleep(time.Second)
 		}
 		if found {
 			return fmt.Errorf("dictionary entry %s/%s still exists", dictionaryType, objectID)
