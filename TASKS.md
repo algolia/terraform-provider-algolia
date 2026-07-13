@@ -34,7 +34,7 @@ Follow the pattern in `AGENTS.md` → "Adding a New Resource":
 
 Uses the existing `search` client — no new client wiring.
 
-- [ ] **P1.1 — `algolia_dictionary_entry` (resource + data source).** Custom stopword/plural/compound entries.
+- [x] **P1.1 — `algolia_dictionary_entry` (resource + data source).** Custom stopword/plural/compound entries.
   - Client: `SetDictionaryEntries`/`BatchDictionaryEntries` (upsert), `SearchDictionaryEntries` (read), delete via batch with `deleteEntry` action.
   - Notes: entry ID + dictionary type (`stopwords`|`plurals`|`compounds`) form the composite import ID (`<type>/<objectID>`); language is per-entry.
   - Follow the Definition of Done.

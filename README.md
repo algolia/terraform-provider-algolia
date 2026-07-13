@@ -90,6 +90,7 @@ resource "algolia_index" "products" {
 | [`algolia_api_key`](docs/resources/api_key.md)                                   | Create scoped API keys with specific permissions                              |
 | [`algolia_rule`](docs/resources/rule.md)                                         | Configure index query rules                                                   |
 | [`algolia_synonym`](docs/resources/synonym.md)                                   | Manage synonym entries on an index                                            |
+| [`algolia_dictionary_entry`](docs/resources/dictionary_entry.md)                 | Manage custom dictionary entries (stopwords, plurals, compounds)              |
 | [`algolia_query_suggestions`](docs/resources/query_suggestions.md)               | Configure Query Suggestions                                                   |
 | [`algolia_personalization_strategy`](docs/resources/personalization_strategy.md) | Set the app-level Personalization strategy                                    |
 | [`algolia_agent_provider`](docs/resources/agent_provider.md)                     | Register LLM providers for Agent Studio                                       |
@@ -103,6 +104,7 @@ resource "algolia_index" "products" {
 | [`algolia_virtual_index`](docs/data-sources/virtual_index.md)                       | Read virtual replica settings                      |
 | [`algolia_rule`](docs/data-sources/rule.md)                                         | Read a rule by index and object ID                 |
 | [`algolia_synonym`](docs/data-sources/synonym.md)                                   | Read a synonym by index and object ID              |
+| [`algolia_dictionary_entry`](docs/data-sources/dictionary_entry.md)                 | Read a dictionary entry by dictionary and object ID |
 | [`algolia_query_suggestions`](docs/data-sources/query_suggestions.md)               | Read a Query Suggestions configuration             |
 | [`algolia_personalization_strategy`](docs/data-sources/personalization_strategy.md) | Read the Personalization strategy                  |
 | [`algolia_agent_provider`](docs/data-sources/agent_provider.md)                     | Read Agent Studio provider details                 |
@@ -124,7 +126,8 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Search** — API keys | ✅ | ✅ | ✅ `algolia_api_key` |
 | **Search** — rules | ✅ | ✅ | ✅ `algolia_rule` |
 | **Search** — synonyms | ✅ | ✅ | ✅ `algolia_synonym` |
-| **Search** — dictionaries | ✅ | ✅ | 🟡 Planned · P1 |
+| **Search** — dictionaries (custom entries) | ✅ | ✅ | ✅ `algolia_dictionary_entry` |
+| **Search** — dictionaries (settings) | ✅ | ✅ | 🟡 Planned · P1 (P1.2) |
 | **Search** — allowed sources (IP allowlist) | ✅ | ✅ | 🟡 Planned · P1 |
 | **Search** — MCM clusters & user IDs | ✅ | ✅ | 🟡 Planned · P1 (read-only) |
 | **Search** — records · search · browse | ✅ | ✅ | ⛔ Out of scope (data-plane) |
@@ -155,6 +158,7 @@ terraform import algolia_index.products products
 terraform import algolia_api_key.search AB1CD2EF3G
 terraform import algolia_rule.promo products/my-rule-id
 terraform import algolia_synonym.brand products/my-synonym-id
+terraform import algolia_dictionary_entry.stopword stopwords/my-entry-id
 ```
 
 ## Contributing
