@@ -317,7 +317,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 				diags.AddError("Invalid re_ranking_apply_filter", "Failed to parse JSON: "+err.Error())
 				return nil, diags
 			}
-			settings.ReRankingApplyFilter = &reRankingFilter
+			settings.ReRankingApplyFilter = *utils.NewNullable(&reRankingFilter)
 		}
 		if isKnown(adv.Mode) {
 			v := search.Mode(adv.Mode.ValueString())
