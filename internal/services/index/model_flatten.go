@@ -565,13 +565,13 @@ func flattenOptionalWords(ctx context.Context, ow utils.Nullable[search.Optional
 	}
 }
 
-// flattenReRankingApplyFilter converts a *ReRankingApplyFilter union to types.String (JSON-encoded).
-func flattenReRankingApplyFilter(rr *search.ReRankingApplyFilter) types.String {
-	if rr == nil {
+// flattenReRankingApplyFilter converts a Nullable[ReRankingApplyFilter] union to types.String (JSON-encoded).
+func flattenReRankingApplyFilter(rr utils.Nullable[search.ReRankingApplyFilter]) types.String {
+	if !rr.IsSet() || rr.Get() == nil {
 		return types.StringNull()
 	}
 
-	switch v := rr.GetActualInstance().(type) {
+	switch v := rr.Get().GetActualInstance().(type) {
 	case string:
 		return types.StringValue(v)
 	case []search.ReRankingApplyFilter:
