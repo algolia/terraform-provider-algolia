@@ -17,6 +17,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agentprovider"
 	"github.com/algolia/terraform-provider-algolia/internal/services/apikey"
+	"github.com/algolia/terraform-provider-algolia/internal/services/collection"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
 	"github.com/algolia/terraform-provider-algolia/internal/services/personalization"
 	"github.com/algolia/terraform-provider-algolia/internal/services/querysuggestions"
@@ -132,13 +133,15 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	agentClient := agent.NewClient(appID, apiKey)
+	collectionsClient := collection.NewClient(appID, apiKey)
 
 	data := &providertypes.ProviderData{
-		AppID:           appID,
-		APIKey:          apiKey,
-		AnalyticsRegion: normalizedAnalyticsRegion,
-		Client:          client,
-		AgentClient:     agentClient,
+		AppID:             appID,
+		APIKey:            apiKey,
+		AnalyticsRegion:   normalizedAnalyticsRegion,
+		Client:            client,
+		AgentClient:       agentClient,
+		CollectionsClient: collectionsClient,
 	}
 
 	resp.ResourceData = data
@@ -151,6 +154,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		agent.NewResource,
 		agentprovider.NewResource,
 		apikey.NewResource,
+		collection.NewResource,
 		rule.NewResource,
 		synonym.NewResource,
 		index.NewVirtualResource,
@@ -166,6 +170,7 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		agent.NewDataSource,
 		agentprovider.NewDataSource,
 		agentprovider.NewModelsDataSource,
+		collection.NewDataSource,
 		rule.NewDataSource,
 		synonym.NewDataSource,
 		querysuggestions.NewDataSource,
