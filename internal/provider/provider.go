@@ -16,6 +16,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agentprovider"
+	"github.com/algolia/terraform-provider-algolia/internal/services/allowedsources"
 	"github.com/algolia/terraform-provider-algolia/internal/services/apikey"
 	"github.com/algolia/terraform-provider-algolia/internal/services/dictionary"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
@@ -159,6 +160,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		index.NewVirtualResource,
 		querysuggestions.NewResource,
 		personalization.NewResource,
+		allowedsources.NewResource,
 	}
 }
 
@@ -175,5 +177,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		dictionary.NewSettingsDataSource,
 		querysuggestions.NewDataSource,
 		personalization.NewDataSource,
+		allowedsources.NewDataSource,
 	}
 }

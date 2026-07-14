@@ -41,9 +41,10 @@ Uses the existing `search` client — no new client wiring.
 - [x] **P1.2 — `algolia_dictionary_settings` (resource).** App-level `disableStandardEntries` per language.
   - Client: `SetDictionarySettings` / `GetDictionarySettings`.
   - Notes: singleton per app — import ID can be the app ID; `Delete` resets to defaults.
-- [ ] **P1.3 — `algolia_allowed_sources` (resource).** API-access IP allowlist.
+- [x] **P1.3 — `algolia_allowed_sources` (resource).** API-access IP allowlist.
   - Client: `GetSources` (read), `ReplaceSources` (set), `AppendSource`/`DeleteSource` (incremental).
   - Notes: decide singleton-full-list vs. per-source resource; recommend full-list resource managing the complete set via `ReplaceSources`.
+  - Shipped as a full-list singleton (resource + data source). Note: `ReplaceSources` rejects an empty `source` slice client-side, so `Delete` clears the allowlist via per-entry `DeleteSource` calls instead of `ReplaceSources([])`.
 - [ ] **P1.4 — Search lookup data sources.** Add `algolia_api_key` (`GetApiKey`), `algolia_indices` (`ListIndices`), `algolia_api_keys` (`ListApiKeys`). Data-source-only; no CRUD.
 
 ## Phase 2 — Net-new configuration APIs
