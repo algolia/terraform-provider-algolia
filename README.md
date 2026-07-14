@@ -100,6 +100,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_authentication`](docs/resources/ingestion_authentication.md) | Manage Ingestion authentication credentials for sources/destinations          |
 | [`algolia_ingestion_source`](docs/resources/ingestion_source.md)                 | Manage Ingestion sources (where a task reads or receives records from)        |
 | [`algolia_ingestion_destination`](docs/resources/ingestion_destination.md)       | Manage Ingestion destinations (the index or event stream a task writes to)    |
+| [`algolia_ingestion_transformation`](docs/resources/ingestion_transformation.md) | Manage Ingestion transformations (code or no-code logic applied to records)   |
 
 ## Data Sources
 
@@ -123,6 +124,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_authentication`](docs/data-sources/ingestion_authentication.md) | Read Ingestion authentication metadata (credentials are never exposed) |
 | [`algolia_ingestion_source`](docs/data-sources/ingestion_source.md)                 | Read an Ingestion source's configuration, including `input`        |
 | [`algolia_ingestion_destination`](docs/data-sources/ingestion_destination.md)       | Read an Ingestion destination's configuration, including `input`   |
+| [`algolia_ingestion_transformation`](docs/data-sources/ingestion_transformation.md) | Read an Ingestion transformation's configuration, including `code`/`input` |
 
 ## API Coverage
 
@@ -152,7 +154,8 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Ingestion** — authentications | ✅ | ✅ | ✅ `algolia_ingestion_authentication` |
 | **Ingestion** — sources | ✅ | ✅ | ✅ `algolia_ingestion_source` |
 | **Ingestion** — destinations | ✅ | ✅ | ✅ `algolia_ingestion_destination` |
-| **Ingestion** — tasks, transformations | ✅ | ✅ | 🟡 Planned · P2 |
+| **Ingestion** — transformations | ✅ | ✅ | ✅ `algolia_ingestion_transformation` |
+| **Ingestion** — tasks | ✅ | ✅ | 🟡 Planned · P2 |
 | **A/B Testing** | ✅ | ✅ | 🟡 Planned · P2 |
 | **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
 | **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
