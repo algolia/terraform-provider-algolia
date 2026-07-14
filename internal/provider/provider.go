@@ -164,6 +164,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		allowedsources.NewResource,
 		ingestion.NewAuthenticationResource,
 		ingestion.NewSourceResource,
+		ingestion.NewDestinationResource,
 	}
 }
 
@@ -186,5 +187,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		allowedsources.NewDataSource,
 		ingestion.NewAuthenticationDataSource,
 		ingestion.NewSourceDataSource,
+		ingestion.NewDestinationDataSource,
 	}
 }
