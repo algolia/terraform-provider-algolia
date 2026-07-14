@@ -52,8 +52,8 @@ Uses the existing `search` client — no new client wiring.
 
 All clients ship in v4 already. **Do Ingestion first** — it is highest-value and sets the multi-resource template.
 
-- [x] **P2.0 — Ingestion service scaffolding (depends: P0.1).** Create `internal/services/ingestion/`, wire the `ingestion` client into `ProviderData` (region-routed — reuse `analyticsregion`), and add a shared `client.go` helper. Blocks P2.1a–e.
-  - Shipped: `analyticsregion.NewIngestionClient` (mirrors `NewQuerySuggestionsClient`/`NewPersonalizationClient`) plus `internal/services/ingestion/client.go`, a `base` struct (appID/apiKey/analyticsRegion + `configure`/`client` helpers) the five upcoming resources/data sources embed, and a `configuredClient(*providertypes.ProviderData)` convenience helper. No client stored on `ProviderData` — built on demand, per the existing region-routed convention. No resource/data source yet.
+- [x] **P2.0 — Ingestion service scaffolding (depends: P0.1).** Create `internal/services/ingestion/`, wire the `ingestion` client via `analyticsregion` (region-routed; built on demand, not stored on `ProviderData`), and add a shared `client.go` helper. Blocks P2.1a–e.
+  - Shipped: `analyticsregion.NewIngestionClient` (mirrors `NewQuerySuggestionsClient`/`NewPersonalizationClient`) plus `internal/services/ingestion/client.go`, a `base` struct (appID/apiKey/analyticsRegion + `configure`/`client` helpers) the five upcoming resources/data sources embed. No client stored on `ProviderData` — built on demand, per the existing region-routed convention. No resource/data source yet.
 - [ ] **P2.1a — `algolia_ingestion_authentication` (depends: P2.0).** `Create/Get/Update/DeleteAuthentication`. Handle secret/credential fields as `Sensitive`.
 - [ ] **P2.1b — `algolia_ingestion_source` (depends: P2.0).** `Create/Get/Update/DeleteSource`.
 - [ ] **P2.1c — `algolia_ingestion_destination` (depends: P2.0).** `Create/Get/Update/DeleteDestination`.
