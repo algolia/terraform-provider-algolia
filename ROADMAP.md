@@ -27,7 +27,8 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **search** — API keys | resource | ✅ `algolia_api_key` (no data source yet) |
 | **search** — rules | resource + data source | ✅ `algolia_rule` |
 | **search** — synonyms | resource + data source | ✅ `algolia_synonym` |
-| **search** — dictionaries (custom entries + settings) | resource | ❌ gap |
+| **search** — dictionaries — custom entries | resource + data source | ✅ `algolia_dictionary_entry` |
+| **search** — dictionaries — settings (`disableStandardEntries`) | resource | ❌ gap (P1.2) |
 | **search** — allowed sources (IP allowlist) | resource | ❌ gap |
 | **search** — MCM clusters / user IDs | data source (clusters); user-id assignment is operational | ❌ gap, low priority |
 | **search** — records/objects, search, browse, secured keys | out of scope (data-plane) | — |
@@ -48,7 +49,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 
 ## Current state (baseline)
 
-9 resources and 9 data sources across `search`, `query-suggestions`, `personalization`, and `agent-studio`. Registered in `internal/provider/provider.go`; each lives under `internal/services/<name>/` following the model / schema / expand / flatten / resource / data_source layout described in `AGENTS.md`.
+10 resources and 10 data sources across `search`, `query-suggestions`, `personalization`, and `agent-studio`. Registered in `internal/provider/provider.go`; each lives under `internal/services/<name>/` following the model / schema / expand / flatten / resource / data_source layout described in `AGENTS.md`.
 
 ## Phased roadmap
 
@@ -58,7 +59,7 @@ Phases are ordered by **value ÷ effort**, front-loading work where the Go clien
 
 The `search` client is already a provider dependency, so these are low-risk additions that close obvious gaps.
 
-- `algolia_dictionary_entry` — custom stopwords / plurals / compounds (`BatchDictionaryEntries`, `SearchDictionaryEntries`).
+- ✅ `algolia_dictionary_entry` — custom stopwords / plurals / compounds (`BatchDictionaryEntries`, `SearchDictionaryEntries`). Shipped (resource + data source).
 - `algolia_dictionary_settings` — `disableStandardEntries` (`SetDictionarySettings` / `GetDictionarySettings`).
 - `algolia_allowed_sources` — API access IP allowlist (`GetSources` / `ReplaceSources` / `AppendSource`).
 - Data sources: `algolia_api_key`, `algolia_indices`, `algolia_api_keys`.
