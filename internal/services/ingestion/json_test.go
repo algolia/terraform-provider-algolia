@@ -28,6 +28,18 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "different numeric array order",
+			a:        `{"ports":[443,80,8080]}`,
+			b:        `{"ports":[80,8080,443]}`,
+			expected: true,
+		},
+		{
+			name:     "arrays of objects keep order (not reordered)",
+			a:        `{"cols":[{"n":"a"},{"n":"b"}]}`,
+			b:        `{"cols":[{"n":"b"},{"n":"a"}]}`,
+			expected: false,
+		},
+		{
 			name:     "different whitespace",
 			a:        "{\n  \"url\": \"https://example.com/data.csv\"\n}",
 			b:        `{"url":"https://example.com/data.csv"}`,
