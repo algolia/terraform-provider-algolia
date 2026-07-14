@@ -163,6 +163,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		personalization.NewResource,
 		allowedsources.NewResource,
 		ingestion.NewAuthenticationResource,
+		ingestion.NewSourceResource,
 	}
 }
 
@@ -184,5 +185,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		personalization.NewDataSource,
 		allowedsources.NewDataSource,
 		ingestion.NewAuthenticationDataSource,
+		ingestion.NewSourceDataSource,
 	}
 }
