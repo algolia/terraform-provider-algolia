@@ -91,6 +91,7 @@ resource "algolia_index" "products" {
 | [`algolia_rule`](docs/resources/rule.md)                                         | Configure index query rules                                                   |
 | [`algolia_synonym`](docs/resources/synonym.md)                                   | Manage synonym entries on an index                                            |
 | [`algolia_dictionary_entry`](docs/resources/dictionary_entry.md)                 | Manage custom dictionary entries (stopwords, plurals, compounds)              |
+| [`algolia_dictionary_settings`](docs/resources/dictionary_settings.md)           | Manage which built-in standard dictionary entries are disabled, per language  |
 | [`algolia_query_suggestions`](docs/resources/query_suggestions.md)               | Configure Query Suggestions                                                   |
 | [`algolia_personalization_strategy`](docs/resources/personalization_strategy.md) | Set the app-level Personalization strategy                                    |
 | [`algolia_agent_provider`](docs/resources/agent_provider.md)                     | Register LLM providers for Agent Studio                                       |
@@ -105,6 +106,7 @@ resource "algolia_index" "products" {
 | [`algolia_rule`](docs/data-sources/rule.md)                                         | Read a rule by index and object ID                 |
 | [`algolia_synonym`](docs/data-sources/synonym.md)                                   | Read a synonym by index and object ID              |
 | [`algolia_dictionary_entry`](docs/data-sources/dictionary_entry.md)                 | Read a dictionary entry by dictionary and object ID |
+| [`algolia_dictionary_settings`](docs/data-sources/dictionary_settings.md)           | Read which built-in standard dictionary entries are disabled |
 | [`algolia_query_suggestions`](docs/data-sources/query_suggestions.md)               | Read a Query Suggestions configuration             |
 | [`algolia_personalization_strategy`](docs/data-sources/personalization_strategy.md) | Read the Personalization strategy                  |
 | [`algolia_agent_provider`](docs/data-sources/agent_provider.md)                     | Read Agent Studio provider details                 |
@@ -127,7 +129,7 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Search** — rules | ✅ | ✅ | ✅ `algolia_rule` |
 | **Search** — synonyms | ✅ | ✅ | ✅ `algolia_synonym` |
 | **Search** — dictionaries (custom entries) | ✅ | ✅ | ✅ `algolia_dictionary_entry` |
-| **Search** — dictionaries (settings) | ✅ | ✅ | 🟡 Planned · P1 (P1.2) |
+| **Search** — dictionaries (settings) | ✅ | ✅ | ✅ `algolia_dictionary_settings` |
 | **Search** — allowed sources (IP allowlist) | ✅ | ✅ | 🟡 Planned · P1 |
 | **Search** — MCM clusters & user IDs | ✅ | ✅ | 🟡 Planned · P1 (read-only) |
 | **Search** — records · search · browse | ✅ | ✅ | ⛔ Out of scope (data-plane) |
