@@ -73,6 +73,7 @@ The `search` client is already a provider dependency, so these are low-risk addi
 
 - **Ingestion** (highest priority — the canonical infrastructure-as-code use case):
   `algolia_ingestion_source`, `algolia_ingestion_destination`, `algolia_ingestion_authentication`, `algolia_ingestion_task`, `algolia_ingestion_transformation`, plus read-only data sources. Region-routed — reuse `internal/analyticsregion` patterns.
+  Scaffolding shipped (`internal/analyticsregion.NewIngestionClient` + `internal/services/ingestion/client.go`); the five resources/data sources themselves are still to come.
 - **A/B Testing:** `algolia_ab_test` (build on `abtesting-v3`; region-routed).
 - **Recommend:** `algolia_recommend_rule` (`GetRecommendRule` / `BatchRecommendRules` / `DeleteRecommendRule`) + data source.
 - **Composition:** `algolia_composition`, `algolia_composition_rule` + data sources.
