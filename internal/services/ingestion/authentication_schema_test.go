@@ -67,15 +67,27 @@ func TestAuthenticationDataSourceSchema_OmitsInput(t *testing.T) {
 }
 
 func TestAllowedAuthenticationTypeStrings_MatchesEnum(t *testing.T) {
-	values := allowedAuthenticationTypeStrings()
-	if len(values) != 7 {
-		t.Fatalf("got %d allowed authentication types, want 7: %v", len(values), values)
-	}
+	// Assert the known baseline values are present rather than an exact count,
+	// so adding a new authentication type upstream doesn't break this test.
+	assertContains(t, "authentication types", allowedAuthenticationTypeStrings(),
+		"googleServiceAccount", "basic", "apiKey", "oauth", "algolia", "algoliaInsights", "secrets")
 }
 
 func TestAllowedPlatformStrings_MatchesEnum(t *testing.T) {
-	values := allowedPlatformStrings()
-	if len(values) != 3 {
-		t.Fatalf("got %d allowed platforms, want 3: %v", len(values), values)
+	assertContains(t, "platforms", allowedPlatformStrings(),
+		"bigcommerce", "commercetools", "shopify")
+}
+
+func assertContains(t *testing.T, label string, got []string, want ...string) {
+	t.Helper()
+
+	set := make(map[string]bool, len(got))
+	for _, v := range got {
+		set[v] = true
+	}
+	for _, w := range want {
+		if !set[w] {
+			t.Errorf("allowed %s %v missing expected value %q", label, got, w)
+		}
 	}
 }
