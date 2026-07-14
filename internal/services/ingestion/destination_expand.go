@@ -131,9 +131,16 @@ func expandTransformationIDs(list types.List) []string {
 
 	values := make([]string, 0, len(list.Elements()))
 	for _, element := range list.Elements() {
-		if value, ok := element.(types.String); ok && !value.IsNull() && !value.IsUnknown() {
-			values = append(values, value.ValueString())
+		value, ok := element.(types.String)
+		if !ok || value.IsNull() || value.IsUnknown() {
+			// A null/unknown element (e.g. transformation_ids built from a
+			// not-yet-known computed value) must not be silently dropped:
+			// sending a partial list could unintentionally clear or alter the
+			// destination's transformations. Treat the whole list as
+			// not-yet-resolved and omit the field instead.
+			return nil
 		}
+		values = append(values, value.ValueString())
 	}
 
 	return values
