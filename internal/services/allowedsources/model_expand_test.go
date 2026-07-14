@@ -29,22 +29,20 @@ func sourceSetValue(t *testing.T, models []SourceModel) types.Set {
 }
 
 func TestExpandSources_Null(t *testing.T) {
-	sources, diags := expandSources(context.Background(), types.SetNull(types.ObjectType{AttrTypes: sourceAttrTypes}))
-	if diags.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", diags)
-	}
-	if len(sources) != 0 {
-		t.Fatalf("expected no sources for a null set, got %#v", sources)
+	// A null/unknown set must surface an explicit diagnostic rather than
+	// silently expanding to an empty ReplaceSources payload.
+	_, diags := expandSources(context.Background(), types.SetNull(types.ObjectType{AttrTypes: sourceAttrTypes}))
+	if !diags.HasError() {
+		t.Fatalf("expected an error diagnostic for a null set, got none")
 	}
 }
 
 func TestExpandSources_Empty(t *testing.T) {
-	sources, diags := expandSources(context.Background(), sourceSetValue(t, nil))
-	if diags.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", diags)
-	}
-	if len(sources) != 0 {
-		t.Fatalf("expected no sources for an empty set, got %#v", sources)
+	// An empty set must surface an explicit diagnostic (the API rejects an
+	// empty allowlist), not silently produce zero sources.
+	_, diags := expandSources(context.Background(), sourceSetValue(t, nil))
+	if !diags.HasError() {
+		t.Fatalf("expected an error diagnostic for an empty set, got none")
 	}
 }
 
