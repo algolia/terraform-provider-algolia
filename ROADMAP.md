@@ -37,7 +37,8 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **personalization** — strategy | resource + data source | ✅ `algolia_personalization_strategy` |
 | **advanced-personalization** | evaluate vs. existing strategy | ❌ investigate |
 | **agent-studio** | resource + data source | ✅ `algolia_agent`, `algolia_agent_provider` |
-| **ingestion** — sources, destinations, authentications, tasks, transformations | resource + data source | ❌ gap (highest IaC value) |
+| **ingestion** — authentications | resource + data source | ✅ `algolia_ingestion_authentication` |
+| **ingestion** — sources, destinations, tasks, transformations | resource + data source | ❌ gap (highest IaC value) |
 | **ingestion** — runs, events, push | out of scope (runtime) | — |
 | **abtesting** / **abtesting-v3** | resource | ❌ gap |
 | **recommend** — recommend rules | resource + data source | ❌ gap |
@@ -73,7 +74,7 @@ The `search` client is already a provider dependency, so these are low-risk addi
 
 - **Ingestion** (highest priority — the canonical infrastructure-as-code use case):
   `algolia_ingestion_source`, `algolia_ingestion_destination`, `algolia_ingestion_authentication`, `algolia_ingestion_task`, `algolia_ingestion_transformation`, plus read-only data sources. Region-routed — reuse `internal/analyticsregion` patterns.
-  Scaffolding shipped (`internal/analyticsregion.NewIngestionClient` + `internal/services/ingestion/client.go`); the five resources/data sources themselves are still to come.
+  Scaffolding shipped (`internal/analyticsregion.NewIngestionClient` + `internal/services/ingestion/client.go`); `algolia_ingestion_authentication` (resource + data source) shipped. `input` credentials are modeled as a JSON-encoded, write-only `Sensitive` string (the API redacts secrets on read, so it's never refreshed) — see `internal/services/ingestion/authentication_schema.go`. The remaining four resources/data sources (source, destination, task, transformation) are still to come.
 - **A/B Testing:** `algolia_ab_test` (build on `abtesting-v3`; region-routed).
 - **Recommend:** `algolia_recommend_rule` (`GetRecommendRule` / `BatchRecommendRules` / `DeleteRecommendRule`) + data source.
 - **Composition:** `algolia_composition`, `algolia_composition_rule` + data sources.

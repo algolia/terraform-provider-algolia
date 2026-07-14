@@ -20,6 +20,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/services/apikey"
 	"github.com/algolia/terraform-provider-algolia/internal/services/dictionary"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
+	"github.com/algolia/terraform-provider-algolia/internal/services/ingestion"
 	"github.com/algolia/terraform-provider-algolia/internal/services/personalization"
 	"github.com/algolia/terraform-provider-algolia/internal/services/querysuggestions"
 	"github.com/algolia/terraform-provider-algolia/internal/services/rule"
@@ -161,6 +162,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		querysuggestions.NewResource,
 		personalization.NewResource,
 		allowedsources.NewResource,
+		ingestion.NewAuthenticationResource,
 	}
 }
 
@@ -181,5 +183,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		querysuggestions.NewDataSource,
 		personalization.NewDataSource,
 		allowedsources.NewDataSource,
+		ingestion.NewAuthenticationDataSource,
 	}
 }

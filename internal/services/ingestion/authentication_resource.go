@@ -1,0 +1,220 @@
+package ingestion
+
+import (
+	"context"
+	"errors"
+
+	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+)
+
+var (
+	_ resource.Resource                = &authenticationResource{}
+	_ resource.ResourceWithConfigure   = &authenticationResource{}
+	_ resource.ResourceWithImportState = &authenticationResource{}
+)
+
+// authenticationResource manages an algolia_ingestion_authentication
+// resource. It embeds base (see client.go) for Configure-time wiring and an
+// on-demand region-routed Ingestion client.
+type authenticationResource struct {
+	base
+}
+
+// NewAuthenticationResource returns the algolia_ingestion_authentication resource.
+func NewAuthenticationResource() resource.Resource {
+	return &authenticationResource{}
+}
+
+func (r *authenticationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_ingestion_authentication"
+}
+
+func (r *authenticationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = authenticationResourceSchema()
+}
+
+func (r *authenticationResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	resp.Diagnostics.Append(r.configure(req.ProviderData)...)
+}
+
+func (r *authenticationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan AuthenticationResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	client, diags := r.client()
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	create, expandDiags := expandAuthenticationCreate(&plan)
+	resp.Diagnostics.Append(expandDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	tflog.Debug(ctx, "Creating Ingestion authentication", map[string]any{
+		"name": plan.Name.ValueString(),
+		"type": plan.Type.ValueString(),
+	})
+
+	createResp, err := client.CreateAuthentication(client.NewApiCreateAuthenticationRequest(create))
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating Ingestion authentication", "Could not create authentication "+plan.Name.ValueString()+": "+err.Error())
+		return
+	}
+
+	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(createResp.AuthenticationID))
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read back authentication after creation: "+err.Error())
+		return
+	}
+
+	// flattenAuthentication does not touch plan.Input; it keeps the value
+	// already in the plan (the credentials the user just configured).
+	resp.Diagnostics.Append(flattenAuthentication(apiResp, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *authenticationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state AuthenticationResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	client, diags := r.client()
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	authenticationID := state.AuthenticationID.ValueString()
+	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID))
+	if err != nil {
+		var apiErr *ingestionapi.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+			tflog.Warn(ctx, "Ingestion authentication not found; removing from state", map[string]any{"authentication_id": authenticationID})
+			resp.State.RemoveResource(ctx)
+			return
+		}
+
+		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read authentication "+authenticationID+": "+err.Error())
+		return
+	}
+
+	// flattenAuthentication does not touch state.Input: GetAuthentication
+	// redacts secret values, so this Read only refreshes name/type/
+	// platform/created_at/updated_at and preserves the previously
+	// configured input as-is. See the input attribute's schema description.
+	resp.Diagnostics.Append(flattenAuthentication(apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+func (r *authenticationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan AuthenticationResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	client, diags := r.client()
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	update, expandDiags := expandAuthenticationUpdate(&plan)
+	resp.Diagnostics.Append(expandDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	authenticationID := plan.AuthenticationID.ValueString()
+	tflog.Debug(ctx, "Updating Ingestion authentication", map[string]any{"authentication_id": authenticationID})
+
+	if _, err := client.UpdateAuthentication(client.NewApiUpdateAuthenticationRequest(authenticationID, update)); err != nil {
+		resp.Diagnostics.AddError("Error updating Ingestion authentication", "Could not update authentication "+authenticationID+": "+err.Error())
+		return
+	}
+
+	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID))
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read back authentication after update: "+err.Error())
+		return
+	}
+
+	resp.Diagnostics.Append(flattenAuthentication(apiResp, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *authenticationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state AuthenticationResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	client, diags := r.client()
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	authenticationID := state.AuthenticationID.ValueString()
+	tflog.Debug(ctx, "Deleting Ingestion authentication", map[string]any{"authentication_id": authenticationID})
+
+	if _, err := client.DeleteAuthentication(client.NewApiDeleteAuthenticationRequest(authenticationID)); err != nil {
+		var apiErr *ingestionapi.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+			return
+		}
+
+		resp.Diagnostics.AddError("Error deleting Ingestion authentication", "Could not delete authentication "+authenticationID+": "+err.Error())
+	}
+}
+
+func (r *authenticationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	client, diags := r.client()
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	authenticationID := req.ID
+	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID))
+	if err != nil {
+		resp.Diagnostics.AddError("Error importing Ingestion authentication", "Could not import authentication "+authenticationID+": "+err.Error())
+		return
+	}
+
+	var state AuthenticationResourceModel
+	// input cannot be recovered on import: GetAuthentication redacts secret
+	// values. Leave it null; the next plan will show a diff until the user
+	// sets input explicitly in configuration and applies it.
+	state.Input = types.StringNull()
+	resp.Diagnostics.Append(flattenAuthentication(apiResp, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
