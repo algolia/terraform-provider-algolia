@@ -29,8 +29,8 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 		},
 		{
 			name:     "different numeric array order",
-			a:        `[{"from":1,"until":2},{"from":3,"until":4}]`,
-			b:        `[{"from":1,"until":2},{"from":3,"until":4}]`,
+			a:        `{"scores":[1,2,3]}`,
+			b:        `{"scores":[3,1,2]}`,
 			expected: true,
 		},
 		{
