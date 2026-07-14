@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	abtesting "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
 	ingestion "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	personalization "github.com/algolia/algoliasearch-client-go/v4/algolia/personalization"
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
@@ -93,4 +94,34 @@ func NewIngestionClient(appID, apiKey, region string) (*ingestion.APIClient, err
 	}
 
 	return ingestion.NewClient(appID, apiKey, apiRegion)
+}
+
+// NewABTestingClient builds an abtesting-v3 client for the given normalized
+// analytics region.
+//
+// Unlike every other region-routed client in this provider (Query
+// Suggestions, Personalization, Ingestion - all of which expose a Region
+// enum of exactly "eu"/"us"), the A/B Testing API's Region enum is "de"/
+// "us": its EU-hosted cluster lives in Germany and the client models that
+// as abtesting.DE, not an abtesting.EU that does not exist. To keep this
+// provider's public surface consistent - a single `analytics_region` of
+// "us"/"eu" governs every region-routed resource - "eu" is mapped to
+// abtesting.DE here rather than surfacing "de" as a third region value.
+func NewABTestingClient(appID, apiKey, region string) (*abtesting.APIClient, error) {
+	normalized, err := Require(region)
+	if err != nil {
+		return nil, err
+	}
+
+	var apiRegion abtesting.Region
+	switch normalized {
+	case "us":
+		apiRegion = abtesting.US
+	case "eu":
+		apiRegion = abtesting.DE
+	default:
+		return nil, fmt.Errorf("analytics region must be one of: us, eu")
+	}
+
+	return abtesting.NewClient(appID, apiKey, apiRegion)
 }

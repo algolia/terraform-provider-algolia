@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
+	"github.com/algolia/terraform-provider-algolia/internal/services/abtest"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/algolia/terraform-provider-algolia/internal/services/agentprovider"
 	"github.com/algolia/terraform-provider-algolia/internal/services/allowedsources"
@@ -167,6 +168,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		ingestion.NewDestinationResource,
 		ingestion.NewTransformationResource,
 		ingestion.NewTaskResource,
+		abtest.NewResource,
 	}
 }
 
@@ -192,5 +194,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		ingestion.NewDestinationDataSource,
 		ingestion.NewTransformationDataSource,
 		ingestion.NewTaskDataSource,
+		abtest.NewDataSource,
 	}
 }
