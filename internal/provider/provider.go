@@ -24,6 +24,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/services/ingestion"
 	"github.com/algolia/terraform-provider-algolia/internal/services/personalization"
 	"github.com/algolia/terraform-provider-algolia/internal/services/querysuggestions"
+	"github.com/algolia/terraform-provider-algolia/internal/services/recommend"
 	"github.com/algolia/terraform-provider-algolia/internal/services/rule"
 	"github.com/algolia/terraform-provider-algolia/internal/services/synonym"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -169,6 +170,7 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		ingestion.NewTransformationResource,
 		ingestion.NewTaskResource,
 		abtest.NewResource,
+		recommend.NewResource,
 	}
 }
 
@@ -195,5 +197,6 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		ingestion.NewTransformationDataSource,
 		ingestion.NewTaskDataSource,
 		abtest.NewDataSource,
+		recommend.NewDataSource,
 	}
 }

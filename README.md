@@ -102,6 +102,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_destination`](docs/resources/ingestion_destination.md)       | Manage Ingestion destinations (the index or event stream a task writes to)    |
 | [`algolia_ingestion_transformation`](docs/resources/ingestion_transformation.md) | Manage Ingestion transformations (code or no-code logic applied to records)   |
 | [`algolia_ingestion_task`](docs/resources/ingestion_task.md)                     | Manage Ingestion tasks (schedule a source → transform → destination pipeline) |
+| [`algolia_recommend_rule`](docs/resources/recommend_rule.md)                     | Manage Recommend rules (condition/consequence pairs that customize a Recommend model's results) |
 
 ## Data Sources
 
@@ -127,6 +128,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_destination`](docs/data-sources/ingestion_destination.md)       | Read an Ingestion destination's configuration, including `input`   |
 | [`algolia_ingestion_transformation`](docs/data-sources/ingestion_transformation.md) | Read an Ingestion transformation's configuration, including `code`/`input` |
 | [`algolia_ingestion_task`](docs/data-sources/ingestion_task.md)                     | Read an Ingestion task's configuration, including `input`/`notifications`/`policies`/`cursor` |
+| [`algolia_recommend_rule`](docs/data-sources/recommend_rule.md)                     | Read a Recommend rule by index, model, and object ID |
 
 ## API Coverage
 
@@ -159,7 +161,7 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Ingestion** — transformations | ✅ | ✅ | ✅ `algolia_ingestion_transformation` |
 | **Ingestion** — tasks | ✅ | ✅ | ✅ `algolia_ingestion_task` |
 | **A/B Testing** | ✅ | ✅ | ✅ `algolia_ab_test` |
-| **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
+| **Recommend** — rules | ✅ | ✅ | ✅ `algolia_recommend_rule` |
 | **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
 | **Crawler** | ✅ | ❌ not in v4 | 🟡 Planned · P3 (needs custom client) |
 | **Analytics** | ✅ | ✅ | 🟡 Planned · P4 (read-only) |
