@@ -104,6 +104,9 @@ resource "algolia_index" "products" {
 | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
 | [`algolia_index`](docs/data-sources/index.md)                                       | Read existing index settings                       |
 | [`algolia_virtual_index`](docs/data-sources/virtual_index.md)                       | Read virtual replica settings                      |
+| [`algolia_indices`](docs/data-sources/indices.md)                                   | List every index in the application                |
+| [`algolia_api_key`](docs/data-sources/api_key.md)                                   | Read an API key's metadata by its key value         |
+| [`algolia_api_keys`](docs/data-sources/api_keys.md)                                 | List every API key configured for the application  |
 | [`algolia_rule`](docs/data-sources/rule.md)                                         | Read a rule by index and object ID                 |
 | [`algolia_synonym`](docs/data-sources/synonym.md)                                   | Read a synonym by index and object ID              |
 | [`algolia_dictionary_entry`](docs/data-sources/dictionary_entry.md)                 | Read a dictionary entry by dictionary and object ID |
@@ -127,7 +130,8 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | --- | :---: | :---: | --- |
 | **Search** — index settings | ✅ | ✅ | ✅ `algolia_index` |
 | **Search** — virtual (replica) index | ✅ | ✅ | ✅ `algolia_virtual_index` |
-| **Search** — API keys | ✅ | ✅ | ✅ `algolia_api_key` |
+| **Search** — index listing | ✅ | ✅ | ✅ `algolia_indices` (data source) |
+| **Search** — API keys | ✅ | ✅ | ✅ `algolia_api_key` (+ `algolia_api_keys` data source) |
 | **Search** — rules | ✅ | ✅ | ✅ `algolia_rule` |
 | **Search** — synonyms | ✅ | ✅ | ✅ `algolia_synonym` |
 | **Search** — dictionaries (custom entries) | ✅ | ✅ | ✅ `algolia_dictionary_entry` |

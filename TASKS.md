@@ -45,7 +45,8 @@ Uses the existing `search` client — no new client wiring.
   - Client: `GetSources` (read), `ReplaceSources` (set), `AppendSource`/`DeleteSource` (incremental).
   - Notes: decide singleton-full-list vs. per-source resource; recommend full-list resource managing the complete set via `ReplaceSources`.
   - Shipped as a full-list singleton (resource + data source). Note: `ReplaceSources` rejects an empty `source` slice client-side, so `Delete` clears the allowlist via per-entry `DeleteSource` calls instead of `ReplaceSources([])`.
-- [ ] **P1.4 — Search lookup data sources.** Add `algolia_api_key` (`GetApiKey`), `algolia_indices` (`ListIndices`), `algolia_api_keys` (`ListApiKeys`). Data-source-only; no CRUD.
+- [x] **P1.4 — Search lookup data sources.** Add `algolia_api_key` (`GetApiKey`), `algolia_indices` (`ListIndices`), `algolia_api_keys` (`ListApiKeys`). Data-source-only; no CRUD.
+  - Shipped: `algolia_api_key`/`algolia_api_keys` in `internal/services/apikey/`, `algolia_indices` in `internal/services/index/`. `ListIndices` is paginated (`nbPages`); the data source pages through `WithPage` until every page is fetched.
 
 ## Phase 2 — Net-new configuration APIs
 
