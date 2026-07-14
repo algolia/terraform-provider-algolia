@@ -158,7 +158,7 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Ingestion** — destinations | ✅ | ✅ | ✅ `algolia_ingestion_destination` |
 | **Ingestion** — transformations | ✅ | ✅ | ✅ `algolia_ingestion_transformation` |
 | **Ingestion** — tasks | ✅ | ✅ | ✅ `algolia_ingestion_task` |
-| **A/B Testing** | ✅ | ✅ | 🟡 Planned · P2 |
+| **A/B Testing** | ✅ | ✅ | ✅ `algolia_ab_test` |
 | **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
 | **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
 | **Crawler** | ✅ | ❌ not in v4 | 🟡 Planned · P3 (needs custom client) |
