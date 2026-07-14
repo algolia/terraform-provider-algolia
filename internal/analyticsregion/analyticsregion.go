@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	ingestion "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	personalization "github.com/algolia/algoliasearch-client-go/v4/algolia/personalization"
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
 )
@@ -73,4 +74,23 @@ func NewPersonalizationClient(appID, apiKey, region string) (*personalization.AP
 	}
 
 	return personalization.NewClient(appID, apiKey, apiRegion)
+}
+
+func NewIngestionClient(appID, apiKey, region string) (*ingestion.APIClient, error) {
+	normalized, err := Require(region)
+	if err != nil {
+		return nil, err
+	}
+
+	var apiRegion ingestion.Region
+	switch normalized {
+	case "us":
+		apiRegion = ingestion.US
+	case "eu":
+		apiRegion = ingestion.EU
+	default:
+		return nil, fmt.Errorf("analytics region must be one of: us, eu")
+	}
+
+	return ingestion.NewClient(appID, apiKey, apiRegion)
 }
