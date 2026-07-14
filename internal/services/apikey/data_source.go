@@ -58,7 +58,8 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 
 	key := model.Key.ValueString()
-	tflog.Debug(ctx, "Reading API key data source", map[string]any{"key": key})
+	// The key value is Sensitive; do not include it in logs.
+	tflog.Debug(ctx, "Reading API key data source")
 
 	apiResp, err := d.client.GetApiKey(d.client.NewApiGetApiKeyRequest(key))
 	if err != nil {
@@ -66,13 +67,13 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			resp.Diagnostics.AddError(
 				"API key not found",
-				"No API key found for value "+key+". Check that the key is correct and that the "+
+				"No API key found for the provided value. Check that the key is correct and that the "+
 					"credentials configured for the provider are allowed to read it.",
 			)
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading API key", "Could not read API key "+key+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading API key", "Could not read the API key: "+err.Error())
 		return
 	}
 
