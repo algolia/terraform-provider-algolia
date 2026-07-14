@@ -108,8 +108,12 @@ func taskResourceSchema() schema.Schema {
 					"to change this after creation, and its true value advances automatically as the task runs " +
 					"(a runtime concern outside this provider's scope) - so, unlike " +
 					"`input`/`notifications`/`policies`, it is never refreshed from the API on read; the " +
-					"configured value (or null, if omitted) is always preserved as-is. Not recoverable on import.",
+					"configured value (or null, if omitted) is always preserved as-is. Because it can only be set " +
+					"at creation, changing it forces the task to be replaced. Not recoverable on import.",
 				Optional: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"created_at": schema.StringAttribute{
 				Description: "Date and time when the resource was created, in RFC 3339 format.",
