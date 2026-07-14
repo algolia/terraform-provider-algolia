@@ -11,7 +11,7 @@ Manage your [Algolia](https://www.algolia.com/) search infrastructure as code.
 
 ## Overview
 
-The Algolia Terraform provider lets you configure and manage Algolia resources declaratively: index settings, API keys, query suggestions, personalization strategies, rules, synonyms, Agent Studio agents, and Ingestion authentication credentials and sources.
+The Algolia Terraform provider lets you configure and manage Algolia resources declaratively: index settings, API keys, query suggestions, personalization strategies, rules, synonyms, Agent Studio agents, and the full Ingestion pipeline (authentications, sources, destinations, transformations, and tasks).
 
 ## Requirements
 
@@ -101,6 +101,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_source`](docs/resources/ingestion_source.md)                 | Manage Ingestion sources (where a task reads or receives records from)        |
 | [`algolia_ingestion_destination`](docs/resources/ingestion_destination.md)       | Manage Ingestion destinations (the index or event stream a task writes to)    |
 | [`algolia_ingestion_transformation`](docs/resources/ingestion_transformation.md) | Manage Ingestion transformations (code or no-code logic applied to records)   |
+| [`algolia_ingestion_task`](docs/resources/ingestion_task.md)                     | Manage Ingestion tasks (schedule a source → transform → destination pipeline) |
 
 ## Data Sources
 
@@ -125,6 +126,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_source`](docs/data-sources/ingestion_source.md)                 | Read an Ingestion source's configuration, including `input`        |
 | [`algolia_ingestion_destination`](docs/data-sources/ingestion_destination.md)       | Read an Ingestion destination's configuration, including `input`   |
 | [`algolia_ingestion_transformation`](docs/data-sources/ingestion_transformation.md) | Read an Ingestion transformation's configuration, including `code`/`input` |
+| [`algolia_ingestion_task`](docs/data-sources/ingestion_task.md)                     | Read an Ingestion task's configuration, including `input`/`notifications`/`policies`/`cursor` |
 
 ## API Coverage
 
@@ -155,7 +157,7 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Ingestion** — sources | ✅ | ✅ | ✅ `algolia_ingestion_source` |
 | **Ingestion** — destinations | ✅ | ✅ | ✅ `algolia_ingestion_destination` |
 | **Ingestion** — transformations | ✅ | ✅ | ✅ `algolia_ingestion_transformation` |
-| **Ingestion** — tasks | ✅ | ✅ | 🟡 Planned · P2 |
+| **Ingestion** — tasks | ✅ | ✅ | ✅ `algolia_ingestion_task` |
 | **A/B Testing** | ✅ | ✅ | 🟡 Planned · P2 |
 | **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
 | **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
