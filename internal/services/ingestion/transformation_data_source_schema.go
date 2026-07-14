@@ -24,8 +24,8 @@ func transformationDataSourceSchema() datasourceschema.Schema {
 				Computed:    true,
 			},
 			"code": datasourceschema.StringAttribute{
-				Description: "The transformation's source code (for `type = \"code\"` transformations). May be " +
-					"empty for no-code transformations.",
+				Description: "The transformation's source code (for `type = \"code\"` transformations). Null for " +
+					"no-code transformations (which have no `code`).",
 				Computed: true,
 			},
 			"type": datasourceschema.StringAttribute{

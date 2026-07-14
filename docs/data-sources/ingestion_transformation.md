@@ -51,7 +51,7 @@ output "transformation_code" {
 ### Read-Only
 
 - `authentication_ids` (List of String) Universally unique identifiers (UUIDs) of the authentication resources associated with this transformation.
-- `code` (String) The transformation's source code (for `type = "code"` transformations). May be empty for no-code transformations.
+- `code` (String) The transformation's source code (for `type = "code"` transformations). Null for no-code transformations (which have no `code`).
 - `created_at` (String) Date and time when the resource was created, in RFC 3339 format.
 - `description` (String) A descriptive name for the transformation explaining what it does.
 - `id` (String) Terraform identifier for the resource. Equal to `transformation_id`.

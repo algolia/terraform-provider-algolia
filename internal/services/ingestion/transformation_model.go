@@ -18,9 +18,11 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 //     no-code transformations built from a series of steps. Like
 //     Source/Destination's Input, GetTransformation returns it in full
 //     (nothing is redacted), so Read refreshes it too - but only adopts the
-//     API's encoding when it is not semantically equal (ignoring key/array
-//     order) to what's already configured, to avoid a perpetual diff. See
-//     flattenTransformation/flattenTransformationInput.
+//     API's encoding when it is not semantically equal to what's already
+//     configured (ignoring object key order and the order of scalar arrays;
+//     the order of object arrays like `steps` is significant and preserved),
+//     to avoid a perpetual diff. See flattenTransformation/
+//     flattenTransformationInput.
 type TransformationResourceModel struct {
 	ID                types.String `tfsdk:"id"`
 	TransformationID  types.String `tfsdk:"transformation_id"`

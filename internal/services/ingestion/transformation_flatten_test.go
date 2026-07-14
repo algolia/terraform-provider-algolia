@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -402,20 +403,45 @@ func TestExpandFlattenTransformation_InputRoundTrip(t *testing.T) {
 	}
 }
 
-func TestFlattenAuthenticationIDs_EmptyIsNull(t *testing.T) {
-	list, diags := flattenAuthenticationIDs(nil)
-	if diags.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", diags)
-	}
-	if !list.IsNull() {
-		t.Fatalf("authentication_ids = %#v, want null", list)
-	}
+func TestFlattenAuthenticationIDs(t *testing.T) {
+	nullList := types.ListNull(types.StringType)
+	emptyList, _ := types.ListValue(types.StringType, []attr.Value{})
+	populatedPrev, _ := types.ListValue(types.StringType, []attr.Value{types.StringValue("auth-x")})
 
-	list, diags = flattenAuthenticationIDs([]string{})
-	if diags.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", diags)
+	// API empty + unset prior -> null.
+	if list, _ := flattenAuthenticationIDs(nil, nullList); !list.IsNull() {
+		t.Fatalf("empty API + null prior = %#v, want null", list)
 	}
-	if !list.IsNull() {
-		t.Fatalf("authentication_ids = %#v, want null", list)
+	// API empty + explicit empty prior -> preserved empty list (no diff).
+	if list, _ := flattenAuthenticationIDs([]string{}, emptyList); list.IsNull() || len(list.Elements()) != 0 {
+		t.Fatalf("empty API + [] prior = %#v, want empty list", list)
+	}
+	// API empty + non-empty prior -> null (real drift, cleared externally).
+	if list, _ := flattenAuthenticationIDs(nil, populatedPrev); !list.IsNull() {
+		t.Fatalf("empty API + populated prior = %#v, want null (drift)", list)
+	}
+	// API non-empty -> adopt API value.
+	list, _ := flattenAuthenticationIDs([]string{"auth-y"}, nullList)
+	if list.IsNull() || len(list.Elements()) != 1 {
+		t.Fatalf("non-empty API = %#v, want 1 element", list)
+	}
+}
+
+func TestFlattenCode(t *testing.T) {
+	// API empty + unset prior -> null.
+	if got := flattenCode("", types.StringNull()); !got.IsNull() {
+		t.Fatalf("empty API + null prior = %#v, want null", got)
+	}
+	// API empty + explicit "" prior -> preserved "".
+	if got := flattenCode("", types.StringValue("")); got.IsNull() || got.ValueString() != "" {
+		t.Fatalf("empty API + \"\" prior = %#v, want empty string", got)
+	}
+	// API empty + non-empty prior -> null (drift, cleared externally).
+	if got := flattenCode("", types.StringValue("old")); !got.IsNull() {
+		t.Fatalf("empty API + non-empty prior = %#v, want null (drift)", got)
+	}
+	// API non-empty -> adopt API value.
+	if got := flattenCode("new", types.StringValue("old")); got.ValueString() != "new" {
+		t.Fatalf("non-empty API = %q, want new", got.ValueString())
 	}
 }

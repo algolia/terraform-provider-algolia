@@ -40,9 +40,9 @@ func transformationResourceSchema() schema.Schema {
 			"code": schema.StringAttribute{
 				Description: "The transformation's source code (for `type = \"code\"` transformations). This is " +
 					"the deprecated, legacy way of specifying a code transformation's logic directly - the " +
-					"Ingestion API recommends `input` with a matching `type` instead. May be empty for no-code " +
-					"transformations. The Ingestion API returns `code` in full (nothing is redacted), so this " +
-					"attribute is refreshed on read.",
+					"Ingestion API recommends `input` with a matching `type` instead. Leave it unset for no-code " +
+					"transformations (which have no `code`); an unset `code` reads back as null. The Ingestion API " +
+					"returns `code` in full (nothing is redacted), so this attribute is refreshed on read.",
 				Optional: true,
 			},
 			"type": schema.StringAttribute{
@@ -62,8 +62,9 @@ func transformationResourceSchema() schema.Schema {
 					"Optional: a transformation's logic can instead be supplied via the legacy `code` attribute. " +
 					"The Ingestion API returns a transformation's `input` in full when reading it back (nothing is " +
 					"redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by " +
-					"harmless JSON differences (key order, array order), the refresh only replaces the configured " +
-					"value when it is not semantically equivalent to what the API returned.",
+					"harmless JSON differences (object key order, and the order of arrays of scalars), the refresh " +
+					"only replaces the configured value when it is not semantically equivalent to what the API " +
+					"returned. Note the order of arrays of objects (e.g. `steps`) is significant and preserved.",
 				Optional: true,
 			},
 			"description": schema.StringAttribute{
