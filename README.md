@@ -11,7 +11,7 @@ Manage your [Algolia](https://www.algolia.com/) search infrastructure as code.
 
 ## Overview
 
-The Algolia Terraform provider lets you configure and manage Algolia resources declaratively: index settings, API keys, query suggestions, personalization strategies, rules, synonyms, Agent Studio agents, and Ingestion authentication credentials.
+The Algolia Terraform provider lets you configure and manage Algolia resources declaratively: index settings, API keys, query suggestions, personalization strategies, rules, synonyms, Agent Studio agents, and Ingestion authentication credentials and sources.
 
 ## Requirements
 
@@ -98,6 +98,7 @@ resource "algolia_index" "products" {
 | [`algolia_agent_provider`](docs/resources/agent_provider.md)                     | Register LLM providers for Agent Studio                                       |
 | [`algolia_agent`](docs/resources/agent.md)                                       | Create and configure Agent Studio agents                                      |
 | [`algolia_ingestion_authentication`](docs/resources/ingestion_authentication.md) | Manage Ingestion authentication credentials for sources/destinations          |
+| [`algolia_ingestion_source`](docs/resources/ingestion_source.md)                 | Manage Ingestion sources (where a task reads or receives records from)        |
 
 ## Data Sources
 
@@ -119,6 +120,7 @@ resource "algolia_index" "products" {
 | [`algolia_agent_provider_models`](docs/data-sources/agent_provider_models.md)       | List models available for an Agent Studio provider |
 | [`algolia_agent`](docs/data-sources/agent.md)                                       | Read Agent Studio agent details                    |
 | [`algolia_ingestion_authentication`](docs/data-sources/ingestion_authentication.md) | Read Ingestion authentication metadata (credentials are never exposed) |
+| [`algolia_ingestion_source`](docs/data-sources/ingestion_source.md)                 | Read an Ingestion source's configuration, including `input`        |
 
 ## API Coverage
 
@@ -146,7 +148,8 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Advanced Personalization** | ✅ | ❌ not in v4 | 🟡 Planned · P3 (investigate) |
 | **Agent Studio** — agents & providers | ✅ | ❌ custom client | ✅ `algolia_agent`, `algolia_agent_provider` |
 | **Ingestion** — authentications | ✅ | ✅ | ✅ `algolia_ingestion_authentication` |
-| **Ingestion** — sources, destinations, tasks, transformations | ✅ | ✅ | 🟡 Planned · P2 |
+| **Ingestion** — sources | ✅ | ✅ | ✅ `algolia_ingestion_source` |
+| **Ingestion** — destinations, tasks, transformations | ✅ | ✅ | 🟡 Planned · P2 |
 | **A/B Testing** | ✅ | ✅ | 🟡 Planned · P2 |
 | **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
 | **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
