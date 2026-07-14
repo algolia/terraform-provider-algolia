@@ -299,8 +299,8 @@ func waitForDictionaryEntry(client *search.APIClient, dictionaryType search.Dict
 }
 
 // waitForDictionaryTask polls GetAppTask until the task reaches "published"
-// status or 30 minutes elapse, using exponential backoff capped at 10
-// seconds. This mirrors index.waitForIndexTask, which replaces the SDK's
+// status or 30 minutes elapse, increasing the poll interval linearly (by 1s
+// each attempt) up to a 10-second cap. This mirrors index.waitForIndexTask, which replaces the SDK's
 // built-in WaitForTask/WaitForAppTask whose retry-count options were not
 // being applied. Dictionary batch tasks are application-level, so this uses
 // GetAppTask rather than the per-index GetTask.
