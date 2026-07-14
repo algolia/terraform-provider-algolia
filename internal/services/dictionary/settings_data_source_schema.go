@@ -11,7 +11,7 @@ func dictionarySettingsDataSourceSchema() datasourceschema.Schema {
 			"built-in standard dictionary entries (stopwords, plurals, compounds) are disabled, per language.",
 		Attributes: map[string]datasourceschema.Attribute{
 			"id": datasourceschema.StringAttribute{
-				Description: "Terraform identifier for the singleton dictionary settings resource. Set to the Algolia application ID.",
+				Description: "Terraform identifier for the singleton dictionary settings data source. Set to the Algolia application ID.",
 				Computed:    true,
 			},
 			"disable_standard_entries": datasourceschema.SingleNestedAttribute{

@@ -120,15 +120,15 @@ func testAccRestoreDictionarySettings(t *testing.T, client *search.APIClient, or
 		return
 	}
 
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		taskResp, err := client.GetAppTask(client.NewApiGetAppTaskRequest(updateResp.TaskID))
 		if err == nil && taskResp.Status == search.TASK_STATUS_PUBLISHED {
 			return
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(time.Second)
 	}
-	t.Errorf("restoring dictionary settings did not complete within 30 seconds")
+	t.Errorf("restoring dictionary settings did not complete within 2 minutes")
 }
 
 func testAccDictionarySettingsConfig() string {

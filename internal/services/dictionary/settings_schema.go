@@ -24,7 +24,9 @@ func dictionarySettingsResourceSchema() schema.Schema {
 			},
 			"disable_standard_entries": schema.SingleNestedAttribute{
 				Description: "Standard dictionary entries to disable, per dictionary type and language. " +
-					"Omitting a language (or the whole attribute) leaves Algolia's built-in entries enabled for it.",
+					"Set a language ISO code to `true` to disable Algolia's built-in entries for it, or `false` to keep them enabled. " +
+					"Applied values are preserved across plans (Computed): to re-enable a previously disabled language, set it to `false` " +
+					"or supply an updated map — removing the attribute from configuration does not clear settings that were already applied.",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Object{

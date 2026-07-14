@@ -32,7 +32,7 @@ data "algolia_dictionary_settings" "example" {
 ### Read-Only
 
 - `disable_standard_entries` (Attributes) Standard dictionary entries disabled, per dictionary type and language. (see [below for nested schema](#nestedatt--disable_standard_entries))
-- `id` (String) Terraform identifier for the singleton dictionary settings resource. Set to the Algolia application ID.
+- `id` (String) Terraform identifier for the singleton dictionary settings data source. Set to the Algolia application ID.
 
 <a id="nestedatt--disable_standard_entries"></a>
 ### Nested Schema for `disable_standard_entries`
