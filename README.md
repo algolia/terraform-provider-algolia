@@ -99,6 +99,7 @@ resource "algolia_index" "products" {
 | [`algolia_agent`](docs/resources/agent.md)                                       | Create and configure Agent Studio agents                                      |
 | [`algolia_ingestion_authentication`](docs/resources/ingestion_authentication.md) | Manage Ingestion authentication credentials for sources/destinations          |
 | [`algolia_ingestion_source`](docs/resources/ingestion_source.md)                 | Manage Ingestion sources (where a task reads or receives records from)        |
+| [`algolia_ingestion_destination`](docs/resources/ingestion_destination.md)       | Manage Ingestion destinations (the index or event stream a task writes to)    |
 
 ## Data Sources
 
@@ -121,6 +122,7 @@ resource "algolia_index" "products" {
 | [`algolia_agent`](docs/data-sources/agent.md)                                       | Read Agent Studio agent details                    |
 | [`algolia_ingestion_authentication`](docs/data-sources/ingestion_authentication.md) | Read Ingestion authentication metadata (credentials are never exposed) |
 | [`algolia_ingestion_source`](docs/data-sources/ingestion_source.md)                 | Read an Ingestion source's configuration, including `input`        |
+| [`algolia_ingestion_destination`](docs/data-sources/ingestion_destination.md)       | Read an Ingestion destination's configuration, including `input`   |
 
 ## API Coverage
 
@@ -149,7 +151,8 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Agent Studio** — agents & providers | ✅ | ❌ custom client | ✅ `algolia_agent`, `algolia_agent_provider` |
 | **Ingestion** — authentications | ✅ | ✅ | ✅ `algolia_ingestion_authentication` |
 | **Ingestion** — sources | ✅ | ✅ | ✅ `algolia_ingestion_source` |
-| **Ingestion** — destinations, tasks, transformations | ✅ | ✅ | 🟡 Planned · P2 |
+| **Ingestion** — destinations | ✅ | ✅ | ✅ `algolia_ingestion_destination` |
+| **Ingestion** — tasks, transformations | ✅ | ✅ | 🟡 Planned · P2 |
 | **A/B Testing** | ✅ | ✅ | 🟡 Planned · P2 |
 | **Recommend** — rules | ✅ | ✅ | 🟡 Planned · P2 |
 | **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
