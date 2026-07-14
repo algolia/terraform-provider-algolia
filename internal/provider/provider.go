@@ -168,9 +168,12 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 	return []func() datasource.DataSource{
 		index.NewDataSource,
 		index.NewVirtualDataSource,
+		index.NewIndicesDataSource,
 		agent.NewDataSource,
 		agentprovider.NewDataSource,
 		agentprovider.NewModelsDataSource,
+		apikey.NewDataSource,
+		apikey.NewKeysDataSource,
 		rule.NewDataSource,
 		synonym.NewDataSource,
 		dictionary.NewDataSource,

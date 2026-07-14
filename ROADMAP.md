@@ -24,7 +24,8 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | API surface | Terraform verdict | Status |
 |---|---|---|
 | **search** — index settings | resource + data source | ✅ `algolia_index`, `algolia_virtual_index` |
-| **search** — API keys | resource | ✅ `algolia_api_key` (no data source yet) |
+| **search** — index listing | data source | ✅ `algolia_indices` |
+| **search** — API keys | resource + data source | ✅ `algolia_api_key`, `algolia_api_keys` |
 | **search** — rules | resource + data source | ✅ `algolia_rule` |
 | **search** — synonyms | resource + data source | ✅ `algolia_synonym` |
 | **search** — dictionaries — custom entries | resource + data source | ✅ `algolia_dictionary_entry` |
@@ -49,7 +50,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 
 ## Current state (baseline)
 
-12 resources and 12 data sources across `search`, `query-suggestions`, `personalization`, and `agent-studio`. Registered in `internal/provider/provider.go`; each lives under `internal/services/<name>/` following the model / schema / expand / flatten / resource / data_source layout described in `AGENTS.md`.
+12 resources and 15 data sources across `search`, `query-suggestions`, `personalization`, and `agent-studio`. Registered in `internal/provider/provider.go`; each lives under `internal/services/<name>/` following the model / schema / expand / flatten / resource / data_source layout described in `AGENTS.md`.
 
 ## Phased roadmap
 
@@ -62,7 +63,7 @@ The `search` client is already a provider dependency, so these are low-risk addi
 - ✅ `algolia_dictionary_entry` — custom stopwords / plurals / compounds (`BatchDictionaryEntries`, `SearchDictionaryEntries`). Shipped (resource + data source).
 - ✅ `algolia_dictionary_settings` — `disableStandardEntries` (`SetDictionarySettings` / `GetDictionarySettings`). Shipped (resource + data source).
 - ✅ `algolia_allowed_sources` — API access IP allowlist (`GetSources` / `ReplaceSources` / `DeleteSource`). Shipped (resource + data source).
-- Data sources: `algolia_api_key`, `algolia_indices`, `algolia_api_keys`.
+- ✅ Search lookup data sources — `algolia_api_key` (`GetApiKey`), `algolia_api_keys` (`ListApiKeys`), `algolia_indices` (`ListIndices`, paginated). Shipped (data-source-only, no CRUD/import).
 
 **Effort:** S–M each. **Risk:** low.
 
