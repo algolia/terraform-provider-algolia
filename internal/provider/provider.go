@@ -20,6 +20,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/services/allowedsources"
 	"github.com/algolia/terraform-provider-algolia/internal/services/apikey"
 	"github.com/algolia/terraform-provider-algolia/internal/services/composition"
+	"github.com/algolia/terraform-provider-algolia/internal/services/crawler"
 	"github.com/algolia/terraform-provider-algolia/internal/services/dictionary"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
 	"github.com/algolia/terraform-provider-algolia/internal/services/ingestion"
@@ -41,6 +42,8 @@ type algoliaProviderModel struct {
 	AppID           types.String `tfsdk:"app_id"`
 	APIKey          types.String `tfsdk:"api_key"`
 	AnalyticsRegion types.String `tfsdk:"analytics_region"`
+	CrawlerUserID   types.String `tfsdk:"crawler_user_id"`
+	CrawlerAPIKey   types.String `tfsdk:"crawler_api_key"`
 }
 
 func New(version string) func() provider.Provider {
@@ -76,6 +79,15 @@ func (p *algoliaProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 					stringvalidator.OneOf("us", "eu"),
 				},
 			},
+			"crawler_user_id": schema.StringAttribute{
+				Description: "Crawler user ID, from the Crawler settings page in the Algolia dashboard. Required only for crawler resources/data sources. Can also be set via the ALGOLIA_CRAWLER_USER_ID environment variable.",
+				Optional:    true,
+			},
+			"crawler_api_key": schema.StringAttribute{
+				Description: "Crawler API key, from the Crawler settings page in the Algolia dashboard. Required only for crawler resources/data sources. Can also be set via the ALGOLIA_CRAWLER_API_KEY environment variable.",
+				Optional:    true,
+				Sensitive:   true,
+			},
 		},
 	}
 }
@@ -90,6 +102,8 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	appID := os.Getenv("ALGOLIA_APP_ID")
 	apiKey := os.Getenv("ALGOLIA_API_KEY")
 	analyticsRegion := os.Getenv(analyticsregion.EnvVar)
+	crawlerUserID := os.Getenv("ALGOLIA_CRAWLER_USER_ID")
+	crawlerAPIKey := os.Getenv("ALGOLIA_CRAWLER_API_KEY")
 
 	if !config.AppID.IsNull() {
 		appID = config.AppID.ValueString()
@@ -99,6 +113,12 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 	if !config.AnalyticsRegion.IsNull() {
 		analyticsRegion = config.AnalyticsRegion.ValueString()
+	}
+	if !config.CrawlerUserID.IsNull() {
+		crawlerUserID = config.CrawlerUserID.ValueString()
+	}
+	if !config.CrawlerAPIKey.IsNull() {
+		crawlerAPIKey = config.CrawlerAPIKey.ValueString()
 	}
 
 	if appID == "" {
@@ -139,12 +159,21 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 
 	agentClient := agent.NewClient(appID, apiKey)
 
+	// The crawler is optional: only the (future) crawler resource/data source needs these
+	// credentials, so an empty crawler_user_id/crawler_api_key is not an error here — the
+	// client is simply left nil and only constructed when both are set.
+	var crawlerClient interface{}
+	if crawlerUserID != "" && crawlerAPIKey != "" {
+		crawlerClient = crawler.NewClient(crawlerUserID, crawlerAPIKey)
+	}
+
 	data := &providertypes.ProviderData{
 		AppID:           appID,
 		APIKey:          apiKey,
 		AnalyticsRegion: normalizedAnalyticsRegion,
 		Client:          client,
 		AgentClient:     agentClient,
+		CrawlerClient:   crawlerClient,
 	}
 
 	resp.ResourceData = data
