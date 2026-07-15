@@ -103,6 +103,8 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_transformation`](docs/resources/ingestion_transformation.md) | Manage Ingestion transformations (code or no-code logic applied to records)   |
 | [`algolia_ingestion_task`](docs/resources/ingestion_task.md)                     | Manage Ingestion tasks (schedule a source → transform → destination pipeline) |
 | [`algolia_recommend_rule`](docs/resources/recommend_rule.md)                     | Manage Recommend rules (condition/consequence pairs that customize a Recommend model's results) |
+| [`algolia_composition`](docs/resources/composition.md)                           | Manage a Composition (combine source indices into one search experience) |
+| [`algolia_composition_rule`](docs/resources/composition_rule.md)                 | Manage a Composition rule (condition/consequence pairs on a composition) |
 
 ## Data Sources
 
@@ -129,6 +131,8 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_transformation`](docs/data-sources/ingestion_transformation.md) | Read an Ingestion transformation's configuration, including `code`/`input` |
 | [`algolia_ingestion_task`](docs/data-sources/ingestion_task.md)                     | Read an Ingestion task's configuration, including `input`/`notifications`/`policies`/`cursor` |
 | [`algolia_recommend_rule`](docs/data-sources/recommend_rule.md)                     | Read a Recommend rule by index, model, and object ID |
+| [`algolia_composition`](docs/data-sources/composition.md)                           | Read a Composition by object ID |
+| [`algolia_composition_rule`](docs/data-sources/composition_rule.md)                 | Read a Composition rule by composition and object ID |
 
 ## API Coverage
 
@@ -162,7 +166,7 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Ingestion** — tasks | ✅ | ✅ | ✅ `algolia_ingestion_task` |
 | **A/B Testing** | ✅ | ✅ | ✅ `algolia_ab_test` |
 | **Recommend** — rules | ✅ | ✅ | ✅ `algolia_recommend_rule` |
-| **Composition** | ✅ | ✅ | 🟡 Planned · P2 |
+| **Composition** | ✅ | ✅ | ✅ `algolia_composition`, `algolia_composition_rule` |
 | **Crawler** | ✅ | ❌ not in v4 | 🟡 Planned · P3 (needs custom client) |
 | **Analytics** | ✅ | ✅ | 🟡 Planned · P4 (read-only) |
 | **Monitoring** | ✅ | ✅ | 🟡 Planned · P4 (read-only) |
