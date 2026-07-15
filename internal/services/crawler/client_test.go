@@ -340,6 +340,27 @@ func TestAPIError_nonSuccessStatus(t *testing.T) {
 	}
 }
 
+func TestAPIError_non2xxNon4xxStatus(t *testing.T) {
+	// A 3xx that the HTTP client does not auto-follow (e.g. 304 Not Modified) must be
+	// treated as an error, not silently unmarshaled as a success. Guards against the
+	// >=400 check that would let 2xx-adjacent statuses through.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer server.Close()
+
+	c := newTestClient(t, server)
+
+	_, err := c.GetCrawler(context.Background(), "some-id")
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusNotModified {
+		t.Errorf("APIError.StatusCode = %d, want %d", apiErr.StatusCode, http.StatusNotModified)
+	}
+}
+
 func TestAPIError_deleteNonSuccessStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

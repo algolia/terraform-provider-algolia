@@ -111,7 +111,10 @@ func (c *Client) do(req *http.Request, result any) error {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
-	if resp.StatusCode >= 400 {
+	// Treat any non-2xx status as an error (matching APIError's contract). The Go HTTP
+	// client follows 3xx redirects itself, so a 3xx reaching here (e.g. a 304) is genuinely
+	// unexpected and must not be mistaken for a success and unmarshaled.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &APIError{
 			StatusCode: resp.StatusCode,
 			Body:       string(respBody),
