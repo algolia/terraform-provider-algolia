@@ -1,3 +1,20 @@
+resource "algolia_composition" "example" {
+  object_id = "featured-products"
+  name      = "Featured products"
+
+  behavior = jsonencode({
+    injection = {
+      main = {
+        source = {
+          search = {
+            index = "products"
+          }
+        }
+      }
+    }
+  })
+}
+
 resource "algolia_composition_rule" "example" {
   composition_id = algolia_composition.example.object_id
   object_id      = "boost-featured-on-mobile"

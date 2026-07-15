@@ -13,6 +13,23 @@ Manages an Algolia composition rule: a condition/consequence pair that overrides
 ## Example Usage
 
 ```terraform
+resource "algolia_composition" "example" {
+  object_id = "featured-products"
+  name      = "Featured products"
+
+  behavior = jsonencode({
+    injection = {
+      main = {
+        source = {
+          search = {
+            index = "products"
+          }
+        }
+      }
+    }
+  })
+}
+
 resource "algolia_composition_rule" "example" {
   composition_id = algolia_composition.example.object_id
   object_id      = "boost-featured-on-mobile"

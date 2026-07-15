@@ -31,8 +31,10 @@ resource "algolia_composition" "example" {
     }
   })
 
+  # Map of sorting labels to the index (or replica) implementing each sort.
   sorting_strategy = jsonencode({
-    relevancy = "asc"
+    "Price (asc)"  = "products_price_asc"
+    "Price (desc)" = "products_price_desc"
   })
 }
 ```
