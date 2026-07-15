@@ -19,6 +19,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/services/agentprovider"
 	"github.com/algolia/terraform-provider-algolia/internal/services/allowedsources"
 	"github.com/algolia/terraform-provider-algolia/internal/services/apikey"
+	"github.com/algolia/terraform-provider-algolia/internal/services/composition"
 	"github.com/algolia/terraform-provider-algolia/internal/services/dictionary"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
 	"github.com/algolia/terraform-provider-algolia/internal/services/ingestion"
@@ -171,6 +172,8 @@ func (p *algoliaProvider) Resources(_ context.Context) []func() resource.Resourc
 		ingestion.NewTaskResource,
 		abtest.NewResource,
 		recommend.NewResource,
+		composition.NewResource,
+		composition.NewRuleResource,
 	}
 }
 
@@ -198,5 +201,7 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		ingestion.NewTaskDataSource,
 		abtest.NewDataSource,
 		recommend.NewDataSource,
+		composition.NewDataSource,
+		composition.NewRuleDataSource,
 	}
 }
