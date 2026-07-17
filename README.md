@@ -133,6 +133,8 @@ resource "algolia_index" "products" {
 | [`algolia_recommend_rule`](docs/data-sources/recommend_rule.md)                     | Read a Recommend rule by index, model, and object ID |
 | [`algolia_composition`](docs/data-sources/composition.md)                           | Read a Composition by object ID |
 | [`algolia_composition_rule`](docs/data-sources/composition_rule.md)                 | Read a Composition rule by composition and object ID |
+| [`algolia_clusters`](docs/data-sources/clusters.md)                                 | List every cluster in a multi-cluster (MCM) application |
+| [`algolia_user_ids`](docs/data-sources/user_ids.md)                                 | List every user ID mapped to a cluster in a multi-cluster (MCM) application |
 
 ## API Coverage
 
@@ -153,7 +155,7 @@ How far the provider reaches across Algolia's API surface. The three columns are
 | **Search** — dictionaries (custom entries) | ✅ | ✅ | ✅ `algolia_dictionary_entry` |
 | **Search** — dictionaries (settings) | ✅ | ✅ | ✅ `algolia_dictionary_settings` |
 | **Search** — allowed sources (IP allowlist) | ✅ | ✅ | ✅ `algolia_allowed_sources` |
-| **Search** — MCM clusters & user IDs | ✅ | ✅ | 🟡 Planned · P1 (read-only) |
+| **Search** — MCM clusters & user IDs | ✅ | ✅ | ✅ `algolia_clusters`, `algolia_user_ids` (data sources) |
 | **Search** — records · search · browse | ✅ | ✅ | ⛔ Out of scope (data-plane) |
 | **Query Suggestions** | ✅ | ✅ | ✅ `algolia_query_suggestions` |
 | **Personalization** — strategy | ✅ | ✅ | ✅ `algolia_personalization_strategy` |

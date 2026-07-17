@@ -31,7 +31,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **search** — dictionaries — custom entries | resource + data source | ✅ `algolia_dictionary_entry` |
 | **search** — dictionaries — settings (`disableStandardEntries`) | resource + data source | ✅ `algolia_dictionary_settings` |
 | **search** — allowed sources (IP allowlist) | resource | ✅ `algolia_allowed_sources` |
-| **search** — MCM clusters / user IDs | data source (clusters); user-id assignment is operational | ❌ gap, low priority |
+| **search** — MCM clusters / user IDs | data source (clusters, user IDs); user-id assignment is operational | ✅ `algolia_clusters`, `algolia_user_ids` |
 | **search** — records/objects, search, browse, secured keys | out of scope (data-plane) | — |
 | **query-suggestions** | resource + data source | ✅ `algolia_query_suggestions` |
 | **personalization** — strategy | resource + data source | ✅ `algolia_personalization_strategy` |
@@ -68,6 +68,7 @@ The `search` client is already a provider dependency, so these are low-risk addi
 - ✅ `algolia_dictionary_settings` — `disableStandardEntries` (`SetDictionarySettings` / `GetDictionarySettings`). Shipped (resource + data source).
 - ✅ `algolia_allowed_sources` — API access IP allowlist (`GetSources` / `ReplaceSources` / `DeleteSource`). Shipped (resource + data source).
 - ✅ Search lookup data sources — `algolia_api_key` (`GetApiKey`), `algolia_api_keys` (`ListApiKeys`), `algolia_indices` (`ListIndices`, paginated). Shipped (data-source-only, no CRUD/import).
+- ✅ **MCM read-only data sources** — `algolia_clusters` (`ListClusters`) + `algolia_user_ids` (`ListUserIds`, paged). Shipped in `internal/services/mcm/` (data-source-only; both endpoints are deprecated in Algolia's own API but still functional). `ListClustersResponse` only carries cluster *names* (its `topUsers` field is a `[]string`, despite the name) — no per-cluster record/user counts or data size, unlike the richer `Cluster` schema documented elsewhere in Algolia's spec, so `algolia_clusters` only exposes `cluster_name`. `ListUserIdsResponse` carries no paging metadata (no `nbPages`/`nbUsers`, unlike `ListIndicesResponse`), so `algolia_user_ids` pages by requesting a fixed `hitsPerPage` and stopping once a page returns fewer items than that. Acceptance tests are additionally gated behind `ALGOLIA_RUN_MCM_ACC=1`, since MCM endpoints error out on applications that aren't on a multi-cluster plan.
 
 **Effort:** S–M each. **Risk:** low.
 
@@ -109,7 +110,7 @@ Runtime / data-plane operations with no reconcilable state, and why:
 - **Insights** (`PushEvents`, `DeleteUserToken`) — event stream.
 - **Recommend** `GetRecommendations` — per-request reads.
 - **Secured API keys** (`GenerateSecuredApiKey`) — a client-side signing helper, not a stored resource.
-- **MCM user-ID assignment** — operational cluster balancing, not declarative config (cluster *listing* may still ship as a data source).
+- **MCM user-ID assignment** — operational cluster balancing, not declarative config (cluster/user-ID *listing* ships as `algolia_clusters`/`algolia_user_ids` data sources — see Phase 1).
 
 ## Cross-cutting workstreams
 

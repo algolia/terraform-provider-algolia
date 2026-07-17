@@ -24,6 +24,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/services/dictionary"
 	"github.com/algolia/terraform-provider-algolia/internal/services/index"
 	"github.com/algolia/terraform-provider-algolia/internal/services/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/services/mcm"
 	"github.com/algolia/terraform-provider-algolia/internal/services/personalization"
 	"github.com/algolia/terraform-provider-algolia/internal/services/querysuggestions"
 	"github.com/algolia/terraform-provider-algolia/internal/services/recommend"
@@ -232,5 +233,7 @@ func (p *algoliaProvider) DataSources(_ context.Context) []func() datasource.Dat
 		recommend.NewDataSource,
 		composition.NewDataSource,
 		composition.NewRuleDataSource,
+		mcm.NewClustersDataSource,
+		mcm.NewUserIdsDataSource,
 	}
 }

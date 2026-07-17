@@ -8,6 +8,7 @@ Agent-ready breakdown of [ROADMAP.md](ROADMAP.md). Each task is scoped to be pic
 - Follow the **Definition of Done** below — it applies to every resource/data-source task.
 - Confirm exact client signatures against the version pinned in `go.mod` (currently `algoliasearch-client-go/v4 v4.44.0`); method-name hints here are from that version.
 - Reference implementation to mirror: `internal/services/index/` (settings/keys/rules/synonyms) and `internal/services/agent/` (for APIs needing a custom HTTP client).
+- Checkbox states: `[ ]` = to do · `[x]` = done · `[~]` = won't do (descoped).
 
 ## Definition of Done (every resource/data-source task)
 
@@ -47,6 +48,8 @@ Uses the existing `search` client — no new client wiring.
   - Shipped as a full-list singleton (resource + data source). Note: `ReplaceSources` rejects an empty `source` slice client-side, so `Delete` clears the allowlist via per-entry `DeleteSource` calls instead of `ReplaceSources([])`.
 - [x] **P1.4 — Search lookup data sources.** Add `algolia_api_key` (`GetApiKey`), `algolia_indices` (`ListIndices`), `algolia_api_keys` (`ListApiKeys`). Data-source-only; no CRUD.
   - Shipped: `algolia_api_key`/`algolia_api_keys` in `internal/services/apikey/`, `algolia_indices` in `internal/services/index/`. `ListIndices` is paginated (`nbPages`); the data source pages through `WithPage` until every page is fetched.
+- [x] **P1.5 — MCM read-only data sources.** `algolia_clusters` (`ListClusters`) + `algolia_user_ids` (`ListUserIds`, paged). Data-source-only; acceptance gated behind `ALGOLIA_RUN_MCM_ACC`.
+  - Shipped in `internal/services/mcm/`. Both client methods are deprecated MCM endpoints; `ListClustersResponse` only returns cluster names (no per-cluster record/user counts or data size), and `ListUserIdsResponse` has no paging metadata, so pagination stops once a page returns fewer than `hitsPerPage` items.
 
 ## Phase 2 — Net-new configuration APIs
 
@@ -78,10 +81,10 @@ All clients ship in v4 already. **Do Ingestion first** — it is highest-value a
 
 ## Phase 3 — APIs needing extra client work
 
-- [ ] **P3.1 — Crawler support.** The Crawler is **not** in the Go v4 client.
+- [~] **P3.1 — Crawler support.** ~~The Crawler is **not** in the Go v4 client.~~ **Won't do** (descoped 2026-07-18): crawler support isn't needed. P3.1a (the custom client) already shipped in #34 and stays in the codebase; the resource/data source (P3.1b) is dropped.
   - [x] **P3.1a — Custom client.** Add `internal/services/crawler/client.go` — a lightweight `net/http` client mirroring `internal/services/agent/client.go` (crawler API host + auth).
     - Shipped: `internal/services/crawler/client.go`, a hand-rolled client for `https://crawler.algolia.com/api/1` (HTTP Basic auth via crawler-specific `crawlerUserID`/`crawlerAPIKey`, distinct from the app's admin API key). Endpoints confirmed against two primary sources (no typed client exists to point at): the open-source `algolia/cli`'s `api/crawler/client.go`/`types.go`, and the official OpenAPI spec at `algolia/api-clients-automation` (`specs/crawler/spec.yml` + `paths/{crawlers,crawler,crawlerConfig}.yml`). `CreateCrawler` (`POST /crawlers`), `GetCrawler` (`GET /crawlers/{id}?withConfig=true`), `UpdateCrawler` (`PATCH /crawlers/{id}` — rename and/or full, unversioned config replace; renamed from the task's assumed POST since the spec confirmed PATCH), `UpdateCrawlerConfig` (`PATCH /crawlers/{id}/config` — partial, versioned config update; body is the raw config object, not wrapped), `DeleteCrawler` (`DELETE /crawlers/{id}`), `ListCrawlers` (`GET /crawlers`, pages through all results at `itemsPerPage=100`, the API's documented max). The crawler `config` is modeled as `json.RawMessage` on request/response structs — not fully typed — per the repo's JSON-encoded-field convention; P3.1b will surface it as a JSON string. Non-2xx responses return a typed `*APIError{StatusCode, Body}`, mirroring `agent.APIError`. Provider plumbing: two new optional provider attributes `crawler_user_id`/`crawler_api_key` (`Sensitive`) with env fallbacks `ALGOLIA_CRAWLER_USER_ID`/`ALGOLIA_CRAWLER_API_KEY` (same names the Algolia CLI uses); missing values are not an error (crawler is optional) — `internal/provider/provider.go`'s `Configure` only constructs a `crawler.Client` when both are non-empty, stored on `ProviderData.CrawlerClient interface{}` (mirrors `AgentClient`'s import-cycle-avoidance pattern). Unit tests in `client_test.go` exercise every method against an `httptest.Server` (an unexported `Client.baseURL` field, defaulting to the real host, is overridden in tests): Basic-auth header, method/path per endpoint, request body shape (including the un-enveloped partial-config body), pagination across multiple pages, and `*APIError` on non-2xx for both a body-returning call (`GetCrawler`) and a no-body call (`DeleteCrawler`). No resource/data source yet — that's P3.1b.
-  - [ ] **P3.1b — `algolia_crawler` (resource + data source) (depends: P3.1a).** Manage crawler config (create/update/delete + read). Store the crawler config JSON as a JSON-encoded `types.String` if the schema is large/dynamic (mirror the index JSON-field pattern).
+  - [~] **P3.1b — ~~`algolia_crawler` (resource + data source)~~** **Won't do** (descoped 2026-07-18): not needed. The crawler client (P3.1a) remains in the codebase if this is ever revisited.
 - [ ] **P3.2 — (Spike) Advanced Personalization.** Not in v4 client. Investigate how `advanced-personalization` relates to the existing `algolia_personalization_strategy`. Output: new resource vs. evolve existing vs. blocked-on-client. Non-blocking; decide before implementing.
 
 ## Phase 4 — Read-only observability (data sources only)
