@@ -66,3 +66,13 @@ Required:
 
 - `facet_name` (String)
 - `score` (Number)
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# The personalization strategy is a singleton per application. Import it with
+# the literal ID "default".
+terraform import algolia_personalization_strategy.example default
+```

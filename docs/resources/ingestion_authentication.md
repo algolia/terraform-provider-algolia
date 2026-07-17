@@ -99,3 +99,14 @@ resource "algolia_ingestion_authentication" "shopify_source" {
 - `created_at` (String) Date and time when the resource was created, in RFC 3339 format.
 - `id` (String) Terraform identifier for the resource. Equal to `authentication_id`.
 - `updated_at` (String) Date and time when the resource was last updated, in RFC 3339 format.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an Ingestion authentication by its UUID. Secret values in `input`
+# are redacted by the API and cannot be recovered on import; set them in
+# configuration and apply to reconcile.
+terraform import algolia_ingestion_authentication.algolia_destination 6c02aeb1-775e-418e-870b-1faccd4b2c0f
+```

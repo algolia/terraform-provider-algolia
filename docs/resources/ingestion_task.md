@@ -115,3 +115,13 @@ resource "algolia_ingestion_task" "push_to_products" {
 - `next_run` (String) Date and time of the next scheduled run of the task, in RFC 3339 format. Null for on-demand tasks or tasks without a `cron` schedule.
 - `task_id` (String) Universally unique identifier (UUID) of the task.
 - `updated_at` (String) Date and time when the resource was last updated, in RFC 3339 format.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an Ingestion task by its UUID. The `cursor` cannot be recovered on
+# import and is left null.
+terraform import algolia_ingestion_task.shopify_to_products 6c02aeb1-775e-418e-870b-1faccd4b2c0f
+```

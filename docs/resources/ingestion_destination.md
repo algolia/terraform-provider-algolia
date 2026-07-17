@@ -96,3 +96,12 @@ resource "algolia_ingestion_destination" "with_authentication" {
 - `destination_id` (String) Universally unique identifier (UUID) of the destination.
 - `id` (String) Terraform identifier for the resource. Equal to `destination_id`.
 - `updated_at` (String) Date and time when the resource was last updated, in RFC 3339 format.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an Ingestion destination by its UUID.
+terraform import algolia_ingestion_destination.search 6c02aeb1-775e-418e-870b-1faccd4b2c0f
+```

@@ -30,8 +30,8 @@ resource "algolia_index" "example" {
   }
 
   typos {
-    typo_tolerance          = "true"
-    min_word_size_for_1_typo = 4
+    typo_tolerance            = "true"
+    min_word_size_for_1_typo  = 4
     min_word_size_for_2_typos = 8
   }
 

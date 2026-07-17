@@ -81,3 +81,12 @@ resource "algolia_composition_rule" "example" {
 ### Read-Only
 
 - `id` (String) Terraform identifier in the form <composition_id>/<object_id>.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a composition rule using the form "composition_id/object_id".
+terraform import algolia_composition_rule.example featured-products/boost-featured-on-mobile
+```

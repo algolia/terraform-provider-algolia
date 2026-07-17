@@ -60,3 +60,12 @@ resource "algolia_recommend_rule" "hide_discontinued" {
 ### Read-Only
 
 - `id` (String) Terraform identifier in the form <index_name>/<model>/<object_id>.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a Recommend rule using the form "index_name/model/object_id".
+terraform import algolia_recommend_rule.hide_discontinued products/related-products/hide-discontinued
+```
