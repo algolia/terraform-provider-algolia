@@ -18,7 +18,7 @@ go test ./internal/services/index/ -run TestExpandTypoTolerance -v
 go test ./... -v -timeout 120m
 ```
 
-Acceptance tests require `TF_ACC=1` and valid `ALGOLIA_APP_ID`/`ALGOLIA_API_KEY` environment variables. Region-routed services such as Query Suggestions, Personalization, and A/B Testing also require `ALGOLIA_ANALYTICS_REGION`. Personalization acceptance tests are additionally gated behind `ALGOLIA_RUN_PERSONALIZATION_ACC=1` because the API enforces a daily strategy-save quota. A/B Testing acceptance tests are additionally gated behind `ALGOLIA_RUN_ABTESTING_ACC=1` because creating an A/B test has cost/quota implications for the target application. Without the required environment variables, tests are skipped automatically.
+Acceptance tests require `TF_ACC=1` and valid `ALGOLIA_APP_ID`/`ALGOLIA_API_KEY` environment variables. Region-routed services such as Query Suggestions, Personalization, and A/B Testing also require `ALGOLIA_ANALYTICS_REGION`. Personalization acceptance tests are additionally gated behind `ALGOLIA_RUN_PERSONALIZATION_ACC=1` because the API enforces a daily strategy-save quota. A/B Testing acceptance tests are additionally gated behind `ALGOLIA_RUN_ABTESTING_ACC=1` because creating an A/B test has cost/quota implications for the target application. MCM (Multi-Cluster Management) acceptance tests are additionally gated behind `ALGOLIA_RUN_MCM_ACC=1` because the MCM endpoints (`algolia_clusters`/`algolia_user_ids`) return an error on applications that aren't on a multi-cluster plan, which is most applications. Without the required environment variables, tests are skipped automatically.
 
 ## Architecture
 
