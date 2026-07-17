@@ -35,7 +35,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **search** — records/objects, search, browse, secured keys | out of scope (data-plane) | — |
 | **query-suggestions** | resource + data source | ✅ `algolia_query_suggestions` |
 | **personalization** — strategy | resource + data source | ✅ `algolia_personalization_strategy` |
-| **advanced-personalization** | evaluate vs. existing strategy | ❌ investigate |
+| **advanced-personalization** | new resource (singleton `/2/config`); needs a custom region-routed client | ⏸️ Deferred (spike done 2026-07-18): separate product from classic Personalization, not in the v4 client |
 | **agent-studio** | resource + data source | ✅ `algolia_agent`, `algolia_agent_provider` |
 | **ingestion** — authentications | resource + data source | ✅ `algolia_ingestion_authentication` |
 | **ingestion** — sources | resource + data source | ✅ `algolia_ingestion_source` |
@@ -88,9 +88,9 @@ The `search` client is already a provider dependency, so these are low-risk addi
 ### Phase 3 — APIs needing extra client work
 
 - **Crawler** (won't do, descoped 2026-07-18): `algolia_crawler` config (+ data source) is not planned. The dedicated HTTP client under `internal/services/crawler/` (P3.1a) shipped and stays in the codebase, but no resource/data source will be built on it unless this is revisited.
-- **Advanced Personalization** — investigate how `advanced-personalization` relates to the existing `personalization_strategy` resource; decide whether it's a new resource, an evolution of the current one, or client-gated.
+- **Advanced Personalization** (spike done 2026-07-18): decision is a NEW resource, not an evolution of `algolia_personalization_strategy`. "AI Personalization" is a separate product (host `ai-personalization.{region}.algolia.com`, region-routed, API `/2`) and is not in the Go v4 client, so it needs a hand-rolled client. Only the singleton `/2/config` (indices, facet attributes, events) is Terraform-suitable. Deferred until there is demand (custom-client work, like the descoped crawler).
 
-**Effort:** Advanced Personalization is an investigation spike (crawler descoped). **Risk:** low.
+**Effort:** Advanced Personalization deferred pending demand (custom client needed); crawler descoped. **Risk:** low.
 
 ### Phase 4 — Read-only observability (data sources only)
 
