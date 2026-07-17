@@ -92,8 +92,8 @@ All clients ship in v4 already. **Do Ingestion first** — it is highest-value a
 
 Low priority / demand-driven. Data-source-only — no CRUD, no import.
 
-- [ ] **P4.1 — Analytics data sources.** e.g. `algolia_analytics_top_searches`, `_no_results`, `_click_through_rate`, etc. (`analytics` client, region-routed). Start with the 2–3 highest-demand metrics rather than all 20 endpoints.
-- [ ] **P4.2 — Monitoring data sources.** e.g. `algolia_monitoring_status`, `_incidents`, `_latency` (`monitoring` client). Note: monitoring may require a separate monitoring API key — surface that in the provider/config.
+- [~] **P4.1 — Analytics data sources.** ~~e.g. `algolia_analytics_top_searches`, `_no_results`, `_click_through_rate`, etc. (`analytics` client, region-routed).~~ **Won't do** (descoped 2026-07-18): analytics is runtime reporting that changes constantly and has no downstream config consumer, so it is a poor fit for Terraform state. Read it in the dashboard or via a script instead.
+- [~] **P4.2 — Monitoring data sources.** ~~e.g. `algolia_monitoring_status`, `_incidents`, `_latency` (`monitoring` client).~~ **Won't do** (descoped 2026-07-18): same rationale as P4.1; runtime observability data, not declarative config.
 
 ## Explicitly NOT tasks (out of scope)
 

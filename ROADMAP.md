@@ -48,8 +48,8 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **recommend** — get recommendations | out of scope (data-plane) | — |
 | **composition** — compositions + composition rules | resource + data source | ✅ `algolia_composition`, `algolia_composition_rule` |
 | **crawler** | ~~resource + data source~~ | 🚫 Won't do (descoped 2026-07-18); P3.1a client shipped, resource dropped |
-| **analytics** | data source only | ❌ optional, low priority |
-| **monitoring** | data source only | ❌ optional, low priority |
+| **analytics** | ~~data source only~~ | 🚫 Won't do (descoped 2026-07-18); runtime reporting, poor IaC fit |
+| **monitoring** | ~~data source only~~ | 🚫 Won't do (descoped 2026-07-18); runtime reporting, poor IaC fit |
 | **insights** — push events / delete user token | out of scope (runtime) | — |
 
 ## Current state (baseline)
@@ -94,12 +94,10 @@ The `search` client is already a provider dependency, so these are low-risk addi
 
 ### Phase 4 — Read-only observability (data sources only)
 
-Optional, demand-driven. Low Terraform value because the data is runtime reporting, not config.
+**Won't do** (descoped 2026-07-18). Runtime reporting, not declarative config: the data changes constantly and nothing downstream consumes it, so it is a poor fit for Terraform state. Read it in the dashboard or via a script instead.
 
-- **Analytics** data sources (top searches, no-results, click/conversion metrics).
-- **Monitoring** data sources (status, incidents, latency, reachability).
-
-**Effort:** S each, repetitive. **Risk:** low.
+- ~~**Analytics** data sources (top searches, no-results, click/conversion metrics).~~
+- ~~**Monitoring** data sources (status, incidents, latency, reachability).~~
 
 ## Explicitly out of scope
 
@@ -130,7 +128,7 @@ Phase 1  (search gaps)      ──▶  Phase 2  (ingestion, ab-test, recommend, 
                                  Phase 3  (advanced-personalization)
                                      │
                                      ▼
-                                 Phase 4  (analytics / monitoring data sources — as demanded)
+                                 Phase 4  (analytics / monitoring: won't do)
 ```
 
 Within Phase 2, **Ingestion first** — it delivers the most infrastructure-as-code value and its multi-resource shape sets the template for the rest.
