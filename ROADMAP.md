@@ -47,7 +47,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **recommend** — recommend rules | resource + data source | ✅ `algolia_recommend_rule` |
 | **recommend** — get recommendations | out of scope (data-plane) | — |
 | **composition** — compositions + composition rules | resource + data source | ✅ `algolia_composition`, `algolia_composition_rule` |
-| **crawler** | resource + data source | ❌ gap (needs custom client — see below) |
+| **crawler** | ~~resource + data source~~ | 🚫 Won't do (descoped 2026-07-18); P3.1a client shipped, resource dropped |
 | **analytics** | data source only | ❌ optional, low priority |
 | **monitoring** | data source only | ❌ optional, low priority |
 | **insights** — push events / delete user token | out of scope (runtime) | — |
@@ -87,10 +87,10 @@ The `search` client is already a provider dependency, so these are low-risk addi
 
 ### Phase 3 — APIs needing extra client work
 
-- **Crawler** — `algolia_crawler` config (+ data source). The Crawler has its own API host and is **not part of the Go v4 client**, so this needs a small dedicated HTTP client under `internal/services/crawler/` (mirror the pattern used for the Agent Studio client). High customer value; the added client is the main cost.
+- **Crawler** (won't do, descoped 2026-07-18): `algolia_crawler` config (+ data source) is not planned. The dedicated HTTP client under `internal/services/crawler/` (P3.1a) shipped and stays in the codebase, but no resource/data source will be built on it unless this is revisited.
 - **Advanced Personalization** — investigate how `advanced-personalization` relates to the existing `personalization_strategy` resource; decide whether it's a new resource, an evolution of the current one, or client-gated.
 
-**Effort:** Crawler M–L (custom client). **Risk:** medium.
+**Effort:** Advanced Personalization is an investigation spike (crawler descoped). **Risk:** low.
 
 ### Phase 4 — Read-only observability (data sources only)
 
@@ -127,7 +127,7 @@ These run alongside every phase:
 Phase 1  (search gaps)      ──▶  Phase 2  (ingestion, ab-test, recommend, composition)
                                      │
                                      ▼
-                                 Phase 3  (crawler, advanced-personalization)
+                                 Phase 3  (advanced-personalization)
                                      │
                                      ▼
                                  Phase 4  (analytics / monitoring data sources — as demanded)
