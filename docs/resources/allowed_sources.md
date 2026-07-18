@@ -62,3 +62,13 @@ Required:
 Optional:
 
 - `description` (String) Human-readable description of this source.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Allowed sources are a singleton. Any import ID is accepted; the
+# application ID is the conventional choice.
+terraform import algolia_allowed_sources.example YourApplicationID
+```

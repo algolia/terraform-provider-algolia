@@ -106,3 +106,12 @@ Optional:
 
 - `api_key` (String, Sensitive) OpenAI-compatible API key. Required when this provider block is configured.
 - `base_url` (String) OpenAI-compatible provider base URL. Required when this provider block is configured.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an Agent Studio provider by its UUID.
+terraform import algolia_agent_provider.openai 01234567-89ab-cdef-0123-456789abcdef
+```

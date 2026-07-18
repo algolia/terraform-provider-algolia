@@ -122,3 +122,13 @@ resource "algolia_ab_test" "search_params_experiment" {
 - `ab_test_id` (Number) Unique identifier of the A/B test.
 - `id` (String) Terraform identifier for the resource. Equal to `ab_test_id` as a string.
 - `status` (String) Status of the A/B test: `active`, `stopped`, `expired`, or `failed`. Refreshed from `GetABTest` on every read.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an A/B test by its numeric ID. Metrics are not recoverable and
+# several attributes force a replace on the next plan; see the resource docs.
+terraform import algolia_ab_test.ranking_experiment 42
+```

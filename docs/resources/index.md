@@ -45,8 +45,8 @@ resource "algolia_index" "example" {
   }
 
   typos {
-    typo_tolerance          = "true"
-    min_word_size_for_1_typo = 4
+    typo_tolerance            = "true"
+    min_word_size_for_1_typo  = 4
     min_word_size_for_2_typos = 8
   }
 
@@ -224,3 +224,12 @@ Optional:
 - `min_word_size_for_1_typo` (Number) Minimum number of characters a word in the query string must contain to accept matches with one typo.
 - `min_word_size_for_2_typos` (Number) Minimum number of characters a word in the query string must contain to accept matches with two typos.
 - `typo_tolerance` (String) Whether typo tolerance is enabled and how it is applied. One of: true, false, min, strict.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an index by its name.
+terraform import algolia_index.example products
+```

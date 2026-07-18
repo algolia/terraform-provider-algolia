@@ -52,3 +52,13 @@ resource "algolia_dictionary_entry" "compound" {
 ### Read-Only
 
 - `id` (String) Terraform identifier in the form <dictionary>/<object_id>.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a dictionary entry using the form "dictionary/object_id".
+# dictionary is one of: stopwords, plurals, compounds.
+terraform import algolia_dictionary_entry.stopword stopwords/my-stopword
+```

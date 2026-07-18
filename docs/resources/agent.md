@@ -271,3 +271,12 @@ Optional:
 
 - `alias` (String) Alias for the tool (3-32 characters).
 - `requires_approval` (Boolean) Whether the tool requires user approval before execution.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import an Agent Studio agent by its UUID.
+terraform import algolia_agent.example 01234567-89ab-cdef-0123-456789abcdef
+```

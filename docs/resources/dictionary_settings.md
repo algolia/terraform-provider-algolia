@@ -44,3 +44,13 @@ Optional:
 - `compounds` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in compounds for that language are disabled.
 - `plurals` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in plurals for that language are disabled.
 - `stopwords` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in stopwords for that language are disabled.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Dictionary settings are a singleton. Any import ID is accepted; the
+# application ID is the conventional choice.
+terraform import algolia_dictionary_settings.example YourApplicationID
+```

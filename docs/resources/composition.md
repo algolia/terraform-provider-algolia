@@ -56,3 +56,12 @@ resource "algolia_composition" "example" {
 ### Read-Only
 
 - `id` (String) The composition's unique identifier. Same value as `object_id`.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import a composition by its object ID.
+terraform import algolia_composition.example featured-products
+```
