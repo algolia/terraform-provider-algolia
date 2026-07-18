@@ -66,6 +66,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # The plugin-testing framework auto-downloads the Terraform CLI when none
+      # is on PATH; pre-installing it avoids that (and its expired-GPG-key
+      # verification failure). terraform_wrapper: false keeps the real binary on
+      # PATH so the framework can exec it directly.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
       - run: go mod download
       - run: TF_ACC=1 go test ./... -v -timeout 120m
         env:
@@ -86,6 +93,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # The plugin-testing framework auto-downloads the Terraform CLI when none
+      # is on PATH; pre-installing it avoids that (and its expired-GPG-key
+      # verification failure). terraform_wrapper: false keeps the real binary on
+      # PATH so the framework can exec it directly.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
       - run: go mod download
       - run: make e2e
         env:
