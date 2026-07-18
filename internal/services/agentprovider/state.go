@@ -2,22 +2,30 @@ package agentprovider
 
 import (
 	"context"
+	"encoding/json"
 
-	agentstudio "github.com/algolia/terraform-provider-algolia/internal/services/agent"
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func hydrateAgentProviderResourceState(_ context.Context, resp *agentstudio.ProviderResponse, preserved AgentProviderResourceModel, model *AgentProviderResourceModel) diag.Diagnostics {
+func hydrateAgentProviderResourceState(_ context.Context, resp *agentStudio.ProviderAuthenticationResponse, preserved AgentProviderResourceModel, model *AgentProviderResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	model.ID = types.StringValue(resp.ID)
+	input, inputDiags := providerInputToMap(resp.Input)
+	diags.Append(inputDiags...)
+	if diags.HasError() {
+		return diags
+	}
+
+	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
 	model.ProviderName = types.StringValue(resp.ProviderName)
 	model.CreatedAt = types.StringValue(resp.CreatedAt)
 	model.UpdatedAt = types.StringValue(resp.UpdatedAt)
-	model.LastUsedAt = nullableString(resp.LastUsedAt)
+	model.LastUsedAt = nullableString(resp.LastUsedAt.Get())
 
 	for _, spec := range providerSpecs {
 		setProviderBlockValue(model, spec, providerBlockNull(spec))
@@ -30,7 +38,7 @@ func hydrateAgentProviderResourceState(_ context.Context, resp *agentstudio.Prov
 	}
 
 	preservedBlock := providerBlockValue(preserved, spec)
-	blockValue, blockDiags := providerBlockValueFromResponse(resp.Input, spec, preservedBlock)
+	blockValue, blockDiags := providerBlockValueFromResponse(input, spec, preservedBlock)
 	diags.Append(blockDiags...)
 	if diags.HasError() {
 		return diags
@@ -41,15 +49,21 @@ func hydrateAgentProviderResourceState(_ context.Context, resp *agentstudio.Prov
 	return diags
 }
 
-func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentstudio.ProviderResponse, model *AgentProviderResourceModel) diag.Diagnostics {
+func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentStudio.ProviderAuthenticationResponse, model *AgentProviderResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	model.ID = types.StringValue(resp.ID)
+	input, inputDiags := providerInputToMap(resp.Input)
+	diags.Append(inputDiags...)
+	if diags.HasError() {
+		return diags
+	}
+
+	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
 	model.ProviderName = types.StringValue(resp.ProviderName)
 	model.CreatedAt = types.StringValue(resp.CreatedAt)
 	model.UpdatedAt = types.StringValue(resp.UpdatedAt)
-	model.LastUsedAt = nullableString(resp.LastUsedAt)
+	model.LastUsedAt = nullableString(resp.LastUsedAt.Get())
 
 	for _, spec := range providerSpecs {
 		setProviderBlockValue(model, spec, providerBlockNull(spec))
@@ -61,7 +75,7 @@ func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentstu
 		return diags
 	}
 
-	blockValue, blockDiags := providerBlockValueFromResponse(resp.Input, spec, providerBlockNull(spec))
+	blockValue, blockDiags := providerBlockValueFromResponse(input, spec, providerBlockNull(spec))
 	diags.Append(blockDiags...)
 	if diags.HasError() {
 		return diags
@@ -71,16 +85,22 @@ func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentstu
 	return diags
 }
 
-func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentstudio.ProviderResponse, model *AgentProviderDataSourceModel) diag.Diagnostics {
+func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentStudio.ProviderAuthenticationResponse, model *AgentProviderDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	model.ProviderID = types.StringValue(resp.ID)
-	model.ID = types.StringValue(resp.ID)
+	input, inputDiags := providerInputToMap(resp.Input)
+	diags.Append(inputDiags...)
+	if diags.HasError() {
+		return diags
+	}
+
+	model.ProviderID = types.StringValue(resp.Id)
+	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
 	model.ProviderName = types.StringValue(resp.ProviderName)
 	model.CreatedAt = types.StringValue(resp.CreatedAt)
 	model.UpdatedAt = types.StringValue(resp.UpdatedAt)
-	model.LastUsedAt = nullableString(resp.LastUsedAt)
+	model.LastUsedAt = nullableString(resp.LastUsedAt.Get())
 
 	for _, spec := range providerSpecs {
 		setDataSourceProviderBlockValue(model, spec, providerDataSourceBlockNull(spec))
@@ -92,7 +112,7 @@ func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentstudio.Pr
 		return diags
 	}
 
-	blockValue, blockDiags := providerDataSourceBlockValueFromResponse(resp.Input, spec)
+	blockValue, blockDiags := providerDataSourceBlockValueFromResponse(input, spec)
 	diags.Append(blockDiags...)
 	if diags.HasError() {
 		return diags
@@ -102,7 +122,7 @@ func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentstudio.Pr
 	return diags
 }
 
-func providerRequestFromModel(model AgentProviderResourceModel) (*agentstudio.ProviderRequest, diag.Diagnostics) {
+func providerRequestFromModel(model AgentProviderResourceModel) (*agentStudio.ProviderAuthenticationCreate, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	spec, ok := providerSpecByName(model.ProviderName.ValueString())
@@ -111,25 +131,21 @@ func providerRequestFromModel(model AgentProviderResourceModel) (*agentstudio.Pr
 		return nil, diags
 	}
 
-	input, inputDiags := expandProviderInput(spec, providerBlockValue(model, spec))
+	inputMap := providerInputMap(spec, providerBlockValue(model, spec))
+	input, inputDiags := buildProviderInput(spec.ProviderName, inputMap)
 	diags.Append(inputDiags...)
 	if diags.HasError() {
 		return nil, diags
 	}
 
-	name := model.Name.ValueString()
-	providerName := model.ProviderName.ValueString()
-
-	req := &agentstudio.ProviderRequest{
-		Name:         &name,
-		ProviderName: &providerName,
+	return &agentStudio.ProviderAuthenticationCreate{
+		Name:         model.Name.ValueString(),
+		ProviderName: agentStudio.ProviderName(model.ProviderName.ValueString()),
 		Input:        input,
-	}
-
-	return req, diags
+	}, diags
 }
 
-func providerRequestFromModelForUpdate(model AgentProviderResourceModel) (*agentstudio.ProviderRequest, diag.Diagnostics) {
+func providerRequestFromModelForUpdate(model AgentProviderResourceModel) (*agentStudio.ProviderAuthenticationPatch, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	spec, ok := providerSpecByName(model.ProviderName.ValueString())
@@ -138,17 +154,19 @@ func providerRequestFromModelForUpdate(model AgentProviderResourceModel) (*agent
 		return nil, diags
 	}
 
-	input, inputDiags := expandProviderInput(spec, providerBlockValue(model, spec))
+	inputMap := providerInputMap(spec, providerBlockValue(model, spec))
+	input, inputDiags := buildProviderInputNullable(spec.ProviderName, inputMap)
 	diags.Append(inputDiags...)
 	if diags.HasError() {
 		return nil, diags
 	}
 
-	name := model.Name.ValueString()
-	return &agentstudio.ProviderRequest{
-		Name:  &name,
-		Input: input,
-	}, diags
+	patch := &agentStudio.ProviderAuthenticationPatch{
+		Name:  *utils.NewNullable(strPtr(model.Name.ValueString())),
+		Input: *utils.NewNullable(&input),
+	}
+
+	return patch, diags
 }
 
 func providerBlockValueFromResponse(input map[string]any, spec providerSpec, preservedBlock types.Object) (types.Object, diag.Diagnostics) {
@@ -185,11 +203,11 @@ func providerDataSourceBlockValueFromResponse(input map[string]any, spec provide
 	return types.ObjectValue(attrTypes, attrValues)
 }
 
-func expandProviderInput(spec providerSpec, block types.Object) (map[string]any, diag.Diagnostics) {
-	var diags diag.Diagnostics
-
+// providerInputMap collects the configured (known) provider fields into a map
+// keyed by the provider's API field names.
+func providerInputMap(spec providerSpec, block types.Object) map[string]any {
 	if block.IsNull() || block.IsUnknown() {
-		return map[string]any{}, diags
+		return map[string]any{}
 	}
 
 	input := make(map[string]any, len(spec.Fields))
@@ -207,7 +225,114 @@ func expandProviderInput(spec providerSpec, block types.Object) (map[string]any,
 		input[field.APIName] = stringValue.ValueString()
 	}
 
-	return input, diags
+	return input
+}
+
+// buildProviderInput converts the API-keyed input map into the typed ProviderInput
+// union expected by the SDK, based on the provider name.
+func buildProviderInput(providerName string, input map[string]any) (agentStudio.ProviderInput, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	value, decodeDiags := decodeProviderInputStruct(providerName, input)
+	diags.Append(decodeDiags...)
+	if diags.HasError() {
+		return agentStudio.ProviderInput{}, diags
+	}
+
+	switch v := value.(type) {
+	case *agentStudio.OpenAIProviderInput:
+		return *agentStudio.OpenAIProviderInputAsProviderInput(v), diags
+	case *agentStudio.AnthropicProviderInput:
+		return *agentStudio.AnthropicProviderInputAsProviderInput(v), diags
+	case *agentStudio.AzureOpenAIProviderInput:
+		return *agentStudio.AzureOpenAIProviderInputAsProviderInput(v), diags
+	case *agentStudio.OpenAICompatibleProviderInput:
+		return *agentStudio.OpenAICompatibleProviderInputAsProviderInput(v), diags
+	default:
+		return *agentStudio.BaseProviderInputAsProviderInput(value.(*agentStudio.BaseProviderInput)), diags
+	}
+}
+
+// buildProviderInputNullable mirrors buildProviderInput for the PATCH request body.
+func buildProviderInputNullable(providerName string, input map[string]any) (agentStudio.ProviderInputNullable, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	value, decodeDiags := decodeProviderInputStruct(providerName, input)
+	diags.Append(decodeDiags...)
+	if diags.HasError() {
+		return agentStudio.ProviderInputNullable{}, diags
+	}
+
+	switch v := value.(type) {
+	case *agentStudio.OpenAIProviderInput:
+		return *agentStudio.OpenAIProviderInputAsProviderInputNullable(v), diags
+	case *agentStudio.AnthropicProviderInput:
+		return *agentStudio.AnthropicProviderInputAsProviderInputNullable(v), diags
+	case *agentStudio.AzureOpenAIProviderInput:
+		return *agentStudio.AzureOpenAIProviderInputAsProviderInputNullable(v), diags
+	case *agentStudio.OpenAICompatibleProviderInput:
+		return *agentStudio.OpenAICompatibleProviderInputAsProviderInputNullable(v), diags
+	default:
+		return *agentStudio.BaseProviderInputAsProviderInputNullable(value.(*agentStudio.BaseProviderInput)), diags
+	}
+}
+
+// decodeProviderInputStruct unmarshals the API-keyed input map into the concrete
+// provider input struct that matches the provider name.
+func decodeProviderInputStruct(providerName string, input map[string]any) (any, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	raw, err := json.Marshal(input)
+	if err != nil {
+		diags.AddError("Error building provider input", err.Error())
+		return nil, diags
+	}
+
+	var target any
+	switch providerName {
+	case "openai":
+		target = &agentStudio.OpenAIProviderInput{}
+	case "anthropic":
+		target = &agentStudio.AnthropicProviderInput{}
+	case "azure_openai":
+		target = &agentStudio.AzureOpenAIProviderInput{}
+	case "openai_compatible":
+		target = &agentStudio.OpenAICompatibleProviderInput{}
+	default:
+		// google_genai, deepseek and any other single-key provider use the base input.
+		target = &agentStudio.BaseProviderInput{}
+	}
+
+	if err := json.Unmarshal(raw, target); err != nil {
+		diags.AddError("Error building provider input", err.Error())
+		return nil, diags
+	}
+
+	return target, diags
+}
+
+// providerInputToMap converts the typed ProviderInput union from the API response
+// into a generic map keyed by the provider's API field names.
+func providerInputToMap(input agentStudio.ProviderInput) (map[string]any, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	raw, err := json.Marshal(input)
+	if err != nil {
+		diags.AddError("Error reading provider input", err.Error())
+		return nil, diags
+	}
+
+	if len(raw) == 0 || string(raw) == "null" {
+		return map[string]any{}, diags
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		diags.AddError("Error reading provider input", err.Error())
+		return nil, diags
+	}
+
+	return result, diags
 }
 
 func nullableString(value *string) types.String {
@@ -225,6 +350,10 @@ func stringFromAny(value any) types.String {
 	}
 
 	return types.StringValue(stringValue)
+}
+
+func strPtr(s string) *string {
+	return &s
 }
 
 func setDataSourceProviderBlockValue(model *AgentProviderDataSourceModel, spec providerSpec, value types.Object) {

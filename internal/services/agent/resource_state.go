@@ -4,27 +4,28 @@ import (
 	"context"
 	"fmt"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func hydrateAgentResourceState(ctx context.Context, resp *AgentResponse, deletionProtection types.Bool, model *AgentResourceModel) diag.Diagnostics {
+func hydrateAgentResourceState(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, deletionProtection types.Bool, model *AgentResourceModel) diag.Diagnostics {
 	diags := flattenAgentResponse(ctx, resp, model)
 	if diags.HasError() {
 		return diags
 	}
 
-	model.Publish = remotePublishValue(resp.Status)
+	model.Publish = remotePublishValue(string(resp.Status))
 	model.DeletionProtection = deletionProtectionValue(deletionProtection)
 
 	return diags
 }
 
-func hydrateImportedAgentResourceState(ctx context.Context, resp *AgentResponse, model *AgentResourceModel) diag.Diagnostics {
+func hydrateImportedAgentResourceState(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, model *AgentResourceModel) diag.Diagnostics {
 	return hydrateAgentResourceState(ctx, resp, types.BoolValue(true), model)
 }
 
-func hydrateAgentDataSourceState(ctx context.Context, resp *AgentResponse, model *AgentDataSourceModel) diag.Diagnostics {
+func hydrateAgentDataSourceState(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, model *AgentDataSourceModel) diag.Diagnostics {
 	resourceModel := &AgentResourceModel{}
 	diags := flattenAgentResponse(ctx, resp, resourceModel)
 	if diags.HasError() {
@@ -40,7 +41,7 @@ func hydrateAgentDataSourceState(ctx context.Context, resp *AgentResponse, model
 	model.Model = resourceModel.Model
 	model.TemplateType = resourceModel.TemplateType
 	model.Config = resourceModel.Config
-	model.Publish = remotePublishValue(resp.Status)
+	model.Publish = remotePublishValue(string(resp.Status))
 	model.ToolAlgoliaSearch = resourceModel.ToolAlgoliaSearch
 	model.ToolAlgoliaRecommend = resourceModel.ToolAlgoliaRecommend
 	model.ToolClientSide = resourceModel.ToolClientSide

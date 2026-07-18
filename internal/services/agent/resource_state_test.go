@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -16,12 +17,12 @@ func TestHydrateAgentResourceState_UsesRemotePublishStateAndPreservesDeletionPro
 		DeletionProtection: types.BoolValue(false),
 	}
 
-	resp := &AgentResponse{
-		ID:           "agent-123",
+	resp := &agentStudio.AgentWithVersionResponse{
+		Id:           "agent-123",
 		Name:         "support-bot",
-		Status:       "draft",
+		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Be helpful.",
-		Tools:        []any{},
+		Tools:        []agentStudio.ToolConfigInput{},
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 
@@ -43,12 +44,12 @@ func TestHydrateImportedAgentResourceState_DefaultsDeletionProtection(t *testing
 	ctx := context.Background()
 	model := &AgentResourceModel{}
 
-	resp := &AgentResponse{
-		ID:           "agent-456",
+	resp := &agentStudio.AgentWithVersionResponse{
+		Id:           "agent-456",
 		Name:         "support-bot",
-		Status:       "published",
+		Status:       agentStudio.AGENT_STATUS_PUBLISHED,
 		Instructions: "Be helpful.",
-		Tools:        []any{},
+		Tools:        []agentStudio.ToolConfigInput{},
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 

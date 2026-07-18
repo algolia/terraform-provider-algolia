@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func TestExpandAgentRequest_basic(t *testing.T) {
+func TestExpandAgentConfigCreate_basic(t *testing.T) {
 	ctx := context.Background()
 	model := &AgentResourceModel{
 		Name:         types.StringValue("test-agent"),
@@ -25,43 +25,42 @@ func TestExpandAgentRequest_basic(t *testing.T) {
 		ToolMCP:              types.ListNull(types.ObjectType{AttrTypes: mcpToolAttrTypes}),
 	}
 
-	req, diags := expandAgentRequest(ctx, model)
+	cfg, diags := expandAgentConfigCreate(ctx, model)
 	if diags.HasError() {
 		t.Fatalf("unexpected errors: %v", diags.Errors())
 	}
 
-	if *req.Name != "test-agent" {
-		t.Errorf("expected name 'test-agent', got %q", *req.Name)
+	if cfg.Name != "test-agent" {
+		t.Errorf("expected name 'test-agent', got %q", cfg.Name)
 	}
-	if *req.Instructions != "Be helpful" {
-		t.Errorf("expected instructions 'Be helpful', got %q", *req.Instructions)
+	if cfg.Instructions != "Be helpful" {
+		t.Errorf("expected instructions 'Be helpful', got %q", cfg.Instructions)
 	}
-	if *req.Description != "A test agent" {
-		t.Errorf("expected description 'A test agent', got %q", *req.Description)
+	if cfg.Description == nil || *cfg.Description != "A test agent" {
+		t.Errorf("expected description 'A test agent', got %v", cfg.Description)
 	}
-	if *req.SystemPrompt != "System rules" {
-		t.Errorf("expected system_prompt 'System rules', got %q", *req.SystemPrompt)
+	if cfg.SystemPrompt == nil || *cfg.SystemPrompt != "System rules" {
+		t.Errorf("expected system_prompt 'System rules', got %v", cfg.SystemPrompt)
 	}
-	if *req.ProviderID != "provider-uuid" {
-		t.Errorf("expected provider_id 'provider-uuid', got %q", *req.ProviderID)
+	if cfg.ProviderId == nil || *cfg.ProviderId != "provider-uuid" {
+		t.Errorf("expected provider_id 'provider-uuid', got %v", cfg.ProviderId)
 	}
-	if *req.Model != "gpt-4o" {
-		t.Errorf("expected model 'gpt-4o', got %q", *req.Model)
+	if cfg.Model == nil || *cfg.Model != "gpt-4o" {
+		t.Errorf("expected model 'gpt-4o', got %v", cfg.Model)
 	}
-	if len(req.Tools) != 0 {
-		t.Errorf("expected 0 tools, got %d", len(req.Tools))
+	if cfg.TemplateType == nil || *cfg.TemplateType != "support" {
+		t.Errorf("expected template_type 'support', got %v", cfg.TemplateType)
+	}
+	if len(cfg.Tools) != 0 {
+		t.Errorf("expected 0 tools, got %d", len(cfg.Tools))
 	}
 
-	configMap, ok := req.Config.(map[string]any)
-	if !ok {
-		t.Fatalf("expected config to be map[string]any, got %T", req.Config)
-	}
-	if temp, ok := configMap["temperature"].(float64); !ok || temp != 0.7 {
-		t.Errorf("expected config.temperature=0.7, got %v", configMap["temperature"])
+	if temp, ok := cfg.Config["temperature"].(float64); !ok || temp != 0.7 {
+		t.Errorf("expected config.temperature=0.7, got %v", cfg.Config["temperature"])
 	}
 }
 
-func TestExpandAgentRequest_nullOptionals(t *testing.T) {
+func TestExpandAgentConfigCreate_nullOptionals(t *testing.T) {
 	ctx := context.Background()
 	model := &AgentResourceModel{
 		Name:                 types.StringValue("minimal-agent"),
@@ -78,18 +77,54 @@ func TestExpandAgentRequest_nullOptionals(t *testing.T) {
 		ToolMCP:              types.ListNull(types.ObjectType{AttrTypes: mcpToolAttrTypes}),
 	}
 
-	req, diags := expandAgentRequest(ctx, model)
+	cfg, diags := expandAgentConfigCreate(ctx, model)
 	if diags.HasError() {
 		t.Fatalf("unexpected errors: %v", diags.Errors())
 	}
 
-	if req.Description != nil {
-		t.Errorf("expected nil description, got %v", req.Description)
+	if cfg.Description != nil {
+		t.Errorf("expected nil description, got %v", cfg.Description)
 	}
-	if req.SystemPrompt != nil {
-		t.Errorf("expected nil system_prompt, got %v", req.SystemPrompt)
+	if cfg.SystemPrompt != nil {
+		t.Errorf("expected nil system_prompt, got %v", cfg.SystemPrompt)
 	}
-	if req.Config != nil {
-		t.Errorf("expected nil config, got %v", req.Config)
+	if cfg.Config != nil {
+		t.Errorf("expected nil config, got %v", cfg.Config)
+	}
+}
+
+func TestExpandAgentConfigUpdate_setsKnownFieldsOnly(t *testing.T) {
+	ctx := context.Background()
+	model := &AgentResourceModel{
+		Name:                 types.StringValue("updated-agent"),
+		Instructions:         types.StringValue("New instructions"),
+		Description:          types.StringNull(),
+		SystemPrompt:         types.StringNull(),
+		ProviderID:           types.StringNull(),
+		Model:                types.StringNull(),
+		TemplateType:         types.StringNull(),
+		Config:               types.StringNull(),
+		ToolAlgoliaSearch:    types.ListNull(types.ObjectType{AttrTypes: algoliaSearchToolAttrTypes}),
+		ToolAlgoliaRecommend: types.ListNull(types.ObjectType{AttrTypes: algoliaRecommendToolAttrTypes}),
+		ToolClientSide:       types.ListNull(types.ObjectType{AttrTypes: clientSideToolAttrTypes}),
+		ToolMCP:              types.ListNull(types.ObjectType{AttrTypes: mcpToolAttrTypes}),
+	}
+
+	cfg, diags := expandAgentConfigUpdate(ctx, model)
+	if diags.HasError() {
+		t.Fatalf("unexpected errors: %v", diags.Errors())
+	}
+
+	if !cfg.Name.IsSet() || cfg.Name.Get() == nil || *cfg.Name.Get() != "updated-agent" {
+		t.Errorf("expected name to be set to 'updated-agent', got %v", cfg.Name)
+	}
+	if !cfg.Instructions.IsSet() || cfg.Instructions.Get() == nil || *cfg.Instructions.Get() != "New instructions" {
+		t.Errorf("expected instructions to be set, got %v", cfg.Instructions)
+	}
+	if cfg.Description.IsSet() {
+		t.Errorf("expected description to be unset, got %v", cfg.Description)
+	}
+	if cfg.Config != nil {
+		t.Errorf("expected nil config, got %v", cfg.Config)
 	}
 }

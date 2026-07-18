@@ -37,8 +37,8 @@ var providerSpecs = []providerSpec{
 		Description:  "Azure OpenAI provider configuration.",
 		Fields: []providerFieldSpec{
 			{TerraformName: "api_key", APIName: "apiKey", Description: "Azure OpenAI API key.", Required: true, Sensitive: true},
-			{TerraformName: "base_url", APIName: "baseUrl", Description: "Azure OpenAI base URL.", Required: true},
-			{TerraformName: "deployment_name", APIName: "deploymentName", Description: "Azure OpenAI deployment name.", Required: true},
+			{TerraformName: "base_url", APIName: "azureEndpoint", Description: "Azure OpenAI base URL.", Required: true},
+			{TerraformName: "deployment_name", APIName: "azureDeployment", Description: "Azure OpenAI deployment name.", Required: true},
 			{TerraformName: "api_version", APIName: "apiVersion", Description: "Azure OpenAI API version.", Required: true},
 		},
 	},

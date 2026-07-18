@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"sort"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -26,8 +28,8 @@ var algoliaSearchToolAttrTypes = map[string]attr.Type{
 }
 
 var algoliaRecommendConfigAttrTypes = map[string]attr.Type{
-	"index":      types.StringType,
-	"model_name": types.StringType,
+	"index":       types.StringType,
+	"model_name":  types.StringType,
 	"description": types.StringType,
 }
 
@@ -62,23 +64,23 @@ var mcpToolAttrTypes = map[string]attr.Type{
 }
 
 // flattenAgentResponse populates the Terraform model from an API response.
-func flattenAgentResponse(ctx context.Context, resp *AgentResponse, model *AgentResourceModel) diag.Diagnostics {
+func flattenAgentResponse(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, model *AgentResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	model.ID = types.StringValue(resp.ID)
+	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
 	model.Description = flattenNullableString(resp.Description)
 	model.Instructions = types.StringValue(resp.Instructions)
 	model.SystemPrompt = flattenNullableString(resp.SystemPrompt)
-	model.ProviderID = flattenNullableString(resp.ProviderID)
+	model.ProviderID = flattenNullableString(resp.ProviderId)
 	model.Model = flattenNullableString(resp.Model)
 	model.TemplateType = flattenNullableString(resp.TemplateType)
-	model.Status = types.StringValue(resp.Status)
+	model.Status = types.StringValue(string(resp.Status))
 	model.CreatedAt = types.StringValue(resp.CreatedAt)
 	model.UpdatedAt = flattenNullableString(resp.UpdatedAt)
 
 	// Config
-	if resp.Config != nil {
+	if len(resp.Config) > 0 {
 		configJSON, err := json.Marshal(resp.Config)
 		if err != nil {
 			diags.AddError("Error marshaling config", err.Error())
@@ -102,7 +104,7 @@ func flattenAgentResponse(ctx context.Context, resp *AgentResponse, model *Agent
 }
 
 // flattenTools distributes API tools into the typed tool list attributes on the model.
-func flattenTools(ctx context.Context, apiTools []any, model *AgentResourceModel) diag.Diagnostics {
+func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, model *AgentResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	var searchTools []ToolAlgoliaSearchModel
@@ -110,34 +112,29 @@ func flattenTools(ctx context.Context, apiTools []any, model *AgentResourceModel
 	var clientTools []ToolClientSideModel
 	var mcpTools []ToolMCPModel
 
-	for _, rawTool := range apiTools {
-		toolMap, ok := rawTool.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		toolType, _ := toolMap["type"].(string)
-		switch toolType {
-		case "algolia_search_index":
-			t, d := flattenAlgoliaSearchTool(ctx, toolMap)
+	for i := range apiTools {
+		tool := apiTools[i]
+		switch {
+		case tool.AlgoliaSearchToolConfig != nil:
+			t, d := flattenAlgoliaSearchTool(tool.AlgoliaSearchToolConfig)
 			diags.Append(d...)
 			if t != nil {
 				searchTools = append(searchTools, *t)
 			}
-		case "algolia_recommend":
-			t, d := flattenAlgoliaRecommendTool(ctx, toolMap)
+		case tool.AlgoliaRecommendToolConfigInput != nil:
+			t, d := flattenAlgoliaRecommendTool(tool.AlgoliaRecommendToolConfigInput)
 			diags.Append(d...)
 			if t != nil {
 				recommendTools = append(recommendTools, *t)
 			}
-		case "client_side":
-			t, d := flattenClientSideTool(toolMap)
+		case tool.ClientSideToolConfig != nil:
+			t, d := flattenClientSideTool(tool.ClientSideToolConfig)
 			diags.Append(d...)
 			if t != nil {
 				clientTools = append(clientTools, *t)
 			}
-		case "mcp_tools":
-			t, d := flattenMCPTool(ctx, toolMap)
+		case tool.McpServerToolConfig != nil:
+			t, d := flattenMCPTool(tool.McpServerToolConfig)
 			diags.Append(d...)
 			if t != nil {
 				mcpTools = append(mcpTools, *t)
@@ -189,43 +186,32 @@ func flattenTools(ctx context.Context, apiTools []any, model *AgentResourceModel
 	return diags
 }
 
-func flattenAlgoliaSearchTool(_ context.Context, toolMap map[string]any) (*ToolAlgoliaSearchModel, diag.Diagnostics) {
+func flattenAlgoliaSearchTool(tool *agentStudio.AlgoliaSearchToolConfig) (*ToolAlgoliaSearchModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolAlgoliaSearchModel{
-		Name: types.StringValue(getString(toolMap, "name")),
+		Name: types.StringValue(tool.Name),
 	}
 
-	rawIndices, _ := toolMap["indices"].([]any)
 	var indices []AlgoliaSearchIndexModel
-	for _, raw := range rawIndices {
-		idxMap, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
+	for i := range tool.Indices {
+		src := tool.Indices[i]
 		idx := AlgoliaSearchIndexModel{
-			Name:        types.StringValue(getString(idxMap, "index")),
-			Description: types.StringValue(getString(idxMap, "description")),
+			Name:        types.StringValue(src.Index),
+			Description: types.StringValue(src.Description),
 		}
-		if v, ok := idxMap["enhancedDescription"].(string); ok && v != "" {
-			idx.EnhancedDescription = types.StringValue(v)
+		if src.EnhancedDescription != nil && *src.EnhancedDescription != "" {
+			idx.EnhancedDescription = types.StringValue(*src.EnhancedDescription)
 		} else {
 			idx.EnhancedDescription = types.StringNull()
 		}
-		if v, ok := idxMap["searchParameters"]; ok && v != nil {
-			stripped := stripNullValues(v)
-			if stripped == nil {
-				idx.SearchParameters = types.StringNull()
-			} else {
-				b, err := json.Marshal(stripped)
-				if err != nil {
-					diags.AddError("Error marshaling searchParameters", err.Error())
-					return nil, diags
-				}
-				idx.SearchParameters = types.StringValue(string(b))
-			}
-		} else {
-			idx.SearchParameters = types.StringNull()
+
+		searchParams, d := flattenSearchParameters(src.SearchParameters)
+		diags.Append(d...)
+		if diags.HasError() {
+			return nil, diags
 		}
+		idx.SearchParameters = searchParams
+
 		indices = append(indices, idx)
 	}
 
@@ -241,25 +227,56 @@ func flattenAlgoliaSearchTool(_ context.Context, toolMap map[string]any) (*ToolA
 	return model, diags
 }
 
-func flattenAlgoliaRecommendTool(_ context.Context, toolMap map[string]any) (*ToolAlgoliaRecommendModel, diag.Diagnostics) {
+// flattenSearchParameters marshals the typed search parameters back into the
+// compact JSON string stored in Terraform state, stripping null values so the
+// stored value matches what the user wrote.
+func flattenSearchParameters(params utils.Nullable[agentStudio.SearchParameters]) (types.String, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	model := &ToolAlgoliaRecommendModel{
-		Name: types.StringValue(getString(toolMap, "name")),
+	if !params.IsSet() || params.Get() == nil {
+		return types.StringNull(), diags
 	}
 
-	rawConfigs, _ := toolMap["allowedConfigs"].([]any)
+	raw, err := json.Marshal(params.Get())
+	if err != nil {
+		diags.AddError("Error marshaling searchParameters", err.Error())
+		return types.StringNull(), diags
+	}
+
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		diags.AddError("Error decoding searchParameters", err.Error())
+		return types.StringNull(), diags
+	}
+
+	stripped := stripNullValues(decoded)
+	if stripped == nil {
+		return types.StringNull(), diags
+	}
+
+	b, err := json.Marshal(stripped)
+	if err != nil {
+		diags.AddError("Error marshaling searchParameters", err.Error())
+		return types.StringNull(), diags
+	}
+
+	return types.StringValue(string(b)), diags
+}
+
+func flattenAlgoliaRecommendTool(tool *agentStudio.AlgoliaRecommendToolConfigInput) (*ToolAlgoliaRecommendModel, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	model := &ToolAlgoliaRecommendModel{
+		Name: types.StringValue(tool.Name),
+	}
+
 	var configs []AlgoliaRecommendConfigModel
-	for _, raw := range rawConfigs {
-		cfgMap, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
+	for i := range tool.AllowedConfigs {
+		src := tool.AllowedConfigs[i]
 		cfg := AlgoliaRecommendConfigModel{
-			Index:     types.StringValue(getString(cfgMap, "index")),
-			ModelName: types.StringValue(getString(cfgMap, "modelName")),
+			Index:     types.StringValue(src.Index),
+			ModelName: types.StringValue(src.ModelName),
 		}
-		if v, ok := cfgMap["description"].(string); ok && v != "" {
-			cfg.Description = types.StringValue(v)
+		if src.Description != nil && *src.Description != "" {
+			cfg.Description = types.StringValue(*src.Description)
 		} else {
 			cfg.Description = types.StringNull()
 		}
@@ -275,8 +292,8 @@ func flattenAlgoliaRecommendTool(_ context.Context, toolMap map[string]any) (*To
 		model.AllowedConfigs = types.ListNull(configObjType)
 	}
 
-	if v, ok := toolMap["predefinedRecommendParameters"]; ok && v != nil {
-		b, err := json.Marshal(v)
+	if len(tool.PredefinedRecommendParameters) > 0 {
+		b, err := json.Marshal(tool.PredefinedRecommendParameters)
 		if err != nil {
 			diags.AddError("Error marshaling predefinedRecommendParameters", err.Error())
 			return nil, diags
@@ -289,42 +306,39 @@ func flattenAlgoliaRecommendTool(_ context.Context, toolMap map[string]any) (*To
 	return model, diags
 }
 
-func flattenClientSideTool(toolMap map[string]any) (*ToolClientSideModel, diag.Diagnostics) {
+func flattenClientSideTool(tool *agentStudio.ClientSideToolConfig) (*ToolClientSideModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolClientSideModel{
-		Name:        types.StringValue(getString(toolMap, "name")),
-		Description: types.StringValue(getString(toolMap, "description")),
+		Name:        types.StringValue(tool.Name),
+		Description: types.StringValue(tool.Description),
 	}
 
-	if v, ok := toolMap["inputSchema"]; ok && v != nil {
-		b, err := json.Marshal(v)
-		if err != nil {
-			diags.AddError("Error marshaling inputSchema", err.Error())
-			return nil, diags
-		}
-		model.InputSchema = types.StringValue(string(b))
-	} else {
-		model.InputSchema = types.StringValue("{}")
+	b, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		diags.AddError("Error marshaling inputSchema", err.Error())
+		return nil, diags
 	}
+	model.InputSchema = types.StringValue(string(b))
 
 	return model, diags
 }
 
-func flattenMCPTool(_ context.Context, toolMap map[string]any) (*ToolMCPModel, diag.Diagnostics) {
+func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolMCPModel{
-		Name:      types.StringValue(getString(toolMap, "name")),
-		URL:       types.StringValue(getString(toolMap, "url")),
-		Transport: types.StringValue(getString(toolMap, "transport")),
+		Name: types.StringValue(tool.Name),
+		URL:  types.StringValue(tool.Url),
+	}
+
+	if tool.Transport != nil {
+		model.Transport = types.StringValue(*tool.Transport)
+	} else {
+		model.Transport = types.StringNull()
 	}
 
 	// Headers
-	if rawHeaders, ok := toolMap["headers"].(map[string]any); ok && len(rawHeaders) > 0 {
-		headers := make(map[string]string, len(rawHeaders))
-		for k, v := range rawHeaders {
-			headers[k], _ = v.(string)
-		}
-		headerMap, d := types.MapValueFrom(context.Background(), types.StringType, headers)
+	if len(tool.Headers) > 0 {
+		headerMap, d := types.MapValueFrom(context.Background(), types.StringType, tool.Headers)
 		diags.Append(d...)
 		model.Headers = headerMap
 	} else {
@@ -332,34 +346,31 @@ func flattenMCPTool(_ context.Context, toolMap map[string]any) (*ToolMCPModel, d
 	}
 
 	// Allowed tools
-	if rawAllowed, ok := toolMap["allowedTools"].(map[string]any); ok && len(rawAllowed) > 0 {
+	if len(tool.AllowedTools) > 0 {
 		var allowedTools []MCPAllowedToolModel
-		allowedToolNames := make([]string, 0, len(rawAllowed))
-		for name := range rawAllowed {
+		allowedToolNames := make([]string, 0, len(tool.AllowedTools))
+		for name := range tool.AllowedTools {
 			allowedToolNames = append(allowedToolNames, name)
 		}
 		sort.Strings(allowedToolNames)
 
 		for _, name := range allowedToolNames {
-			rawCfg := rawAllowed[name]
 			at := MCPAllowedToolModel{
-				Name: types.StringValue(name),
+				Name:             types.StringValue(name),
+				RequiresApproval: types.BoolNull(),
+				Alias:            types.StringNull(),
 			}
-			if cfgMap, ok := rawCfg.(map[string]any); ok {
-				if v, ok := cfgMap["requiresApproval"].(bool); ok {
-					at.RequiresApproval = types.BoolValue(v)
-				} else {
-					at.RequiresApproval = types.BoolNull()
+
+			cfg := tool.AllowedTools[name]
+			if cfg.McpToolConfig != nil {
+				if v := cfg.McpToolConfig.RequiresApproval.Get(); v != nil {
+					at.RequiresApproval = types.BoolValue(*v)
 				}
-				if v, ok := cfgMap["alias"].(string); ok && v != "" {
-					at.Alias = types.StringValue(v)
-				} else {
-					at.Alias = types.StringNull()
+				if v := cfg.McpToolConfig.Alias.Get(); v != nil && *v != "" {
+					at.Alias = types.StringValue(*v)
 				}
-			} else {
-				at.RequiresApproval = types.BoolNull()
-				at.Alias = types.StringNull()
 			}
+
 			allowedTools = append(allowedTools, at)
 		}
 
@@ -374,12 +385,12 @@ func flattenMCPTool(_ context.Context, toolMap map[string]any) (*ToolMCPModel, d
 	return model, diags
 }
 
-// getString safely extracts a string from a map.
-func getString(m map[string]any, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
+// flattenNullableString converts a utils.Nullable[string] to a types.String.
+func flattenNullableString(s utils.Nullable[string]) types.String {
+	if v := s.Get(); v != nil {
+		return types.StringValue(*v)
 	}
-	return ""
+	return types.StringNull()
 }
 
 // stripNullValues recursively removes null (nil) values from a JSON-decoded

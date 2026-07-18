@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	agentstudio "github.com/algolia/terraform-provider-algolia/internal/services/agent"
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -19,7 +19,7 @@ var (
 )
 
 type agentProviderResource struct {
-	client *agentstudio.Client
+	client *agentStudio.APIClient
 }
 
 func NewResource() resource.Resource {
@@ -48,16 +48,7 @@ func (r *agentProviderResource) Configure(_ context.Context, req resource.Config
 		return
 	}
 
-	agentClient, ok := data.AgentClient.(*agentstudio.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Agent Client Type",
-			fmt.Sprintf("Expected *agent.Client, got: %T", data.AgentClient),
-		)
-		return
-	}
-
-	r.client = agentClient
+	r.client = data.AgentClient
 }
 
 func (r *agentProviderResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -88,7 +79,7 @@ func (r *agentProviderResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	apiResp, err := r.client.CreateProvider(ctx, apiReq)
+	apiResp, err := r.client.CreateProvider(r.client.NewApiCreateProviderRequest(apiReq), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating provider", "Could not create provider: "+err.Error())
 		return
@@ -112,10 +103,10 @@ func (r *agentProviderResource) Read(ctx context.Context, req resource.ReadReque
 	providerID := state.ID.ValueString()
 	tflog.Debug(ctx, "Reading agent provider", map[string]any{"id": providerID})
 
-	apiResp, err := r.client.GetProvider(ctx, providerID)
+	apiResp, err := r.client.GetProvider(r.client.NewApiGetProviderRequest(providerID), agentStudio.WithContext(ctx))
 	if err != nil {
-		var apiErr *agentstudio.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+		var apiErr *agentStudio.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			tflog.Warn(ctx, "Provider not found; removing from state", map[string]any{"id": providerID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -149,7 +140,7 @@ func (r *agentProviderResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	apiResp, err := r.client.UpdateProvider(ctx, providerID, apiReq)
+	apiResp, err := r.client.UpdateProvider(r.client.NewApiUpdateProviderRequest(providerID, apiReq), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating provider", "Could not update provider "+providerID+": "+err.Error())
 		return
@@ -173,14 +164,14 @@ func (r *agentProviderResource) Delete(ctx context.Context, req resource.DeleteR
 	providerID := state.ID.ValueString()
 	tflog.Debug(ctx, "Deleting agent provider", map[string]any{"id": providerID})
 
-	if err := r.client.DeleteProvider(ctx, providerID); err != nil {
+	if err := r.client.DeleteProvider(r.client.NewApiDeleteProviderRequest(providerID), agentStudio.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error deleting provider", "Could not delete provider "+providerID+": "+err.Error())
 		return
 	}
 }
 
 func (r *agentProviderResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	apiResp, err := r.client.GetProvider(ctx, req.ID)
+	apiResp, err := r.client.GetProvider(r.client.NewApiGetProviderRequest(req.ID), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing provider", "Could not import provider "+req.ID+": "+err.Error())
 		return

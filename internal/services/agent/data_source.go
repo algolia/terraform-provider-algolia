@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -12,7 +13,7 @@ import (
 var _ datasource.DataSource = &agentDataSource{}
 
 type agentDataSource struct {
-	client *Client
+	client *agentStudio.APIClient
 }
 
 func NewDataSource() datasource.DataSource {
@@ -41,16 +42,7 @@ func (d *agentDataSource) Configure(_ context.Context, req datasource.ConfigureR
 		return
 	}
 
-	agentClient, ok := data.AgentClient.(*Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Agent Client Type",
-			fmt.Sprintf("Expected *agent.Client, got: %T", data.AgentClient),
-		)
-		return
-	}
-
-	d.client = agentClient
+	d.client = data.AgentClient
 }
 
 func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -63,7 +55,7 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	agentID := model.ID.ValueString()
 	tflog.Debug(ctx, "Reading agent data source", map[string]interface{}{"id": agentID})
 
-	apiResp, err := d.client.GetAgent(ctx, agentID)
+	apiResp, err := d.client.GetAgent(d.client.NewApiGetAgentRequest(agentID), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading agent", "Could not read agent "+agentID+": "+err.Error())
 		return

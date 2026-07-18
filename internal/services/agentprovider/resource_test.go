@@ -1,7 +1,6 @@
 package agentprovider_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
-	agentstudio "github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -124,19 +123,22 @@ func TestAccAgentProviderResource_googleGenAI(t *testing.T) {
 }
 
 func testAccCheckAgentProviderDestroy(s *terraform.State) error {
-	client := agentstudio.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	client, err := agentStudio.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	if err != nil {
+		return fmt.Errorf("creating agent studio client: %w", err)
+	}
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "algolia_agent_provider" {
 			continue
 		}
 
-		_, err := client.GetProvider(context.Background(), rs.Primary.ID)
+		_, err := client.GetProvider(client.NewApiGetProviderRequest(rs.Primary.ID))
 		if err == nil {
 			return fmt.Errorf("provider %s still exists", rs.Primary.ID)
 		}
 
-		var apiErr *agentstudio.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+		var apiErr *agentStudio.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
 			continue
 		}
 
