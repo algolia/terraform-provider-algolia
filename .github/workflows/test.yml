@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,6 +35,8 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go vet ./...
+      # Ensure the e2e-tagged tests still compile even though they are not run here.
+      - run: go vet -tags e2e ./...
       - uses: golangci/golangci-lint-action@v7
         with:
           version: latest
@@ -63,8 +66,42 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # The plugin-testing framework auto-downloads the Terraform CLI when none
+      # is on PATH; pre-installing it avoids that (and its expired-GPG-key
+      # verification failure). terraform_wrapper: false keeps the real binary on
+      # PATH so the framework can exec it directly.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
       - run: go mod download
       - run: TF_ACC=1 go test ./... -v -timeout 120m
+        env:
+          ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
+          ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+
+  e2e:
+    name: E2E Tests
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Runs whenever the e2e application is configured (repo variable acts as a
+    # feature flag; the app_id/api_key themselves are stored as secrets).
+    if: vars.ALGOLIA_APP_ID != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The plugin-testing framework auto-downloads the Terraform CLI when none
+      # is on PATH; pre-installing it avoids that (and its expired-GPG-key
+      # verification failure). terraform_wrapper: false keeps the real binary on
+      # PATH so the framework can exec it directly.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: go mod download
+      - run: make e2e
         env:
           ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
           ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
