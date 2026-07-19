@@ -1,7 +1,6 @@
 package agent_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,8 +8,8 @@ import (
 	"regexp"
 	"testing"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
-	"github.com/algolia/terraform-provider-algolia/internal/services/agent"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -23,18 +22,21 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 }
 
 func testAccCheckAgentDestroy(s *terraform.State) error {
-	client := agent.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	client, err := agentStudio.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	if err != nil {
+		return fmt.Errorf("creating agent studio client: %w", err)
+	}
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "algolia_agent" {
 			continue
 		}
-		_, err := client.GetAgent(context.Background(), rs.Primary.ID)
+		_, err := client.GetAgent(client.NewApiGetAgentRequest(rs.Primary.ID))
 		if err == nil {
 			return fmt.Errorf("agent %s still exists", rs.Primary.ID)
 		}
 
-		var apiErr *agent.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+		var apiErr *agentStudio.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
 			continue
 		}
 

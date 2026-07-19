@@ -4,7 +4,8 @@ import (
 	"context"
 	"testing"
 
-	agentstudio "github.com/algolia/terraform-provider-algolia/internal/services/agent"
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -21,14 +22,14 @@ func TestHydrateAgentProviderResourceState_PreservesSensitiveFields(t *testing.T
 		}),
 	}
 
-	resp := &agentstudio.ProviderResponse{
-		ID:           "provider-123",
+	resp := &agentStudio.ProviderAuthenticationResponse{
+		Id:           "provider-123",
 		Name:         "OpenAI Prod",
 		ProviderName: "openai",
-		Input: map[string]any{
-			"apiKey":  "aV6IA",
-			"baseUrl": "https://proxy.example.com/v1",
-		},
+		Input: *agentStudio.OpenAIProviderInputAsProviderInput(&agentStudio.OpenAIProviderInput{
+			ApiKey:  "aV6IA",
+			BaseUrl: *utils.NewNullable(strPtr("https://proxy.example.com/v1")),
+		}),
 		CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-02T00:00:00Z",
 	}
@@ -52,13 +53,13 @@ func TestHydrateImportedAgentProviderResourceState_LeavesSensitiveFieldsNull(t *
 	ctx := context.Background()
 	model := &AgentProviderResourceModel{}
 
-	resp := &agentstudio.ProviderResponse{
-		ID:           "provider-456",
+	resp := &agentStudio.ProviderAuthenticationResponse{
+		Id:           "provider-456",
 		Name:         "Gemini",
 		ProviderName: "google_genai",
-		Input: map[string]any{
-			"apiKey": "mask",
-		},
+		Input: *agentStudio.BaseProviderInputAsProviderInput(&agentStudio.BaseProviderInput{
+			ApiKey: "mask",
+		}),
 		CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-02T00:00:00Z",
 	}
@@ -78,14 +79,14 @@ func TestHydrateAgentProviderDataSourceState_OmitsSensitiveFields(t *testing.T) 
 	ctx := context.Background()
 	model := &AgentProviderDataSourceModel{}
 
-	resp := &agentstudio.ProviderResponse{
-		ID:           "provider-789",
+	resp := &agentStudio.ProviderAuthenticationResponse{
+		Id:           "provider-789",
 		Name:         "OpenAI DS",
 		ProviderName: "openai",
-		Input: map[string]any{
-			"apiKey":  "masked",
-			"baseUrl": "https://api.openai.com/v1",
-		},
+		Input: *agentStudio.OpenAIProviderInputAsProviderInput(&agentStudio.OpenAIProviderInput{
+			ApiKey:  "masked",
+			BaseUrl: *utils.NewNullable(strPtr("https://api.openai.com/v1")),
+		}),
 		CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-02T00:00:00Z",
 	}

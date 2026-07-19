@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	agentstudio "github.com/algolia/terraform-provider-algolia/internal/services/agent"
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -19,7 +19,7 @@ var (
 )
 
 type agentProviderDataSource struct {
-	client *agentstudio.Client
+	client *agentStudio.APIClient
 }
 
 func NewDataSource() datasource.DataSource {
@@ -48,16 +48,7 @@ func (d *agentProviderDataSource) Configure(_ context.Context, req datasource.Co
 		return
 	}
 
-	agentClient, ok := data.AgentClient.(*agentstudio.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Agent Client Type",
-			fmt.Sprintf("Expected *agent.Client, got: %T", data.AgentClient),
-		)
-		return
-	}
-
-	d.client = agentClient
+	d.client = data.AgentClient
 }
 
 func (d *agentProviderDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -70,7 +61,7 @@ func (d *agentProviderDataSource) Read(ctx context.Context, req datasource.ReadR
 	providerID := model.ProviderID.ValueString()
 	tflog.Debug(ctx, "Reading agent provider data source", map[string]any{"provider_id": providerID})
 
-	apiResp, err := d.client.GetProvider(ctx, providerID)
+	apiResp, err := d.client.GetProvider(d.client.NewApiGetProviderRequest(providerID), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading provider", "Could not read provider "+providerID+": "+err.Error())
 		return
@@ -85,7 +76,7 @@ func (d *agentProviderDataSource) Read(ctx context.Context, req datasource.ReadR
 }
 
 type agentProviderModelsDataSource struct {
-	client *agentstudio.Client
+	client *agentStudio.APIClient
 }
 
 func NewModelsDataSource() datasource.DataSource {
@@ -114,16 +105,7 @@ func (d *agentProviderModelsDataSource) Configure(_ context.Context, req datasou
 		return
 	}
 
-	agentClient, ok := data.AgentClient.(*agentstudio.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Agent Client Type",
-			fmt.Sprintf("Expected *agent.Client, got: %T", data.AgentClient),
-		)
-		return
-	}
-
-	d.client = agentClient
+	d.client = data.AgentClient
 }
 
 func (d *agentProviderModelsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -136,7 +118,7 @@ func (d *agentProviderModelsDataSource) Read(ctx context.Context, req datasource
 	providerID := model.ProviderID.ValueString()
 	tflog.Debug(ctx, "Reading provider models data source", map[string]any{"provider_id": providerID})
 
-	models, err := d.client.GetProviderModels(ctx, providerID)
+	models, err := d.client.ListProviderModels(d.client.NewApiListProviderModelsRequest(providerID), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading provider models", "Could not read provider models for "+providerID+": "+err.Error())
 		return

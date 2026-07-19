@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -16,7 +17,7 @@ var (
 )
 
 type agentResource struct {
-	client *Client
+	client *agentStudio.APIClient
 }
 
 func NewResource() resource.Resource {
@@ -45,16 +46,7 @@ func (r *agentResource) Configure(_ context.Context, req resource.ConfigureReque
 		return
 	}
 
-	agentClient, ok := data.AgentClient.(*Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Agent Client Type",
-			fmt.Sprintf("Expected *agent.Client, got: %T", data.AgentClient),
-		)
-		return
-	}
-
-	r.client = agentClient
+	r.client = data.AgentClient
 }
 
 func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -66,13 +58,13 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	tflog.Debug(ctx, "Creating agent", map[string]interface{}{"name": plan.Name.ValueString()})
 
-	apiReq, diags := expandAgentRequest(ctx, &plan)
+	apiReq, diags := expandAgentConfigCreate(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	apiResp, err := r.client.CreateAgent(ctx, apiReq)
+	apiResp, err := r.client.CreateAgent(r.client.NewApiCreateAgentRequest(apiReq), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating agent", "Could not create agent: "+err.Error())
 		return
@@ -80,7 +72,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Publish if requested.
 	if plan.Publish.ValueBool() {
-		apiResp, err = r.client.PublishAgent(ctx, apiResp.ID)
+		apiResp, err = r.client.PublishAgent(r.client.NewApiPublishAgentRequest(apiResp.Id), agentStudio.WithContext(ctx))
 		if err != nil {
 			resp.Diagnostics.AddError("Error publishing agent", "Agent created but could not be published: "+err.Error())
 			return
@@ -105,10 +97,10 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	agentID := state.ID.ValueString()
 	tflog.Debug(ctx, "Reading agent", map[string]interface{}{"id": agentID})
 
-	apiResp, err := r.client.GetAgent(ctx, agentID)
+	apiResp, err := r.client.GetAgent(r.client.NewApiGetAgentRequest(agentID), agentStudio.WithContext(ctx))
 	if err != nil {
-		var apiErr *APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+		var apiErr *agentStudio.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			tflog.Warn(ctx, "Agent not found; removing from state", map[string]interface{}{"id": agentID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -146,13 +138,13 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	agentID := plan.ID.ValueString()
 	tflog.Debug(ctx, "Updating agent", map[string]interface{}{"id": agentID})
 
-	apiReq, diags := expandAgentRequest(ctx, &plan)
+	apiReq, diags := expandAgentConfigUpdate(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	apiResp, err := r.client.UpdateAgent(ctx, agentID, apiReq)
+	apiResp, err := r.client.UpdateAgent(r.client.NewApiUpdateAgentRequest(agentID, apiReq), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating agent", "Could not update agent "+agentID+": "+err.Error())
 		return
@@ -160,7 +152,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Only publish on update when transitioning from draft to published.
 	if shouldPublishAfterUpdate(state, plan) {
-		apiResp, err = r.client.PublishAgent(ctx, agentID)
+		apiResp, err = r.client.PublishAgent(r.client.NewApiPublishAgentRequest(agentID), agentStudio.WithContext(ctx))
 		if err != nil {
 			resp.Diagnostics.AddError("Error publishing agent", "Agent updated but could not be published: "+err.Error())
 			return
@@ -195,14 +187,14 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	tflog.Debug(ctx, "Deleting agent", map[string]interface{}{"id": agentID})
 
-	if err := r.client.DeleteAgent(ctx, agentID); err != nil {
+	if err := r.client.DeleteAgent(r.client.NewApiDeleteAgentRequest(agentID), agentStudio.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error deleting agent", "Could not delete agent "+agentID+": "+err.Error())
 		return
 	}
 }
 
 func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	apiResp, err := r.client.GetAgent(ctx, req.ID)
+	apiResp, err := r.client.GetAgent(r.client.NewApiGetAgentRequest(req.ID), agentStudio.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing agent", "Could not import agent "+req.ID+": "+err.Error())
 		return

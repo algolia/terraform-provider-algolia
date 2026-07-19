@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -158,7 +159,14 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	agentClient := agent.NewClient(appID, apiKey)
+	agentClient, err := agentStudio.NewClient(appID, apiKey)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to create Algolia Agent Studio client",
+			"An unexpected error occurred when creating the Algolia Agent Studio client: "+err.Error(),
+		)
+		return
+	}
 
 	// The crawler is optional: only the (future) crawler resource/data source needs these
 	// credentials, so an empty crawler_user_id/crawler_api_key is not an error here — the

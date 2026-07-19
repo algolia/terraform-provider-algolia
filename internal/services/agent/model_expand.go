@@ -4,67 +4,121 @@ import (
 	"context"
 	"encoding/json"
 
+	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// expandAgentRequest converts the Terraform model into an AgentRequest for the API.
-func expandAgentRequest(ctx context.Context, model *AgentResourceModel) (*AgentRequest, diag.Diagnostics) {
+// expandAgentConfigCreate converts the Terraform model into an AgentConfigCreate for the Create API.
+func expandAgentConfigCreate(ctx context.Context, model *AgentResourceModel) (*agentStudio.AgentConfigCreate, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	req := &AgentRequest{}
 
-	if isKnown(model.Name) {
-		v := model.Name.ValueString()
-		req.Name = &v
+	cfg := &agentStudio.AgentConfigCreate{
+		Name:         model.Name.ValueString(),
+		Instructions: model.Instructions.ValueString(),
 	}
+
 	if isKnown(model.Description) {
-		v := model.Description.ValueString()
-		req.Description = &v
-	}
-	if isKnown(model.Instructions) {
-		v := model.Instructions.ValueString()
-		req.Instructions = &v
+		cfg.Description = strPtr(model.Description.ValueString())
 	}
 	if isKnown(model.SystemPrompt) {
-		v := model.SystemPrompt.ValueString()
-		req.SystemPrompt = &v
+		cfg.SystemPrompt = strPtr(model.SystemPrompt.ValueString())
 	}
 	if isKnown(model.ProviderID) {
-		v := model.ProviderID.ValueString()
-		req.ProviderID = &v
+		cfg.ProviderId = strPtr(model.ProviderID.ValueString())
 	}
 	if isKnown(model.Model) {
-		v := model.Model.ValueString()
-		req.Model = &v
+		cfg.Model = strPtr(model.Model.ValueString())
 	}
 	if isKnown(model.TemplateType) {
-		v := model.TemplateType.ValueString()
-		req.TemplateType = &v
+		cfg.TemplateType = strPtr(model.TemplateType.ValueString())
 	}
 
-	if isKnown(model.Config) {
-		var configObj any
-		if err := json.Unmarshal([]byte(model.Config.ValueString()), &configObj); err != nil {
-			diags.AddError("Invalid config JSON", "Could not parse config: "+err.Error())
-			return nil, diags
-		}
-		req.Config = configObj
+	config, d := expandConfig(model.Config)
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil, diags
 	}
+	cfg.Config = config
 
 	tools, d := expandTools(ctx, model)
 	diags.Append(d...)
 	if diags.HasError() {
 		return nil, diags
 	}
-	req.Tools = tools
+	cfg.Tools = tools
 
-	return req, diags
+	return cfg, diags
 }
 
-// expandTools collects all tool blocks into a single []any for the API.
-func expandTools(ctx context.Context, model *AgentResourceModel) ([]any, diag.Diagnostics) {
+// expandAgentConfigUpdate converts the Terraform model into an AgentConfigUpdate for the Update API.
+// Only known (non-null) scalar fields are set so that unset optionals are omitted from the PATCH body,
+// preserving the behaviour of the previous hand-rolled client.
+func expandAgentConfigUpdate(ctx context.Context, model *AgentResourceModel) (*agentStudio.AgentConfigUpdate, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	var tools []any
+
+	cfg := &agentStudio.AgentConfigUpdate{}
+
+	if isKnown(model.Name) {
+		cfg.Name = *utils.NewNullable(strPtr(model.Name.ValueString()))
+	}
+	if isKnown(model.Instructions) {
+		cfg.Instructions = *utils.NewNullable(strPtr(model.Instructions.ValueString()))
+	}
+	if isKnown(model.Description) {
+		cfg.Description = *utils.NewNullable(strPtr(model.Description.ValueString()))
+	}
+	if isKnown(model.SystemPrompt) {
+		cfg.SystemPrompt = *utils.NewNullable(strPtr(model.SystemPrompt.ValueString()))
+	}
+	if isKnown(model.ProviderID) {
+		cfg.ProviderId = *utils.NewNullable(strPtr(model.ProviderID.ValueString()))
+	}
+	if isKnown(model.Model) {
+		cfg.Model = *utils.NewNullable(strPtr(model.Model.ValueString()))
+	}
+	if isKnown(model.TemplateType) {
+		cfg.TemplateType = *utils.NewNullable(strPtr(model.TemplateType.ValueString()))
+	}
+
+	config, d := expandConfig(model.Config)
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	cfg.Config = config
+
+	tools, d := expandTools(ctx, model)
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	cfg.Tools = tools
+
+	return cfg, diags
+}
+
+// expandConfig parses the JSON-encoded config string into a map for the API.
+func expandConfig(config types.String) (map[string]any, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if !isKnown(config) {
+		return nil, diags
+	}
+
+	var configObj map[string]any
+	if err := json.Unmarshal([]byte(config.ValueString()), &configObj); err != nil {
+		diags.AddError("Invalid config JSON", "Could not parse config: "+err.Error())
+		return nil, diags
+	}
+
+	return configObj, diags
+}
+
+// expandTools collects all tool blocks into a single []ToolConfigInput for the API.
+func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.ToolConfigInput, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var tools []agentStudio.ToolConfigInput
 
 	// Algolia Search tools
 	if isKnown(model.ToolAlgoliaSearch) {
@@ -73,13 +127,13 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]any, diag.Di
 		if diags.HasError() {
 			return nil, diags
 		}
-		for _, st := range searchTools {
-			tool, d := expandAlgoliaSearchTool(ctx, &st)
+		for i := range searchTools {
+			tool, d := expandAlgoliaSearchTool(ctx, &searchTools[i])
 			diags.Append(d...)
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, tool)
+			tools = append(tools, *agentStudio.AlgoliaSearchToolConfigAsToolConfigInput(tool))
 		}
 	}
 
@@ -90,13 +144,13 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]any, diag.Di
 		if diags.HasError() {
 			return nil, diags
 		}
-		for _, rt := range recommendTools {
-			tool, d := expandAlgoliaRecommendTool(ctx, &rt)
+		for i := range recommendTools {
+			tool, d := expandAlgoliaRecommendTool(ctx, &recommendTools[i])
 			diags.Append(d...)
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, tool)
+			tools = append(tools, *agentStudio.AlgoliaRecommendToolConfigInputAsToolConfigInput(tool))
 		}
 	}
 
@@ -107,13 +161,13 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]any, diag.Di
 		if diags.HasError() {
 			return nil, diags
 		}
-		for _, ct := range clientTools {
-			tool, d := expandClientSideTool(&ct)
+		for i := range clientTools {
+			tool, d := expandClientSideTool(&clientTools[i])
 			diags.Append(d...)
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, tool)
+			tools = append(tools, *agentStudio.ClientSideToolConfigAsToolConfigInput(tool))
 		}
 	}
 
@@ -124,25 +178,21 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]any, diag.Di
 		if diags.HasError() {
 			return nil, diags
 		}
-		for _, mt := range mcpTools {
-			tool, d := expandMCPTool(ctx, &mt)
+		for i := range mcpTools {
+			tool, d := expandMCPTool(ctx, &mcpTools[i])
 			diags.Append(d...)
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, tool)
+			tools = append(tools, *agentStudio.McpServerToolConfigAsToolConfigInput(tool))
 		}
 	}
 
 	return tools, diags
 }
 
-func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel) (map[string]any, diag.Diagnostics) {
+func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel) (*agentStudio.AlgoliaSearchToolConfig, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	tool := map[string]any{
-		"type": "algolia_search_index",
-		"name": model.Name.ValueString(),
-	}
 
 	var indices []AlgoliaSearchIndexModel
 	diags.Append(model.Indices.ElementsAs(ctx, &indices, false)...)
@@ -150,36 +200,35 @@ func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel)
 		return nil, diags
 	}
 
-	var apiIndices []map[string]any
+	var apiIndices []agentStudio.AlgoliaSearchToolIndexConfig
 	for _, idx := range indices {
-		entry := map[string]any{
-			"index":       idx.Name.ValueString(),
-			"description": idx.Description.ValueString(),
+		entry := agentStudio.AlgoliaSearchToolIndexConfig{
+			Index:       idx.Name.ValueString(),
+			Description: idx.Description.ValueString(),
 		}
 		if isKnown(idx.EnhancedDescription) {
-			entry["enhancedDescription"] = idx.EnhancedDescription.ValueString()
+			entry.EnhancedDescription = strPtr(idx.EnhancedDescription.ValueString())
 		}
 		if isKnown(idx.SearchParameters) {
-			var params any
+			var params agentStudio.SearchParameters
 			if err := json.Unmarshal([]byte(idx.SearchParameters.ValueString()), &params); err != nil {
 				diags.AddError("Invalid search_parameters JSON", "Could not parse search_parameters: "+err.Error())
 				return nil, diags
 			}
-			entry["searchParameters"] = params
+			entry.SearchParameters = *utils.NewNullable(&params)
 		}
 		apiIndices = append(apiIndices, entry)
 	}
-	tool["indices"] = apiIndices
 
-	return tool, diags
+	return &agentStudio.AlgoliaSearchToolConfig{
+		Name:    model.Name.ValueString(),
+		Type:    "algolia_search_index",
+		Indices: apiIndices,
+	}, diags
 }
 
-func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommendModel) (map[string]any, diag.Diagnostics) {
+func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommendModel) (*agentStudio.AlgoliaRecommendToolConfigInput, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	tool := map[string]any{
-		"type": "algolia_recommend",
-		"name": model.Name.ValueString(),
-	}
 
 	var configs []AlgoliaRecommendConfigModel
 	diags.Append(model.AllowedConfigs.ElementsAs(ctx, &configs, false)...)
@@ -187,68 +236,74 @@ func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommend
 		return nil, diags
 	}
 
-	var apiConfigs []map[string]any
+	var apiConfigs []agentStudio.AlgoliaRecommendToolIndexConfig
 	for _, cfg := range configs {
-		entry := map[string]any{
-			"index":     cfg.Index.ValueString(),
-			"modelName": cfg.ModelName.ValueString(),
+		entry := agentStudio.AlgoliaRecommendToolIndexConfig{
+			Index:     cfg.Index.ValueString(),
+			ModelName: cfg.ModelName.ValueString(),
 		}
 		if isKnown(cfg.Description) {
-			entry["description"] = cfg.Description.ValueString()
+			entry.Description = strPtr(cfg.Description.ValueString())
 		}
 		apiConfigs = append(apiConfigs, entry)
 	}
-	tool["allowedConfigs"] = apiConfigs
+
+	tool := &agentStudio.AlgoliaRecommendToolConfigInput{
+		Name:           model.Name.ValueString(),
+		Type:           "algolia_recommend",
+		AllowedConfigs: apiConfigs,
+	}
 
 	if isKnown(model.PredefinedRecommendParameters) {
-		var params any
+		var params map[string]any
 		if err := json.Unmarshal([]byte(model.PredefinedRecommendParameters.ValueString()), &params); err != nil {
 			diags.AddError("Invalid predefined_recommend_parameters JSON", "Could not parse predefined_recommend_parameters: "+err.Error())
 			return nil, diags
 		}
-		tool["predefinedRecommendParameters"] = params
+		tool.PredefinedRecommendParameters = params
 	}
 
 	return tool, diags
 }
 
-func expandClientSideTool(model *ToolClientSideModel) (map[string]any, diag.Diagnostics) {
+func expandClientSideTool(model *ToolClientSideModel) (*agentStudio.ClientSideToolConfig, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	tool := map[string]any{
-		"type":        "client_side",
-		"name":        model.Name.ValueString(),
-		"description": model.Description.ValueString(),
-	}
 
-	var inputSchema any
+	var inputSchema agentStudio.ClientToolsArgsSchema
 	if err := json.Unmarshal([]byte(model.InputSchema.ValueString()), &inputSchema); err != nil {
 		diags.AddError("Invalid input_schema JSON", "Could not parse input_schema: "+err.Error())
 		return nil, diags
 	}
-	tool["inputSchema"] = inputSchema
 
-	return tool, diags
+	return &agentStudio.ClientSideToolConfig{
+		Name:        model.Name.ValueString(),
+		Type:        "client_side",
+		Description: model.Description.ValueString(),
+		InputSchema: inputSchema,
+	}, diags
 }
 
-func expandMCPTool(ctx context.Context, model *ToolMCPModel) (map[string]any, diag.Diagnostics) {
+func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.McpServerToolConfig, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	tool := map[string]any{
-		"type":      "mcp_tools",
-		"name":      model.Name.ValueString(),
-		"url":       model.URL.ValueString(),
-		"transport": model.Transport.ValueString(),
+
+	tool := &agentStudio.McpServerToolConfig{
+		Name: model.Name.ValueString(),
+		Type: "mcp_tools",
+		Url:  model.URL.ValueString(),
 	}
 
+	if isKnown(model.Transport) {
+		tool.Transport = strPtr(model.Transport.ValueString())
+	}
+
+	headers := map[string]string{}
 	if isKnown(model.Headers) {
-		headers := make(map[string]string)
 		diags.Append(model.Headers.ElementsAs(ctx, &headers, false)...)
 		if diags.HasError() {
 			return nil, diags
 		}
-		tool["headers"] = headers
-	} else {
-		tool["headers"] = map[string]string{}
 	}
+	tool.Headers = headers
 
 	if isKnown(model.AllowedTools) {
 		var allowedTools []MCPAllowedToolModel
@@ -258,18 +313,18 @@ func expandMCPTool(ctx context.Context, model *ToolMCPModel) (map[string]any, di
 		}
 
 		if len(allowedTools) > 0 {
-			allowedToolsMap := make(map[string]any)
+			allowedToolsMap := make(map[string]agentStudio.ToolConfig, len(allowedTools))
 			for _, at := range allowedTools {
-				entry := map[string]any{}
+				entry := &agentStudio.McpToolConfig{}
 				if isKnown(at.RequiresApproval) {
-					entry["requiresApproval"] = at.RequiresApproval.ValueBool()
+					entry.RequiresApproval = *utils.NewNullable(boolPtr(at.RequiresApproval.ValueBool()))
 				}
 				if isKnown(at.Alias) {
-					entry["alias"] = at.Alias.ValueString()
+					entry.Alias = *utils.NewNullable(strPtr(at.Alias.ValueString()))
 				}
-				allowedToolsMap[at.Name.ValueString()] = entry
+				allowedToolsMap[at.Name.ValueString()] = *agentStudio.McpToolConfigAsToolConfig(entry)
 			}
-			tool["allowedTools"] = allowedToolsMap
+			tool.AllowedTools = allowedToolsMap
 		}
 	}
 
@@ -277,14 +332,18 @@ func expandMCPTool(ctx context.Context, model *ToolMCPModel) (map[string]any, di
 }
 
 // isKnown returns true if the value is neither null nor unknown.
-func isKnown(v interface{ IsNull() bool; IsUnknown() bool }) bool {
+func isKnown(v interface {
+	IsNull() bool
+	IsUnknown() bool
+},
+) bool {
 	return !v.IsNull() && !v.IsUnknown()
 }
 
-// flattenNullableString converts a *string to a types.String.
-func flattenNullableString(s *string) types.String {
-	if s == nil {
-		return types.StringNull()
-	}
-	return types.StringValue(*s)
+func strPtr(s string) *string {
+	return &s
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
