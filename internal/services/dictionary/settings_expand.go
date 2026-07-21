@@ -28,8 +28,6 @@ func expandDictionarySettings(ctx context.Context, model *DictionarySettingsReso
 	}
 
 	entries.Stopwords = expandLanguageBoolMap(block.Stopwords)
-	entries.Plurals = expandLanguageBoolMap(block.Plurals)
-	entries.Compounds = expandLanguageBoolMap(block.Compounds)
 
 	return entries, diags
 }

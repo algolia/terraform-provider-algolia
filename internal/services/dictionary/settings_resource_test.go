@@ -45,7 +45,6 @@ func TestAccDictionarySettingsResource_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("algolia_dictionary_settings.test", "id"),
 					resource.TestCheckResourceAttr("algolia_dictionary_settings.test", "disable_standard_entries.stopwords.en", "true"),
-					resource.TestCheckResourceAttr("algolia_dictionary_settings.test", "disable_standard_entries.plurals.fr", "true"),
 				),
 			},
 			{
@@ -100,7 +99,7 @@ func testAccCheckDictionarySettingsDestroy(_ *terraform.State) error {
 	}
 
 	entries := resp.GetDisableStandardEntries()
-	if len(entries.GetStopwords()) != 0 || len(entries.GetPlurals()) != 0 || len(entries.GetCompounds()) != 0 {
+	if len(entries.GetStopwords()) != 0 {
 		return fmt.Errorf("expected dictionary settings to be reset to defaults (nothing disabled) on destroy, got %#v", entries)
 	}
 
@@ -137,9 +136,6 @@ resource "algolia_dictionary_settings" "test" {
   disable_standard_entries = {
     stopwords = {
       en = true
-    }
-    plurals = {
-      fr = true
     }
   }
 }

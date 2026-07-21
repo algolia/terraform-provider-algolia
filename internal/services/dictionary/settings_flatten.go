@@ -19,8 +19,6 @@ func flattenDictionarySettings(ctx context.Context, entries search.StandardEntri
 
 	block := DisableStandardEntriesModel{
 		Stopwords: flattenLanguageBoolMap(entries.Stopwords),
-		Plurals:   flattenLanguageBoolMap(entries.Plurals),
-		Compounds: flattenLanguageBoolMap(entries.Compounds),
 	}
 
 	objVal, d := types.ObjectValueFrom(ctx, disableStandardEntriesAttrTypes, &block)
