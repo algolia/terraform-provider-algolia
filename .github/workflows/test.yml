@@ -70,7 +70,7 @@ jobs:
       # is on PATH; pre-installing it avoids that (and its expired-GPG-key
       # verification failure). terraform_wrapper: false keeps the real binary on
       # PATH so the framework can exec it directly.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
       - run: go mod download
@@ -97,7 +97,7 @@ jobs:
       # is on PATH; pre-installing it avoids that (and its expired-GPG-key
       # verification failure). terraform_wrapper: false keeps the real binary on
       # PATH so the framework can exec it directly.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
       - run: go mod download
