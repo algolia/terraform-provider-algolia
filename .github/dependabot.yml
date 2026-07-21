@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # Go modules for the provider itself.
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Collapse patch and minor bumps into a single PR to cut down on noise;
+      # these are the ones the auto-merge workflow will merge unattended.
+      go-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Go modules for the tooling directory (e.g. tfplugindocs).
+  - package-ecosystem: gomod
+    directory: "/tools"
+    schedule:
+      interval: weekly
+    groups:
+      tools-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions used by the workflows in .github/workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
