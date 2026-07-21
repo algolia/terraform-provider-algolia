@@ -23,7 +23,7 @@ builds:
     binary: "{{ .ProjectName }}_v{{ .Version }}"
 
 archives:
-  - format: zip
+  - formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -43,6 +43,9 @@ signs:
 
 release:
   draft: true
+  # Tags with a SemVer pre-release suffix (e.g. v0.1.0-beta.1) are flagged as
+  # GitHub pre-releases automatically.
+  prerelease: auto
 
 changelog:
   sort: asc
