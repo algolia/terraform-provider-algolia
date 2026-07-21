@@ -3,12 +3,12 @@
 page_title: "algolia_dictionary_settings Resource - algolia"
 subcategory: ""
 description: |-
-  Manages the Algolia app-level dictionary settings: which of Algolia's built-in standard dictionary entries (stopwords, plurals, compounds) are disabled, per language. This is a singleton resource — there is exactly one dictionary settings configuration per Algolia application.
+  Manages the Algolia app-level dictionary settings: which of Algolia's built-in standard stopwords dictionary entries are disabled, per language. This is a singleton resource - there is exactly one dictionary settings configuration per Algolia application.
 ---
 
 # algolia_dictionary_settings (Resource)
 
-Manages the Algolia app-level dictionary settings: which of Algolia's built-in standard dictionary entries (stopwords, plurals, compounds) are disabled, per language. This is a singleton resource — there is exactly one dictionary settings configuration per Algolia application.
+Manages the Algolia app-level dictionary settings: which of Algolia's built-in standard stopwords dictionary entries are disabled, per language. This is a singleton resource - there is exactly one dictionary settings configuration per Algolia application.
 
 ## Example Usage
 
@@ -17,9 +17,6 @@ resource "algolia_dictionary_settings" "example" {
   disable_standard_entries = {
     stopwords = {
       en = true
-    }
-    plurals = {
-      fr = true
     }
   }
 }
@@ -30,7 +27,7 @@ resource "algolia_dictionary_settings" "example" {
 
 ### Optional
 
-- `disable_standard_entries` (Attributes) Standard dictionary entries to disable, per dictionary type and language. Set a language ISO code to `true` to disable Algolia's built-in entries for it, or `false` to keep them enabled. Applied values are preserved across plans (Computed): to re-enable a previously disabled language, set it to `false` or supply an updated map — removing the attribute from configuration does not clear settings that were already applied. (see [below for nested schema](#nestedatt--disable_standard_entries))
+- `disable_standard_entries` (Attributes) Standard dictionary entries to disable, per dictionary type and language. Set a language ISO code to `true` to disable Algolia's built-in entries for it, or `false` to keep them enabled. Applied values are preserved across plans (Computed): to re-enable a previously disabled language, set it to `false` or supply an updated map. Removing the attribute from configuration does not clear settings that were already applied. (see [below for nested schema](#nestedatt--disable_standard_entries))
 
 ### Read-Only
 
@@ -41,8 +38,6 @@ resource "algolia_dictionary_settings" "example" {
 
 Optional:
 
-- `compounds` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in compounds for that language are disabled.
-- `plurals` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in plurals for that language are disabled.
 - `stopwords` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in stopwords for that language are disabled.
 
 ## Import

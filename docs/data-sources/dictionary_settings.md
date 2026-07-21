@@ -3,12 +3,12 @@
 page_title: "algolia_dictionary_settings Data Source - algolia"
 subcategory: ""
 description: |-
-  Use this data source to read the Algolia app-level dictionary settings: which of Algolia's built-in standard dictionary entries (stopwords, plurals, compounds) are disabled, per language.
+  Use this data source to read the Algolia app-level dictionary settings: which of Algolia's built-in standard stopwords dictionary entries are disabled, per language.
 ---
 
 # algolia_dictionary_settings (Data Source)
 
-Use this data source to read the Algolia app-level dictionary settings: which of Algolia's built-in standard dictionary entries (stopwords, plurals, compounds) are disabled, per language.
+Use this data source to read the Algolia app-level dictionary settings: which of Algolia's built-in standard stopwords dictionary entries are disabled, per language.
 
 ## Example Usage
 
@@ -39,6 +39,4 @@ data "algolia_dictionary_settings" "example" {
 
 Read-Only:
 
-- `compounds` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in compounds for that language are disabled.
-- `plurals` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in plurals for that language are disabled.
 - `stopwords` (Map of Boolean) Language ISO codes mapped to whether Algolia's built-in stopwords for that language are disabled.
