@@ -50,3 +50,7 @@ dist/
 
 # Claude
 .claude/settings.local.json
+.claude/commands/ship-task.md
+
+# Internal / local-only docs (not for distribution)
+SECURITY-REVIEW-HANDOFF.md
