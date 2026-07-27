@@ -22,6 +22,8 @@ The Algolia Terraform provider lets you configure and manage Algolia resources d
 
 > **This provider is distributed internally only.** It is not published to the public Terraform Registry. Every internal developer installs it from the signed release artifacts on [GitHub Releases](https://github.com/algolia/terraform-provider-algolia/releases) using a local [filesystem mirror](https://developer.hashicorp.com/terraform/cli/config/config-file#filesystem_mirror). No private registry is required.
 
+**Quick install:** from a checkout of this repo, run [`scripts/install.sh`](scripts/install.sh). It detects your platform, downloads the signed release with `gh`, populates the filesystem mirror, and writes the `provider_installation` block for you (without clobbering an existing one). Add `--dev-overrides` for the quick-test flow described under [While still internally available](#while-still-internally-available). Prefer to do it by hand? The manual steps follow.
+
 **1. Download the release archive for your platform.** Grab the `terraform-provider-algolia_<version>_<os>_<arch>.zip` for the version you want from the [releases page](https://github.com/algolia/terraform-provider-algolia/releases) (`darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`, or `windows_arm64`).
 
 **2. Drop it into your filesystem mirror** (do **not** unzip it; the mirror uses the packed layout):
@@ -60,6 +62,8 @@ Then run `terraform init`, and Terraform will pick up the mirrored provider with
 ## While still internally available
 
 Until the provider is published to a registry, the fastest way to try it (or test an unreleased build) is to install it straight from GitHub with `go install` and point Terraform at the resulting binary with a [`dev_overrides`](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers) block. No release download, no filesystem mirror, and no `terraform init`.
+
+> Prefer to skip the manual steps? [`scripts/install.sh --dev-overrides`](scripts/install.sh) sets up the same `dev_overrides` flow automatically (it downloads the signed release rather than using `go install`). Use the manual `go install` steps below when you want to build an arbitrary branch or commit.
 
 **Prerequisites:** Go >= 1.25 and Git access to this (internal) repository. Because the repo is private, `go` must be able to authenticate to GitHub. If you clone Algolia repos over SSH, tell `go` to use SSH for `github.com` too (one time):
 
