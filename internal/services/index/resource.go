@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -74,13 +75,34 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings))
+	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating index", "Could not create index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err = waitForIndexTask(r.client, indexName, setResp.TaskID); err != nil {
+	// The index now exists in Algolia: SetSettings is what creates it (see
+	// "settings-as-index" in AGENTS.md). Persist the identifying attributes
+	// before waiting on the task or reading the index back, so a failure in
+	// either step lands as a diagnostic on a resource Terraform knows about,
+	// instead of orphaning an index that exists remotely but not in state --
+	// nothing would ever adopt it, because the next apply would call Create
+	// again.
+	//
+	// Only wholly-known values may be written here, since Terraform rejects an
+	// apply result containing unknowns. Every settings block attribute and every
+	// metadata attribute is Computed and is only resolved by the read-back
+	// below, so they cannot be carried over from the plan; the early state
+	// therefore holds the index name plus the deletion_protection guard and
+	// leaves the rest null. That is deliberate: if the wait or read-back does
+	// fail, the next plan sees a diff for every configured setting and
+	// re-applies it, which is exactly the reconciliation an orphan never gets.
+	resp.Diagnostics.Append(resp.State.Set(ctx, newIndexIdentityState(indexName, plan.DeletionProtection))...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index creation", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -89,9 +111,13 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	// values the API accepts on write but doesn't return on read.
 	planSnapshot := plan
 
-	diags = r.readIndex(ctx, &plan)
+	found, diags := r.readIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		resp.Diagnostics.AddError("Error reading index", "Index "+indexName+" could not be found immediately after it was created.")
 		return
 	}
 
@@ -114,9 +140,17 @@ func (r *indexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// values the API accepts on write but doesn't return on read.
 	stateSnapshot := state
 
-	diags := r.readIndex(ctx, &state)
+	found, diags := r.readIndex(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		// Deleted outside Terraform. Removing it from state lets the next plan
+		// recreate it; leaving a diagnostic here would instead block plan, apply
+		// and destroy alike until the operator ran `terraform state rm`.
+		tflog.Warn(ctx, "Index not found; removing from state", map[string]interface{}{"name": state.Name.ValueString()})
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -143,22 +177,32 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings))
+	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating index", "Could not update index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err = waitForIndexTask(r.client, indexName, setResp.TaskID); err != nil {
+	// No early state write here, unlike Create: Update runs against a resource
+	// that is already in state, so a failing wait or read-back cannot orphan
+	// anything. Writing the plan early would be actively harmful -- it would
+	// record the desired settings as achieved without ever confirming them, and
+	// the next plan would then show no diff. Leaving the prior state in place
+	// means the next apply calls SetSettings again, which is idempotent.
+	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index update", "Could not wait for task: "+err.Error())
 		return
 	}
 
 	planSnapshot := plan
 
-	diags = r.readIndex(ctx, &plan)
+	found, diags := r.readIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		resp.Diagnostics.AddError("Error reading index", "Index "+indexName+" could not be found immediately after it was updated.")
 		return
 	}
 
@@ -191,13 +235,13 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	tflog.Debug(ctx, "Deleting index", map[string]interface{}{"name": indexName})
 
-	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName))
+	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error deleting index", "Could not delete index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err = waitForIndexTask(r.client, indexName, delResp.TaskID); err != nil {
+	if err = waitForIndexTask(ctx, r.client, indexName, delResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index deletion", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -219,31 +263,53 @@ func (r *indexResource) ImportState(ctx context.Context, req resource.ImportStat
 		DeletionProtection: types.BoolValue(true),
 	}
 
-	resp.Diagnostics.Append(r.readIndex(ctx, &model)...)
+	found, diags := r.readIndex(ctx, &model)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		// Importing is the one path that must fail on a 404: there is nothing to
+		// bring under management, and succeeding would write state for an index
+		// that does not exist. This is the opposite of Read's behaviour, which is
+		// why readIndex reports absence rather than deciding for both callers.
+		resp.Diagnostics.AddError("Error reading index", "Could not read index "+req.ID+": the index does not exist.")
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &model)...)
 }
 
-func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel) diag.Diagnostics {
+// readIndex populates model from the Algolia API.
+//
+// The first return value reports whether the index exists. A 404 is not an error
+// here because the two callers need opposite behaviour: Read has to drop the
+// resource from state so the next plan recreates it, while ImportState has to
+// fail, since importing an index that does not exist cannot produce usable state.
+// Turning the 404 into a diagnostic in here would force both onto the same
+// behaviour, which is what made an out-of-band `algolia indices delete` wedge the
+// resource until the operator ran `terraform state rm`. The flag is only
+// meaningful when the returned diagnostics carry no error.
+func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel) (bool, diag.Diagnostics) {
 	indexName := model.Name.ValueString()
 
-	settingsResp, err := r.client.GetSettings(r.client.NewApiGetSettingsRequest(indexName))
+	settingsResp, err := r.client.GetSettings(r.client.NewApiGetSettingsRequest(indexName), search.WithContext(ctx))
 	if err != nil {
 		var diags diag.Diagnostics
+		if algoliaerr.IsNotFound(err) {
+			return false, diags
+		}
 		diags.AddError("Error reading index", "Could not read index "+indexName+": "+err.Error())
-		return diags
+		return false, diags
 	}
 
 	diags := flattenSettingsResponse(ctx, settingsResp, model)
 	if diags.HasError() {
-		return diags
+		return false, diags
 	}
 
 	// Fetch index metadata (entries, data_size, created_at, updated_at) from ListIndices.
-	listResp, err := r.client.ListIndices(r.client.NewApiListIndicesRequest())
+	listResp, err := r.client.ListIndices(r.client.NewApiListIndicesRequest(), search.WithContext(ctx))
 	if err != nil {
 		// Non-fatal: metadata is optional, log and continue.
 		tflog.Warn(ctx, "Could not list indices for metadata", map[string]interface{}{"error": err.Error()})
@@ -251,7 +317,7 @@ func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel
 		model.DataSize = types.Int64Value(0)
 		model.CreatedAt = types.StringValue("")
 		model.UpdatedAt = types.StringValue("")
-		return diags
+		return true, diags
 	}
 
 	for _, idx := range listResp.Items {
@@ -260,17 +326,18 @@ func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel
 			model.DataSize = types.Int64Value(idx.DataSize)
 			model.CreatedAt = types.StringValue(idx.CreatedAt)
 			model.UpdatedAt = types.StringValue(idx.UpdatedAt)
-			return diags
+			return true, diags
 		}
 	}
 
-	// Index not found in list (possibly just created, not yet visible).
+	// Index not found in list (possibly just created, not yet visible). GetSettings
+	// already succeeded, so the index does exist; only the metadata is missing.
 	model.Entries = types.Int64Value(0)
 	model.DataSize = types.Int64Value(0)
 	model.CreatedAt = types.StringValue("")
 	model.UpdatedAt = types.StringValue("")
 
-	return diags
+	return true, diags
 }
 
 // preservePlannedValues copies non-null planned block attribute values into the
@@ -406,23 +473,55 @@ func restoreNullBlocks(m *IndexResourceModel, nb nullBlocks) {
 // 30 minutes elapse, using exponential backoff capped at 10 seconds. This
 // replaces the SDK's built-in WaitForTask whose retry-count options were not
 // being applied, causing it to time out on large indexes.
-func waitForIndexTask(client *search.APIClient, indexName string, taskID int64) error {
+func waitForIndexTask(ctx context.Context, client *search.APIClient, indexName string, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID), search.WithContext(ctx))
 		if err != nil {
 			return err
 		}
 		if resp.Status == search.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep here made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}
 	}
+
 	return fmt.Errorf("task %d on index %q did not complete within 30 minutes", taskID, indexName)
+}
+
+// newIndexIdentityState returns the minimal state to persist immediately after a
+// successful SetSettings, before the task wait and read-back that can still fail.
+// It carries only wholly-known values, since Terraform rejects an apply result
+// containing unknowns: the index name, and the deletion_protection guard so a
+// later destroy still honours it. Everything else is Computed and resolved only
+// by the read-back, so it is left null deliberately -- a subsequent plan then
+// sees a diff for each configured setting and re-applies it, which is the
+// reconciliation an orphaned index would never get.
+func newIndexIdentityState(indexName string, deletionProtection types.Bool) IndexResourceModel {
+	model := IndexResourceModel{
+		Name:               types.StringValue(indexName),
+		DeletionProtection: deletionProtection,
+	}
+
+	// The settings blocks must be *typed* nulls. A zero-value types.Object carries
+	// no attribute-type information, and the framework rejects it with a "Value
+	// Conversion Error" rather than treating it as null.
+	restoreNullBlocks(&model, nullBlocks{
+		attributes: true, ranking: true, faceting: true, highlighting: true, pagination: true,
+		typos: true, languages: true, queryStrategy: true, performance: true, advanced: true,
+	})
+
+	return model
 }
 
 // jsonSemanticallyEqual returns true if two strings are both valid JSON and

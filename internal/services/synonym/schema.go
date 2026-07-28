@@ -21,12 +21,18 @@ func synonymResourceSchema() schema.Schema {
 				},
 			},
 			"index_name": schema.StringAttribute{
-				Description: "The index that owns the synonym.",
+				Description: "The index that owns the synonym. Changing this forces a new synonym to be created.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"object_id": schema.StringAttribute{
-				Description: "Unique identifier of the synonym object.",
+				Description: "Unique identifier of the synonym object. Changing this forces a new synonym to be created.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"type": schema.StringAttribute{
 				Description: "Synonym type.",
@@ -65,4 +71,3 @@ func synonymResourceSchema() schema.Schema {
 		},
 	}
 }
-

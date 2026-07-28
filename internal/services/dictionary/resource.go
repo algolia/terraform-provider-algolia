@@ -2,11 +2,11 @@ package dictionary
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -80,12 +80,39 @@ func (r *dictionaryEntryResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	if err := r.saveDictionaryEntry(dictionaryType, entry); err != nil {
+	if err := r.saveDictionaryEntry(ctx, dictionaryType, entry); err != nil {
 		resp.Diagnostics.AddError("Error creating dictionary entry", "Could not create entry "+objectID+" in dictionary "+string(dictionaryType)+": "+err.Error())
 		return
 	}
 
-	fetched, err := waitForDictionaryEntry(r.client, dictionaryType, objectID)
+	// The entry now exists in Algolia. Persist the identifying attributes
+	// immediately, before waiting for it to become searchable, so that a failure
+	// in that wait surfaces as an error on a resource Terraform knows about
+	// instead of orphaning an entry that exists remotely but not in state. That
+	// matters most here because object_id is generated: without this write a
+	// retry would generate a *new* object_id and leave the previous entry behind
+	// undeleted, whereas a recorded object_id is reused (it is Computed with
+	// UseStateForUnknown) and the same entry is retried.
+	//
+	// Terraform rejects an apply result that still contains unknown values, so
+	// every unknown has to be resolved here. id is derived from values already in
+	// hand; state is Optional+Computed and therefore unknown when the
+	// configuration omits it, but its value is already decided - expand has just
+	// applied the stopwords default, and flatten maps a missing state to null for
+	// the other dictionaries. Every other attribute is Optional-only, so the plan
+	// holds the configuration verbatim and is already known.
+	plan.ID = types.StringValue(dictionaryEntryResourceID(string(dictionaryType), objectID))
+	if entry.State != nil {
+		plan.State = types.StringValue(string(*entry.State))
+	} else {
+		plan.State = types.StringNull()
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	fetched, err := waitForDictionaryEntry(ctx, r.client, dictionaryType, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading dictionary entry", "Could not read back entry "+objectID+" in dictionary "+string(dictionaryType)+" after creation: "+err.Error())
 		return
@@ -109,7 +136,7 @@ func (r *dictionaryEntryResource) Read(ctx context.Context, req resource.ReadReq
 	dictionaryType := search.DictionaryType(state.Dictionary.ValueString())
 	objectID := state.ObjectID.ValueString()
 
-	entry, err := findDictionaryEntry(r.client, dictionaryType, objectID)
+	entry, err := findDictionaryEntry(ctx, r.client, dictionaryType, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading dictionary entry", "Could not read entry "+objectID+" in dictionary "+string(dictionaryType)+": "+err.Error())
 		return
@@ -146,12 +173,22 @@ func (r *dictionaryEntryResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if err := r.saveDictionaryEntry(dictionaryType, entry); err != nil {
+	if err := r.saveDictionaryEntry(ctx, dictionaryType, entry); err != nil {
 		resp.Diagnostics.AddError("Error updating dictionary entry", "Could not update entry "+objectID+" in dictionary "+string(dictionaryType)+": "+err.Error())
 		return
 	}
 
-	fetched, err := waitForDictionaryEntry(r.client, dictionaryType, objectID)
+	// The write succeeded, so the remote entry already matches the plan. Persist
+	// it before the read-back for the same reason as in Create: a failure in the
+	// wait below must not leave state describing the superseded entry. Nothing is
+	// unknown here - id and state both resolve through UseStateForUnknown from
+	// the prior state during an update.
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	fetched, err := waitForDictionaryEntry(ctx, r.client, dictionaryType, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading dictionary entry", "Could not read back entry "+objectID+" in dictionary "+string(dictionaryType)+" after update: "+err.Error())
 		return
@@ -178,10 +215,9 @@ func (r *dictionaryEntryResource) Delete(ctx context.Context, req resource.Delet
 	deleteReq := search.NewBatchDictionaryEntriesRequest(search.DICTIONARY_ACTION_DELETE_ENTRY, *search.NewDictionaryEntry(objectID))
 	params := search.NewBatchDictionaryEntriesParams([]search.BatchDictionaryEntriesRequest{*deleteReq})
 
-	updateResp, err := r.client.BatchDictionaryEntries(r.client.NewApiBatchDictionaryEntriesRequest(dictionaryType, params))
+	updateResp, err := r.client.BatchDictionaryEntries(r.client.NewApiBatchDictionaryEntriesRequest(dictionaryType, params), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -189,9 +225,8 @@ func (r *dictionaryEntryResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	if err := waitForDictionaryTask(r.client, updateResp.TaskID); err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if err := waitForDictionaryTask(ctx, r.client, updateResp.TaskID); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -208,7 +243,7 @@ func (r *dictionaryEntryResource) ImportState(ctx context.Context, req resource.
 
 	dictionaryType := search.DictionaryType(dictionary)
 
-	entry, err := findDictionaryEntry(r.client, dictionaryType, objectID)
+	entry, err := findDictionaryEntry(ctx, r.client, dictionaryType, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing dictionary entry", "Could not import entry "+req.ID+": "+err.Error())
 		return
@@ -231,23 +266,23 @@ func (r *dictionaryEntryResource) ImportState(ctx context.Context, req resource.
 // saveDictionaryEntry upserts a single dictionary entry (the API treats
 // addEntry as add-or-replace by objectID) and waits for the resulting task
 // to complete.
-func (r *dictionaryEntryResource) saveDictionaryEntry(dictionaryType search.DictionaryType, entry *search.DictionaryEntry) error {
+func (r *dictionaryEntryResource) saveDictionaryEntry(ctx context.Context, dictionaryType search.DictionaryType, entry *search.DictionaryEntry) error {
 	addReq := search.NewBatchDictionaryEntriesRequest(search.DICTIONARY_ACTION_ADD_ENTRY, *entry)
 	params := search.NewBatchDictionaryEntriesParams([]search.BatchDictionaryEntriesRequest{*addReq})
 
-	updateResp, err := r.client.BatchDictionaryEntries(r.client.NewApiBatchDictionaryEntriesRequest(dictionaryType, params))
+	updateResp, err := r.client.BatchDictionaryEntries(r.client.NewApiBatchDictionaryEntriesRequest(dictionaryType, params), search.WithContext(ctx))
 	if err != nil {
 		return err
 	}
 
-	return waitForDictionaryTask(r.client, updateResp.TaskID)
+	return waitForDictionaryTask(ctx, r.client, updateResp.TaskID)
 }
 
 // findDictionaryEntry pages through SearchDictionaryEntries looking for the
 // hit whose ObjectID matches. There is no get-by-id endpoint for dictionary
 // entries, so reads and deletes-confirmation rely on this search. A nil,
 // nil return means the entry does not exist (treated like a 404).
-func findDictionaryEntry(client *search.APIClient, dictionaryType search.DictionaryType, objectID string) (*search.DictionaryEntry, error) {
+func findDictionaryEntry(ctx context.Context, client *search.APIClient, dictionaryType search.DictionaryType, objectID string) (*search.DictionaryEntry, error) {
 	const hitsPerPage = int32(1000)
 	page := int32(0)
 
@@ -258,7 +293,7 @@ func findDictionaryEntry(client *search.APIClient, dictionaryType search.Diction
 			search.WithSearchDictionaryEntriesParamsHitsPerPage(hitsPerPage),
 		)
 
-		apiResp, err := client.SearchDictionaryEntries(client.NewApiSearchDictionaryEntriesRequest(dictionaryType, params))
+		apiResp, err := client.SearchDictionaryEntries(client.NewApiSearchDictionaryEntriesRequest(dictionaryType, params), search.WithContext(ctx))
 		if err != nil {
 			return nil, err
 		}
@@ -280,10 +315,14 @@ func findDictionaryEntry(client *search.APIClient, dictionaryType search.Diction
 // visible or the retry budget is exhausted. The task-completion wait
 // (waitForDictionaryTask) only confirms the write was applied; the search
 // index backing SearchDictionaryEntries can lag slightly behind.
-func waitForDictionaryEntry(client *search.APIClient, dictionaryType search.DictionaryType, objectID string) (*search.DictionaryEntry, error) {
+func waitForDictionaryEntry(ctx context.Context, client *search.APIClient, dictionaryType search.DictionaryType, objectID string) (*search.DictionaryEntry, error) {
 	return search.CreateIterable(
 		func(*search.DictionaryEntry, error) (*search.DictionaryEntry, error) {
-			return findDictionaryEntry(client, dictionaryType, objectID)
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
+			return findDictionaryEntry(ctx, client, dictionaryType, objectID)
 		},
 		func(entry *search.DictionaryEntry, err error) (bool, error) {
 			if err != nil {
@@ -304,21 +343,28 @@ func waitForDictionaryEntry(client *search.APIClient, dictionaryType search.Dict
 // built-in WaitForTask/WaitForAppTask whose retry-count options were not
 // being applied. Dictionary batch tasks are application-level, so this uses
 // GetAppTask rather than the per-index GetTask.
-func waitForDictionaryTask(client *search.APIClient, taskID int64) error {
+func waitForDictionaryTask(ctx context.Context, client *search.APIClient, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetAppTask(client.NewApiGetAppTaskRequest(taskID))
+		resp, err := client.GetAppTask(client.NewApiGetAppTaskRequest(taskID), search.WithContext(ctx))
 		if err != nil {
 			return err
 		}
 		if resp.Status == search.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}
 	}
+
 	return fmt.Errorf("app task %d did not complete within 30 minutes", taskID)
 }

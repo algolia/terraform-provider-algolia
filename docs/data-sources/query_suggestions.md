@@ -48,6 +48,8 @@ data "algolia_query_suggestions" "example" {
 
 ### Read-Only
 
+- `allow_special_characters` (Boolean) Whether suggestions containing special characters are included.
+- `enable_personalization` (Boolean) Whether personalized query suggestions are turned on.
 - `exclude` (Set of String) Words and patterns to exclude from the Query Suggestions index.
 - `id` (String) Terraform identifier in the form <index_name>.
 - `languages` (Set of String) Languages used to deduplicate singular and plural suggestions.
@@ -65,6 +67,7 @@ Read-Only:
 - `index_name` (String)
 - `min_hits` (Number)
 - `min_letters` (Number)
+- `replicas` (Boolean)
 
 <a id="nestedblock--source_indices--facets"></a>
 ### Nested Schema for `source_indices.facets`

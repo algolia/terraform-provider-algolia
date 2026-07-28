@@ -216,4 +216,3 @@ func (r *synonymResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
-

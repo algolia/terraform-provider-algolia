@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
@@ -39,6 +40,14 @@ var algoliaRecommendToolAttrTypes = map[string]attr.Type{
 		AttrTypes: algoliaRecommendConfigAttrTypes,
 	}},
 	"predefined_recommend_parameters": types.StringType,
+}
+
+var algoliaDisplayResultsToolAttrTypes = map[string]attr.Type{
+	"name":                  types.StringType,
+	"min_groups":            types.Int64Type,
+	"max_groups":            types.Int64Type,
+	"min_results_per_group": types.Int64Type,
+	"max_results_per_group": types.Int64Type,
 }
 
 var clientSideToolAttrTypes = map[string]attr.Type{
@@ -104,11 +113,25 @@ func flattenAgentResponse(ctx context.Context, resp *agentStudio.AgentWithVersio
 }
 
 // flattenTools distributes API tools into the typed tool list attributes on the model.
+//
+// Every variant of agentStudio.ToolConfigInput must be accounted for. Agent
+// writes are full replacements of the tool list (see expandTools), so a
+// variant that is read but not stored is silently deleted from the live agent
+// by the next apply. The switch therefore ends in a default arm that raises an
+// error naming the unhandled variant: a client upgrade that adds a tool type
+// has to fail loudly instead of quietly dropping the user's configuration.
+//
+// The prior value of model.ToolMCP (prior state on Read, configuration on
+// Create/Update) is captured before the model is overwritten, so per-tool
+// header maps can honour the null-vs-empty contract - see flattenMCPHeaders.
 func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, model *AgentResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
+	priorHeaders := priorMCPHeaders(model.ToolMCP)
+
 	var searchTools []ToolAlgoliaSearchModel
 	var recommendTools []ToolAlgoliaRecommendModel
+	var displayResultsTools []ToolAlgoliaDisplayResultsModel
 	var clientTools []ToolClientSideModel
 	var mcpTools []ToolMCPModel
 
@@ -134,11 +157,37 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, m
 				clientTools = append(clientTools, *t)
 			}
 		case tool.McpServerToolConfig != nil:
-			t, d := flattenMCPTool(tool.McpServerToolConfig)
+			name := tool.McpServerToolConfig.Name
+			t, d := flattenMCPTool(tool.McpServerToolConfig, priorHeaders[name])
 			diags.Append(d...)
 			if t != nil {
 				mcpTools = append(mcpTools, *t)
 			}
+		case tool.AlgoliaDisplayResultsToolConfig != nil:
+			// Checked after the variants above: every optional field of
+			// AlgoliaDisplayResultsToolConfig is a pointer, so the client's
+			// greedy oneOf fallback can populate it for a payload that also
+			// matched a more specific variant.
+			displayResultsTools = append(displayResultsTools, flattenAlgoliaDisplayResultsTool(tool.AlgoliaDisplayResultsToolConfig))
+		case tool.UnknownToolConfig != nil:
+			// The client's placeholder for a tool whose `type` it does not
+			// recognise. There is no Terraform schema that could hold its
+			// arbitrary properties, so refuse to manage the agent instead of
+			// dropping the tool on the next write.
+			diags.AddError(
+				"Unsupported agent tool type",
+				"Agent tool "+tool.UnknownToolConfig.Name+" has type "+tool.UnknownToolConfig.Type+
+					", which this provider version cannot represent. Terraform would delete the tool on the "+
+					"next apply, because updating an agent replaces its whole tool list. Remove the tool from "+
+					"the agent, or upgrade the provider to a version that supports this tool type.",
+			)
+		default:
+			diags.AddError(
+				"Unsupported agent tool variant",
+				fmt.Sprintf("The Algolia client returned an agent tool variant this provider version does not "+
+					"handle (%T). Terraform would delete the tool on the next apply, because updating an agent "+
+					"replaces its whole tool list. This is a provider bug: please report it.", tool.GetActualInstance()),
+			)
 		}
 	}
 
@@ -163,6 +212,15 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, m
 		model.ToolAlgoliaRecommend = list
 	} else {
 		model.ToolAlgoliaRecommend = types.ListNull(recommendToolType)
+	}
+
+	displayResultsToolType := types.ObjectType{AttrTypes: algoliaDisplayResultsToolAttrTypes}
+	if len(displayResultsTools) > 0 {
+		list, d := types.ListValueFrom(ctx, displayResultsToolType, displayResultsTools)
+		diags.Append(d...)
+		model.ToolAlgoliaDisplayResults = list
+	} else {
+		model.ToolAlgoliaDisplayResults = types.ListNull(displayResultsToolType)
 	}
 
 	clientToolType := types.ObjectType{AttrTypes: clientSideToolAttrTypes}
@@ -306,6 +364,19 @@ func flattenAlgoliaRecommendTool(tool *agentStudio.AlgoliaRecommendToolConfigInp
 	return model, diags
 }
 
+// flattenAlgoliaDisplayResultsTool maps an algolia_display_results tool. All
+// of its fields are optional in the API, and all of them are Computed in the
+// schema, so an absent field becomes null and is filled from the API response.
+func flattenAlgoliaDisplayResultsTool(tool *agentStudio.AlgoliaDisplayResultsToolConfig) ToolAlgoliaDisplayResultsModel {
+	return ToolAlgoliaDisplayResultsModel{
+		Name:               types.StringPointerValue(tool.Name),
+		MinGroups:          flattenNullableInt32(tool.MinGroups),
+		MaxGroups:          flattenNullableInt32(tool.MaxGroups),
+		MinResultsPerGroup: flattenNullableInt32(tool.MinResultsPerGroup),
+		MaxResultsPerGroup: flattenNullableInt32(tool.MaxResultsPerGroup),
+	}
+}
+
 func flattenClientSideTool(tool *agentStudio.ClientSideToolConfig) (*ToolClientSideModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolClientSideModel{
@@ -323,7 +394,7 @@ func flattenClientSideTool(tool *agentStudio.ClientSideToolConfig) (*ToolClientS
 	return model, diags
 }
 
-func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.Diagnostics) {
+func flattenMCPTool(tool *agentStudio.McpServerToolConfig, priorHeaders types.Map) (*ToolMCPModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolMCPModel{
 		Name: types.StringValue(tool.Name),
@@ -336,14 +407,9 @@ func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.
 		model.Transport = types.StringNull()
 	}
 
-	// Headers
-	if len(tool.Headers) > 0 {
-		headerMap, d := types.MapValueFrom(context.Background(), types.StringType, tool.Headers)
-		diags.Append(d...)
-		model.Headers = headerMap
-	} else {
-		model.Headers = types.MapNull(types.StringType)
-	}
+	headers, d := flattenMCPHeaders(tool.Headers, priorHeaders)
+	diags.Append(d...)
+	model.Headers = headers
 
 	// Allowed tools
 	if len(tool.AllowedTools) > 0 {
@@ -383,6 +449,66 @@ func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.
 	}
 
 	return model, diags
+}
+
+// flattenMCPHeaders converts the API's header map into a Terraform map.
+// `headers` is Optional and not Computed, so its planned value is the
+// configuration verbatim: emitting a null map where the plan held a known
+// empty map (`headers = {}`) makes Terraform reject the apply with "Provider
+// produced inconsistent result after apply". When the API returns no headers
+// the prior value therefore decides: a null prior stays null, while a prior
+// that was explicitly configured as `{}` stays a known empty map. A prior with
+// entries that the API no longer returns is real drift and becomes null.
+func flattenMCPHeaders(headers map[string]string, prior types.Map) (types.Map, diag.Diagnostics) {
+	if len(headers) == 0 {
+		if !prior.IsNull() && !prior.IsUnknown() && len(prior.Elements()) == 0 {
+			return prior, nil // explicit {}
+		}
+
+		return types.MapNull(types.StringType), nil
+	}
+
+	return types.MapValueFrom(context.Background(), types.StringType, headers)
+}
+
+// priorMCPHeaders indexes the `headers` map of every MCP tool already present
+// in the model by tool name, so flattenMCPHeaders can compare the API response
+// against the value the same tool held before the refresh. Tool names are
+// unique within an agent (they address the tool in the LLM prompt). Returns nil
+// for a null/unknown list, i.e. for imports and data source reads, where every
+// empty header map maps to null.
+func priorMCPHeaders(prior types.List) map[string]types.Map {
+	if prior.IsNull() || prior.IsUnknown() {
+		return nil
+	}
+
+	headers := make(map[string]types.Map, len(prior.Elements()))
+	for _, element := range prior.Elements() {
+		obj, ok := element.(types.Object)
+		if !ok {
+			continue
+		}
+
+		name, ok := obj.Attributes()["name"].(types.String)
+		if !ok || name.IsNull() || name.IsUnknown() {
+			continue
+		}
+
+		if value, ok := obj.Attributes()["headers"].(types.Map); ok {
+			headers[name.ValueString()] = value
+		}
+	}
+
+	return headers
+}
+
+// flattenNullableInt32 converts an optional API int32 to a types.Int64.
+func flattenNullableInt32(value *int32) types.Int64 {
+	if value == nil {
+		return types.Int64Null()
+	}
+
+	return types.Int64Value(int64(*value))
 }
 
 // flattenNullableString converts a utils.Nullable[string] to a types.String.

@@ -10,14 +10,14 @@ import (
 
 func TestBuildSynonymRequestRegular(t *testing.T) {
 	model := SynonymResourceModel{
-		IndexName: types.StringValue("products"),
-		ObjectID:  types.StringValue("syn-1"),
-		Type:      types.StringValue("synonym"),
-		Synonyms:  types.SetValueMust(types.StringType, []attr.Value{types.StringValue("iphone"), types.StringValue("ios phone")}),
-		Input:     types.StringNull(),
-		Word:      types.StringNull(),
-		Corrections: types.SetNull(types.StringType),
-		Placeholder: types.StringNull(),
+		IndexName:    types.StringValue("products"),
+		ObjectID:     types.StringValue("syn-1"),
+		Type:         types.StringValue("synonym"),
+		Synonyms:     types.SetValueMust(types.StringType, []attr.Value{types.StringValue("iphone"), types.StringValue("ios phone")}),
+		Input:        types.StringNull(),
+		Word:         types.StringNull(),
+		Corrections:  types.SetNull(types.StringType),
+		Placeholder:  types.StringNull(),
 		Replacements: types.SetNull(types.StringType),
 	}
 
@@ -85,5 +85,91 @@ func TestHydrateSynonymModel(t *testing.T) {
 	}
 	if got := model.Input.ValueString(); got != "iphone" {
 		t.Fatalf("input = %q, want iphone", got)
+	}
+}
+
+func TestHydrateSynonymModelPreservesPriorEmptiness(t *testing.T) {
+	emptySet := types.SetValueMust(types.StringType, []attr.Value{})
+	valuedSet := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("ios phone")})
+
+	tests := []struct {
+		name        string
+		prior       types.Set
+		apiSynonyms []string
+		want        types.Set
+	}{
+		{
+			name:  "API empty and prior null stays null",
+			prior: types.SetNull(types.StringType),
+			want:  types.SetNull(types.StringType),
+		},
+		{
+			name:  "API empty and prior known empty stays known empty",
+			prior: emptySet,
+			want:  emptySet,
+		},
+		{
+			name:        "API values win over the prior",
+			prior:       emptySet,
+			apiSynonyms: []string{"ios phone"},
+			want:        valuedSet,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			hit := search.NewSynonymHit("syn-4", search.SYNONYM_TYPE_SYNONYM)
+			if test.apiSynonyms != nil {
+				hit.Synonyms = test.apiSynonyms
+			}
+
+			// Every collection attribute shares the same contract, so all three
+			// are driven off the same prior in each case.
+			model := SynonymResourceModel{
+				Synonyms:     test.prior,
+				Corrections:  test.prior,
+				Replacements: test.prior,
+			}
+
+			if diags := hydrateSynonymModel("products", hit, &model); diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+
+			if !model.Synonyms.Equal(test.want) {
+				t.Errorf("synonyms = %s, want %s", model.Synonyms, test.want)
+			}
+
+			wantOthers := test.prior
+			if test.prior.IsNull() {
+				wantOthers = types.SetNull(types.StringType)
+			}
+			if !model.Corrections.Equal(wantOthers) {
+				t.Errorf("corrections = %s, want %s", model.Corrections, wantOthers)
+			}
+			if !model.Replacements.Equal(wantOthers) {
+				t.Errorf("replacements = %s, want %s", model.Replacements, wantOthers)
+			}
+		})
+	}
+}
+
+func TestHydrateSynonymModelWithoutPriorState(t *testing.T) {
+	// Imports and data source reads start from a zero-valued model, where every
+	// collection is null, so an API response without collections stays null.
+	hit := search.NewSynonymHit("syn-5", search.SYNONYM_TYPE_SYNONYM)
+
+	model := SynonymResourceModel{}
+	if diags := hydrateSynonymModel("products", hit, &model); diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	for name, value := range map[string]types.Set{
+		"synonyms":     model.Synonyms,
+		"corrections":  model.Corrections,
+		"replacements": model.Replacements,
+	} {
+		if !value.Equal(types.SetNull(types.StringType)) {
+			t.Errorf("%s = %s, want null", name, value)
+		}
 	}
 }

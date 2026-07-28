@@ -44,6 +44,7 @@ func hydrateAgentDataSourceState(ctx context.Context, resp *agentStudio.AgentWit
 	model.Publish = remotePublishValue(string(resp.Status))
 	model.ToolAlgoliaSearch = resourceModel.ToolAlgoliaSearch
 	model.ToolAlgoliaRecommend = resourceModel.ToolAlgoliaRecommend
+	model.ToolAlgoliaDisplayResults = resourceModel.ToolAlgoliaDisplayResults
 	model.ToolClientSide = resourceModel.ToolClientSide
 	model.ToolMCP = resourceModel.ToolMCP
 	model.Status = resourceModel.Status

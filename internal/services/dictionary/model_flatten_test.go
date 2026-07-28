@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func TestFlattenDictionaryEntryStopwords(t *testing.T) {
@@ -90,6 +92,90 @@ func TestFlattenDictionaryEntryPlurals(t *testing.T) {
 	}
 	if !model.State.IsNull() {
 		t.Fatalf("state = %v, want null for plurals (stopwords-only field)", model.State)
+	}
+}
+
+// TestFlattenStringList covers the null-vs-empty contract for `words` and
+// `decomposition`: both are Optional and not Computed, so their planned value
+// is the configuration verbatim. Mapping an empty API value to null regardless
+// of the prior value aborts the apply of an explicitly configured `words = []`
+// with "Provider produced inconsistent result after apply".
+func TestFlattenStringList(t *testing.T) {
+	emptyList := types.ListValueMust(types.StringType, []attr.Value{})
+	configuredList := types.ListValueMust(types.StringType, []attr.Value{types.StringValue("cheval")})
+
+	tests := []struct {
+		name   string
+		values []string
+		prior  types.List
+		want   types.List
+	}{
+		{
+			name:   "api empty and prior null stays null",
+			values: nil,
+			prior:  types.ListNull(types.StringType),
+			want:   types.ListNull(types.StringType),
+		},
+		{
+			name:   "api empty and prior known empty stays known empty",
+			values: []string{},
+			prior:  emptyList,
+			want:   emptyList,
+		},
+		{
+			name:   "api non-empty wins",
+			values: []string{"cheval"},
+			prior:  types.ListNull(types.StringType),
+			want:   configuredList,
+		},
+		{
+			name:   "api empty and prior with entries is drift and becomes null",
+			values: nil,
+			prior:  configuredList,
+			want:   types.ListNull(types.StringType),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, diags := flattenStringList(test.values, test.prior)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+			if !got.Equal(test.want) {
+				t.Fatalf("list = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+// TestFlattenDictionaryEntryPreservesConfiguredEmptyLists is the end-to-end
+// version: the prior value reaches flattenStringList through the model being
+// refreshed (the plan on Create/Update, the prior state on Read).
+func TestFlattenDictionaryEntryPreservesConfiguredEmptyLists(t *testing.T) {
+	language := search.SUPPORTED_LANGUAGE_EN
+	entry := search.NewDictionaryEntry(
+		"obj-4",
+		search.WithDictionaryEntryLanguage(language),
+		search.WithDictionaryEntryWord("the"),
+	)
+
+	emptyList := types.ListValueMust(types.StringType, []attr.Value{})
+	model := DictionaryEntryResourceModel{
+		Words:         emptyList,
+		Decomposition: emptyList,
+	}
+
+	diags := flattenDictionaryEntry(search.DICTIONARY_TYPE_STOPWORDS, entry, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if model.Words.IsNull() || len(model.Words.Elements()) != 0 {
+		t.Fatalf("words = %v, want a known empty list (the configured value)", model.Words)
+	}
+	if model.Decomposition.IsNull() || len(model.Decomposition.Elements()) != 0 {
+		t.Fatalf("decomposition = %v, want a known empty list (the configured value)", model.Decomposition)
 	}
 }
 

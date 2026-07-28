@@ -39,7 +39,10 @@ jobs:
       - run: go vet -tags e2e ./...
       - uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          # Pinned to the version in .tool-versions so CI and local runs use the
+          # same linter: `version: latest` silently diverges from what a
+          # contributor runs and turns lint into a moving target.
+          version: v2.11.3
 
   test:
     name: Unit Tests
@@ -78,15 +81,21 @@ jobs:
         env:
           ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
           ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+          # Region-routed APIs (Query Suggestions, Personalization, A/B Testing,
+          # Ingestion) skip their acceptance tests without this. It is a plain repo
+          # variable ("us" or "eu"), not a secret.
+          ALGOLIA_ANALYTICS_REGION: ${{ vars.ALGOLIA_ANALYTICS_REGION }}
 
   e2e:
     name: E2E Tests
     needs: [build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Runs whenever the e2e application is configured (repo variable acts as a
-    # feature flag; the app_id/api_key themselves are stored as secrets).
-    if: vars.ALGOLIA_APP_ID != ''
+    # Same guard as the acceptance job: this job runs repository code with the
+    # admin ALGOLIA_API_KEY and a GH_TOKEN, so it must only run on a push to main
+    # (post-review), never on a pull request. The repo variable additionally acts
+    # as a feature flag for whether an e2e application is configured at all.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ALGOLIA_APP_ID != ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v7
@@ -105,6 +114,7 @@ jobs:
         env:
           ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
           ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+          ALGOLIA_ANALYTICS_REGION: ${{ vars.ALGOLIA_ANALYTICS_REGION }}
           # Lets the install-script e2e test (TestE2EInstallScript) download the
           # published release via gh; that test skips if unauthenticated.
           GH_TOKEN: ${{ github.token }}

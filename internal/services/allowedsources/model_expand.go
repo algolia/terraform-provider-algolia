@@ -68,3 +68,33 @@ func expandSources(ctx context.Context, set types.Set) ([]search.Source, diag.Di
 
 	return sources, diags
 }
+
+// managedSourceValues lists the source values this resource manages, taken from
+// its state. Delete uses it instead of GetSources so that entries added outside
+// Terraform are never removed. Unlike expandSources it tolerates a null or empty
+// set: there is nothing wrong with a destroy that has nothing left to remove.
+func managedSourceValues(ctx context.Context, set types.Set) ([]string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if set.IsNull() || set.IsUnknown() {
+		return nil, diags
+	}
+
+	var models []SourceModel
+	diags.Append(set.ElementsAs(ctx, &models, false)...)
+	if diags.HasError() {
+		return nil, diags
+	}
+
+	values := make([]string, 0, len(models))
+	for _, m := range models {
+		if m.Source.IsNull() || m.Source.IsUnknown() || m.Source.ValueString() == "" {
+			continue
+		}
+		values = append(values, m.Source.ValueString())
+	}
+
+	sort.Strings(values)
+
+	return values, diags
+}

@@ -33,13 +33,14 @@ func newTestABTest() *abtestingapi.ABTest {
 	return abTest
 }
 
-// TestFlattenABTestComputed_PreservesConfig is the "Read preserves config"
-// regression test: flattenABTestComputed must refresh id/ab_test_id/status
-// from the enriched GetABTest response, but must never touch
-// name/end_at/variants/metrics/configuration - those stay exactly as they
-// were in state before Read ran, even though the API response contains
-// values for name/end_at/variants/configuration that differ in shape (and,
-// in this test, in value) from what's already in state.
+// TestFlattenABTestComputed_PreservesConfig pins the Create/Update refresh:
+// flattenABTestComputed must refresh id/ab_test_id/status from the enriched
+// GetABTest response and touch nothing else. Terraform requires the applied
+// value of a Required attribute to equal the planned one, so name/end_at must
+// not be adopted here even though GetABTest returns them faithfully - that is
+// Read's job (see TestFlattenABTestRead_RefreshesNameAndEndAt).
+// variants/metrics/configuration are never refreshed anywhere on the resource,
+// because the API response's shape for them diverges from the create shape.
 func TestFlattenABTestComputed_PreservesConfig(t *testing.T) {
 	abTest := newTestABTest()
 
@@ -78,6 +79,78 @@ func TestFlattenABTestComputed_PreservesConfig(t *testing.T) {
 	if model.EndAt.ValueString() != "2099-01-01T00:00:00Z" {
 		t.Fatalf("end_at = %v, want 2099-01-01T00:00:00Z (preserved)", model.EndAt.ValueString())
 	}
+	if model.Variants.ValueString() != `[{"index":"prod","trafficPercentage":50}]` {
+		t.Fatalf("variants = %v, want the original configured JSON (preserved)", model.Variants.ValueString())
+	}
+	if model.Metrics.ValueString() != `[{"name":"addToCartRate"}]` {
+		t.Fatalf("metrics = %v, want the original configured JSON (preserved)", model.Metrics.ValueString())
+	}
+	if model.Configuration.ValueString() != `{"errorCorrection":"benjamini-hochberg"}` {
+		t.Fatalf("configuration = %v, want the original configured JSON (preserved)", model.Configuration.ValueString())
+	}
+}
+
+// TestFlattenABTestRead_RefreshesNameAndEndAt is the R13 regression test: Read
+// used to refresh only id/ab_test_id/status, so a test renamed or rescheduled
+// outside Terraform stayed invisible forever. name and end_at come back from
+// GetABTest in the shape they were submitted, so refreshing them is safe and
+// surfaces the drift.
+func TestFlattenABTestRead_RefreshesNameAndEndAt(t *testing.T) {
+	abTest := newTestABTest()
+
+	model := &ABTestResourceModel{
+		ID:            types.StringValue("42"),
+		ABTestID:      types.Int64Value(42),
+		Name:          types.StringValue("stale-name"),
+		EndAt:         types.StringValue("2099-01-01T00:00:00Z"),
+		Variants:      types.StringValue(`[{"index":"prod","trafficPercentage":50}]`),
+		Metrics:       types.StringValue(`[{"name":"addToCartRate"}]`),
+		Configuration: types.StringValue(`{"errorCorrection":"benjamini-hochberg"}`),
+		Status:        types.StringValue("stale-status"),
+	}
+
+	diags := flattenABTestRead(abTest, model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if model.Name.ValueString() != "homepage-ranking" {
+		t.Fatalf("name = %v, want homepage-ranking (refreshed from the API)", model.Name.ValueString())
+	}
+	if model.EndAt.ValueString() != "2026-08-01T00:00:00Z" {
+		t.Fatalf("end_at = %v, want 2026-08-01T00:00:00Z (refreshed from the API)", model.EndAt.ValueString())
+	}
+
+	// The computed attributes are refreshed too.
+	if model.ID.ValueString() != "42" {
+		t.Fatalf("id = %v, want 42", model.ID.ValueString())
+	}
+	if model.ABTestID.ValueInt64() != 42 {
+		t.Fatalf("ab_test_id = %v, want 42", model.ABTestID.ValueInt64())
+	}
+	if model.Status.ValueString() != "active" {
+		t.Fatalf("status = %v, want active", model.Status.ValueString())
+	}
+}
+
+// TestFlattenABTestRead_PreservesWriteOnceConfig pins the other half of the
+// contract: the three attributes whose read shape diverges from their write
+// shape are still never refreshed, so Read cannot corrupt state with runtime
+// results.
+func TestFlattenABTestRead_PreservesWriteOnceConfig(t *testing.T) {
+	abTest := newTestABTest()
+
+	model := &ABTestResourceModel{
+		Variants:      types.StringValue(`[{"index":"prod","trafficPercentage":50}]`),
+		Metrics:       types.StringValue(`[{"name":"addToCartRate"}]`),
+		Configuration: types.StringValue(`{"errorCorrection":"benjamini-hochberg"}`),
+	}
+
+	diags := flattenABTestRead(abTest, model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
 	if model.Variants.ValueString() != `[{"index":"prod","trafficPercentage":50}]` {
 		t.Fatalf("variants = %v, want the original configured JSON (preserved)", model.Variants.ValueString())
 	}

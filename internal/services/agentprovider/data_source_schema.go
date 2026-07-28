@@ -1,7 +1,9 @@
 package agentprovider
 
-import datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 func agentProviderDataSourceSchema() datasourceschema.Schema {
 	blocks := make(map[string]datasourceschema.Block, len(providerSpecs))

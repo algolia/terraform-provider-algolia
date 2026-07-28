@@ -75,16 +75,20 @@ func buildSynonymHit(model *SynonymResourceModel) (*search.SynonymHit, diag.Diag
 }
 
 func hydrateSynonymModel(indexName string, hit *search.SynonymHit, model *SynonymResourceModel) diag.Diagnostics {
+	priorSynonyms := model.Synonyms
+	priorCorrections := model.Corrections
+	priorReplacements := model.Replacements
+
 	model.ID = types.StringValue(synonymResourceID(indexName, hit.GetObjectID()))
 	model.IndexName = types.StringValue(indexName)
 	model.ObjectID = types.StringValue(hit.GetObjectID())
 	model.Type = types.StringValue(canonicalSynonymType(string(hit.GetType())))
-	model.Synonyms = stringSetFromSlice(hit.GetSynonyms())
+	model.Synonyms = nullableStringSet(priorSynonyms, hit.GetSynonyms())
 	model.Input = nullableString(hit.Input)
 	model.Word = nullableString(hit.Word)
-	model.Corrections = stringSetFromSlice(hit.GetCorrections())
+	model.Corrections = nullableStringSet(priorCorrections, hit.GetCorrections())
 	model.Placeholder = nullableString(hit.Placeholder)
-	model.Replacements = stringSetFromSlice(hit.GetReplacements())
+	model.Replacements = nullableStringSet(priorReplacements, hit.GetReplacements())
 
 	return nil
 }
@@ -148,10 +152,22 @@ func waitForSynonymTask(client *search.APIClient, indexName string, taskID int64
 	return fmt.Errorf("task %d on index %q did not complete within 30 minutes", taskID, indexName)
 }
 
-func stringSetFromSlice(values []string) types.Set {
+// nullableStringSet converts an API string slice into a Terraform set. For an
+// Optional, non-Computed attribute the planned value is the configuration
+// verbatim, so emitting a known empty set where the plan held null makes
+// Terraform reject the apply with "Provider produced inconsistent result after
+// apply". When the API returns nothing, the prior value therefore decides: a
+// null prior stays null, while a prior that was explicitly configured as `[]`
+// stays a known empty set.
+func nullableStringSet(prior types.Set, values []string) types.Set {
 	if len(values) == 0 {
-		return types.SetNull(types.StringType)
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.SetNull(types.StringType)
+		}
+
+		return types.SetValueMust(types.StringType, []attr.Value{})
 	}
+
 	attrValues := make([]attr.Value, 0, len(values))
 	for _, value := range values {
 		attrValues = append(attrValues, types.StringValue(value))
@@ -182,4 +198,3 @@ func nullableString(value *string) types.String {
 	}
 	return types.StringValue(*value)
 }
-

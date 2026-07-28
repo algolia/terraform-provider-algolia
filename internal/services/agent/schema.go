@@ -86,10 +86,11 @@ func agentResourceSchema() schema.Schema {
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"tool_algolia_search":    toolAlgoliaSearchBlockSchema(),
-			"tool_algolia_recommend": toolAlgoliaRecommendBlockSchema(),
-			"tool_client_side":       toolClientSideBlockSchema(),
-			"tool_mcp":               toolMCPBlockSchema(),
+			"tool_algolia_search":          toolAlgoliaSearchBlockSchema(),
+			"tool_algolia_recommend":       toolAlgoliaRecommendBlockSchema(),
+			"tool_algolia_display_results": toolAlgoliaDisplayResultsBlockSchema(),
+			"tool_client_side":             toolClientSideBlockSchema(),
+			"tool_mcp":                     toolMCPBlockSchema(),
 		},
 	}
 }
@@ -192,6 +193,50 @@ func toolAlgoliaRecommendBlockSchema() schema.Block {
 	}
 }
 
+// toolAlgoliaDisplayResultsBlockSchema describes the algolia_display_results
+// tool. Every attribute is Optional and Computed: all of them are optional in
+// the API, and Agent Studio fills in server-side defaults for the ones that
+// are omitted, so they have to be able to take their value from the API
+// response rather than from configuration.
+func toolAlgoliaDisplayResultsBlockSchema() schema.Block {
+	return schema.ListNestedBlock{
+		Description: "Algolia display results tool configuration: controls how the agent groups the search " +
+			"results it shows.",
+		NestedObject: schema.NestedBlockObject{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Tool name (3-32 characters). Assigned by Agent Studio if not set.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(3, 32),
+					},
+				},
+				"min_groups": schema.Int64Attribute{
+					Description: "Minimum number of result groups to display.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"max_groups": schema.Int64Attribute{
+					Description: "Maximum number of result groups to display.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"min_results_per_group": schema.Int64Attribute{
+					Description: "Minimum number of results to display within each group.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"max_results_per_group": schema.Int64Attribute{
+					Description: "Maximum number of results to display within each group.",
+					Optional:    true,
+					Computed:    true,
+				},
+			},
+		},
+	}
+}
+
 func toolClientSideBlockSchema() schema.Block {
 	return schema.ListNestedBlock{
 		Description: "Client-side tool configuration.",
@@ -247,8 +292,11 @@ func toolMCPBlockSchema() schema.Block {
 					},
 				},
 				"headers": schema.MapAttribute{
-					Description: "Additional headers to send with MCP requests.",
+					Description: "Additional headers to send with MCP requests, such as `Authorization`. " +
+						"Marked sensitive: header values commonly carry credentials, and Agent Studio returns " +
+						"them in full on read, so they are stored in Terraform state as written.",
 					Optional:    true,
+					Sensitive:   true,
 					ElementType: types.StringType,
 				},
 			},

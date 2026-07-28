@@ -11,6 +11,8 @@ type RuleResourceModel struct {
 	ObjectID    types.String `tfsdk:"object_id"`
 	Description types.String `tfsdk:"description"`
 	Enabled     types.Bool   `tfsdk:"enabled"`
+	Tags        types.List   `tfsdk:"tags"`
+	Scope       types.String `tfsdk:"scope"`
 	Conditions  types.List   `tfsdk:"conditions"`
 	Consequence types.List   `tfsdk:"consequence"`
 	Validity    types.List   `tfsdk:"validity"`
@@ -35,10 +37,12 @@ var (
 	promoteModelType = types.ObjectType{AttrTypes: promoteModelAttrTypes}
 
 	consequenceModelAttrTypes = map[string]attr.Type{
-		"params_json": types.StringType,
-		"promote":     types.ListType{ElemType: promoteModelType},
-		"hide":        types.SetType{ElemType: types.StringType},
-		"user_data":   types.StringType,
+		"params_json":         types.StringType,
+		"promote":             types.ListType{ElemType: promoteModelType},
+		"hide":                types.SetType{ElemType: types.StringType},
+		"user_data":           types.StringType,
+		"filter_promotes":     types.BoolType,
+		"redirect_index_name": types.StringType,
 	}
 	consequenceModelType = types.ObjectType{AttrTypes: consequenceModelAttrTypes}
 

@@ -48,6 +48,8 @@ resource "algolia_query_suggestions" "example" {
 
 ### Optional
 
+- `allow_special_characters` (Boolean) Whether to include suggestions containing special characters. Optional and computed: when omitted the value currently configured for the index (for example through the Algolia dashboard) is kept, because updating a Query Suggestions configuration replaces it in full.
+- `enable_personalization` (Boolean) Whether to turn on personalized query suggestions. Optional and computed: when omitted the value currently configured for the index (for example through the Algolia dashboard) is kept, because updating a Query Suggestions configuration replaces it in full.
 - `exclude` (Set of String) Words and patterns to exclude from the Query Suggestions index.
 - `languages` (Set of String) Languages used to deduplicate singular and plural suggestions.
 - `source_indices` (Block List) Source indices used to generate the Query Suggestions index. (see [below for nested schema](#nestedblock--source_indices))
@@ -69,8 +71,9 @@ Optional:
 - `external` (Set of String) External indices used to generate custom suggestions.
 - `facets` (Block List) Facets to use as categories for suggestions. (see [below for nested schema](#nestedblock--source_indices--facets))
 - `generate` (List of List of String) Facet combinations used to generate suggestions.
-- `min_hits` (Number) Minimum hits required for a query to become a suggestion.
-- `min_letters` (Number) Minimum letters required for a query to become a suggestion.
+- `min_hits` (Number) Minimum hits required for a query to become a suggestion. Optional and computed: the Query Suggestions API applies its own default when this is omitted, and reports that default back.
+- `min_letters` (Number) Minimum letters required for a query to become a suggestion. Optional and computed: the Query Suggestions API applies its own default when this is omitted, and reports that default back.
+- `replicas` (Boolean) Whether Query Suggestions uses all replica indices of this source index to find popular searches. Optional and computed: when omitted the value currently configured for the source index is kept, because updating a Query Suggestions configuration replaces it in full.
 
 <a id="nestedblock--source_indices--facets"></a>
 ### Nested Schema for `source_indices.facets`

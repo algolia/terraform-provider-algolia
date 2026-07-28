@@ -7,6 +7,7 @@ import (
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -62,7 +63,15 @@ func (r *abTestResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	addRequest, expandDiags := expandAddABTestsRequest(&plan)
+	createABTest(ctx, client, &plan, resp)
+}
+
+// createABTest is the Create body, split out so that a unit test can drive it
+// against an httptest-backed client (see resource_create_test.go) - the client
+// base.client() builds always talks to the real, region-routed A/B Testing
+// API. Create itself only resolves the plan and the client.
+func createABTest(ctx context.Context, client *abtestingapi.APIClient, plan *ABTestResourceModel, resp *resource.CreateResponse) {
+	addRequest, expandDiags := expandAddABTestsRequest(plan)
 	resp.Diagnostics.Append(expandDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -70,26 +79,50 @@ func (r *abTestResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	tflog.Debug(ctx, "Creating A/B test", map[string]any{"name": plan.Name.ValueString()})
 
-	createResp, err := client.AddABTests(client.NewApiAddABTestsRequest(addRequest))
+	createResp, err := client.AddABTests(client.NewApiAddABTestsRequest(addRequest), abtestingapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating A/B test", "Could not create A/B test "+plan.Name.ValueString()+": "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(createResp.AbTestID))
+	// AddABTests has succeeded: a *paid* A/B test now exists in Algolia under
+	// the server-assigned ID in createResp, and that ID is the only handle
+	// Terraform will ever have on it. Persist it before anything that can
+	// still fail, so that a failing read-back leaves a resource Terraform can
+	// read, update and destroy instead of an unrecoverable orphan only the
+	// dashboard can clean up. Same pattern as recommend.Create (see
+	// internal/services/recommend/resource.go).
+	//
+	// status is the only other computed attribute and is still unknown here.
+	// Terraform rejects an apply result containing unknown values, so it is
+	// written as null; the read-back below fills it in, and if that fails the
+	// next Read does. Every remaining attribute is Required or Optional, hence
+	// already resolved in the plan.
+	plan.ID = types.StringValue(strconv.FormatInt(int64(createResp.AbTestID), 10))
+	plan.ABTestID = types.Int64Value(int64(createResp.AbTestID))
+	plan.Status = types.StringNull()
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(createResp.AbTestID), abtestingapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading A/B test", "Could not read back A/B test after creation: "+err.Error())
 		return
 	}
 
 	// flattenABTestComputed only refreshes id/ab_test_id/status; it leaves
-	// name/end_at/variants/metrics/configuration as already set in plan.
-	resp.Diagnostics.Append(flattenABTestComputed(apiResp, &plan)...)
+	// name/end_at/variants/metrics/configuration as already set in plan,
+	// which is what Terraform requires of an apply (the applied value of a
+	// Required attribute must equal the planned one). Refreshing name/end_at
+	// is Read's job - see flattenABTestRead.
+	resp.Diagnostics.Append(flattenABTestComputed(apiResp, plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 func (r *abTestResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -119,11 +152,12 @@ func (r *abTestResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	// flattenABTestComputed only refreshes id/ab_test_id/status. It
-	// deliberately preserves name/end_at/variants/metrics/configuration as
-	// they are in state - see flattenABTestComputed and the resource
-	// schema's description for why.
-	resp.Diagnostics.Append(flattenABTestComputed(apiResp, &state)...)
+	// flattenABTestRead refreshes id/ab_test_id/status plus name/end_at, so
+	// a test renamed or rescheduled outside Terraform surfaces as drift. It
+	// deliberately preserves variants/metrics/configuration as they are in
+	// state, because GetABTest's shape for those diverges from the create
+	// shape - see flattenABTestRead and the resource schema's description.
+	resp.Diagnostics.Append(flattenABTestRead(apiResp, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

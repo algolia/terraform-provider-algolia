@@ -6,13 +6,53 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  # A tag push does not trigger the Tests workflow (it runs on pushes to main and
+  # on pull requests), so without this job `git tag && git push` publishes to the
+  # registry regardless of CI state. This gate has two parts: the tagged commit
+  # must already have a green Tests run - the only run that includes the
+  # acceptance suite, which cannot be executed here because it needs the
+  # main-branch-only secrets - and the fast checks are re-run against the exact
+  # tagged tree.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Require a successful Tests run for the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          conclusion="$(gh run list --workflow=test.yml --commit "$SHA" --limit 1 --json conclusion --jq '.[0].conclusion')"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::Tests workflow for $SHA concluded '${conclusion:-<no run found>}'. Push the commit to main, let Tests pass, then re-tag."
+            exit 1
+          fi
+      - run: go mod download
+      - run: go build -v ./...
+      - run: go vet ./...
+      - run: go vet -tags e2e ./...
+      - run: go test ./... -timeout 120m
+
   goreleaser:
     name: GoReleaser
+    needs: [verify]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:

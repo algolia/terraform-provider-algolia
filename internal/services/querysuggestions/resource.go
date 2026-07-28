@@ -147,9 +147,7 @@ func (r *querySuggestionsResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	configuration := suggestions.NewConfiguration(configWithIndex.GetSourceIndices())
-	configuration.Languages = configWithIndex.Languages
-	configuration.Exclude = configWithIndex.Exclude
+	configuration := configurationFromWithIndex(configWithIndex)
 
 	if _, err := client.UpdateConfig(client.NewApiUpdateConfigRequest(plan.IndexName.ValueString(), configuration)); err != nil {
 		resp.Diagnostics.AddError("Error updating Query Suggestions config", "Could not update Query Suggestions config "+plan.IndexName.ValueString()+": "+err.Error())

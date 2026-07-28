@@ -22,7 +22,7 @@ output "index_entries" {
 }
 
 output "searchable_attributes" {
-  value = data.algolia_index.example.attributes[0].searchable_attributes
+  value = data.algolia_index.example.attributes.searchable_attributes
 }
 ```
 

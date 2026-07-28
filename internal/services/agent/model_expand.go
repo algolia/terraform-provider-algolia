@@ -154,6 +154,19 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.
 		}
 	}
 
+	// Algolia display results tools
+	if isKnown(model.ToolAlgoliaDisplayResults) {
+		var displayResultsTools []ToolAlgoliaDisplayResultsModel
+		diags.Append(model.ToolAlgoliaDisplayResults.ElementsAs(ctx, &displayResultsTools, false)...)
+		if diags.HasError() {
+			return nil, diags
+		}
+		for i := range displayResultsTools {
+			tool := expandAlgoliaDisplayResultsTool(&displayResultsTools[i])
+			tools = append(tools, *agentStudio.AlgoliaDisplayResultsToolConfigAsToolConfigInput(tool))
+		}
+	}
+
 	// Client-side tools
 	if isKnown(model.ToolClientSide) {
 		var clientTools []ToolClientSideModel
@@ -266,6 +279,22 @@ func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommend
 	return tool, diags
 }
 
+func expandAlgoliaDisplayResultsTool(model *ToolAlgoliaDisplayResultsModel) *agentStudio.AlgoliaDisplayResultsToolConfig {
+	tool := &agentStudio.AlgoliaDisplayResultsToolConfig{
+		Type: "algolia_display_results",
+	}
+
+	if isKnown(model.Name) {
+		tool.Name = strPtr(model.Name.ValueString())
+	}
+	tool.MinGroups = int32Ptr(model.MinGroups)
+	tool.MaxGroups = int32Ptr(model.MaxGroups)
+	tool.MinResultsPerGroup = int32Ptr(model.MinResultsPerGroup)
+	tool.MaxResultsPerGroup = int32Ptr(model.MaxResultsPerGroup)
+
+	return tool
+}
+
 func expandClientSideTool(model *ToolClientSideModel) (*agentStudio.ClientSideToolConfig, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -346,4 +375,16 @@ func strPtr(s string) *string {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// int32Ptr converts a Terraform int64 into the *int32 the API expects,
+// mapping null and unknown to nil so the field is omitted from the payload.
+func int32Ptr(v types.Int64) *int32 {
+	if !isKnown(v) {
+		return nil
+	}
+
+	value := int32(v.ValueInt64())
+
+	return &value
 }

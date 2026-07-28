@@ -63,10 +63,11 @@ func agentDataSourceSchema() datasourceschema.Schema {
 			},
 		},
 		Blocks: map[string]datasourceschema.Block{
-			"tool_algolia_search":    toolAlgoliaSearchDataSourceBlockSchema(),
-			"tool_algolia_recommend": toolAlgoliaRecommendDataSourceBlockSchema(),
-			"tool_client_side":       toolClientSideDataSourceBlockSchema(),
-			"tool_mcp":               toolMCPDataSourceBlockSchema(),
+			"tool_algolia_search":          toolAlgoliaSearchDataSourceBlockSchema(),
+			"tool_algolia_recommend":       toolAlgoliaRecommendDataSourceBlockSchema(),
+			"tool_algolia_display_results": toolAlgoliaDisplayResultsDataSourceBlockSchema(),
+			"tool_client_side":             toolClientSideDataSourceBlockSchema(),
+			"tool_mcp":                     toolMCPDataSourceBlockSchema(),
 		},
 	}
 }
@@ -119,6 +120,21 @@ func toolAlgoliaRecommendDataSourceBlockSchema() datasourceschema.Block {
 	}
 }
 
+func toolAlgoliaDisplayResultsDataSourceBlockSchema() datasourceschema.Block {
+	return datasourceschema.ListNestedBlock{
+		Description: "Algolia display results tool configuration.",
+		NestedObject: datasourceschema.NestedBlockObject{
+			Attributes: map[string]datasourceschema.Attribute{
+				"name":                  datasourceschema.StringAttribute{Computed: true},
+				"min_groups":            datasourceschema.Int64Attribute{Computed: true},
+				"max_groups":            datasourceschema.Int64Attribute{Computed: true},
+				"min_results_per_group": datasourceschema.Int64Attribute{Computed: true},
+				"max_results_per_group": datasourceschema.Int64Attribute{Computed: true},
+			},
+		},
+	}
+}
+
 func toolClientSideDataSourceBlockSchema() datasourceschema.Block {
 	return datasourceschema.ListNestedBlock{
 		Description: "Client-side tool configuration.",
@@ -141,7 +157,10 @@ func toolMCPDataSourceBlockSchema() datasourceschema.Block {
 				"url":       datasourceschema.StringAttribute{Computed: true},
 				"transport": datasourceschema.StringAttribute{Computed: true},
 				"headers": datasourceschema.MapAttribute{
+					Description: "Additional headers sent with MCP requests. Sensitive: header values commonly " +
+						"carry credentials.",
 					Computed:    true,
+					Sensitive:   true,
 					ElementType: types.StringType,
 				},
 			},

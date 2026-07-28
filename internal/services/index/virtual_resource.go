@@ -2,10 +2,10 @@ package index
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -63,7 +63,7 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 	primaryIndexName := plan.PrimaryIndexName.ValueString()
 	tflog.Debug(ctx, "Creating virtual index", map[string]any{"name": indexName, "primary_index_name": primaryIndexName})
 
-	if err := ensureVirtualReplicaLinked(r.client, primaryIndexName, indexName); err != nil {
+	if err := ensureVirtualReplicaLinked(ctx, r.client, primaryIndexName, indexName); err != nil {
 		resp.Diagnostics.AddError("Error linking virtual replica", "Could not link virtual replica "+indexName+" to primary index "+primaryIndexName+": "+err.Error())
 		return
 	}
@@ -82,15 +82,19 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	if err = waitForIndexTask(r.client, indexName, setResp.TaskID); err != nil {
+	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for virtual index creation", "Could not wait for task: "+err.Error())
 		return
 	}
 
 	planSnapshot := indexPlan
-	diags = r.readVirtualIndex(ctx, &plan)
+	found, diags := r.readVirtualIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		resp.Diagnostics.AddError("Error reading index", "Virtual index "+indexName+" could not be found immediately after it was created.")
 		return
 	}
 
@@ -112,9 +116,16 @@ func (r *virtualIndexResource) Read(ctx context.Context, req resource.ReadReques
 	nullBlocks := captureNullBlocks(&indexState)
 	stateSnapshot := indexState
 
-	diags := r.readVirtualIndex(ctx, &state)
+	found, diags := r.readVirtualIndex(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		// Deleted outside Terraform: drop it from state so the next plan recreates
+		// it, rather than wedging plan, apply and destroy behind a read error.
+		tflog.Warn(ctx, "Virtual index not found; removing from state", map[string]any{"name": state.Name.ValueString()})
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -134,7 +145,7 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 
 	indexName := plan.Name.ValueString()
 	primaryIndexName := plan.PrimaryIndexName.ValueString()
-	if err := ensureVirtualReplicaLinked(r.client, primaryIndexName, indexName); err != nil {
+	if err := ensureVirtualReplicaLinked(ctx, r.client, primaryIndexName, indexName); err != nil {
 		resp.Diagnostics.AddError("Error linking virtual replica", "Could not confirm virtual replica linkage: "+err.Error())
 		return
 	}
@@ -153,15 +164,19 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	if err = waitForIndexTask(r.client, indexName, setResp.TaskID); err != nil {
+	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for virtual index update", "Could not wait for task: "+err.Error())
 		return
 	}
 
 	planSnapshot := indexPlan
-	diags = r.readVirtualIndex(ctx, &plan)
+	found, diags := r.readVirtualIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		resp.Diagnostics.AddError("Error reading index", "Virtual index "+indexName+" could not be found immediately after it was updated.")
 		return
 	}
 
@@ -192,7 +207,7 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	primaryIndexName := state.PrimaryIndexName.ValueString()
 	if primaryIndexName != "" {
-		if err := removeVirtualReplicaLink(r.client, primaryIndexName, indexName); err != nil {
+		if err := removeVirtualReplicaLink(ctx, r.client, primaryIndexName, indexName); err != nil {
 			resp.Diagnostics.AddError("Error unlinking virtual replica", "Could not unlink virtual replica "+indexName+" from primary index "+primaryIndexName+": "+err.Error())
 			return
 		}
@@ -200,15 +215,14 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting virtual index", "Could not delete virtual index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err = waitForIndexTask(r.client, indexName, delResp.TaskID); err != nil {
+	if err = waitForIndexTask(ctx, r.client, indexName, delResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for virtual index deletion", "Could not wait for task: "+err.Error())
 	}
 }
@@ -218,43 +232,55 @@ func (r *virtualIndexResource) ImportState(ctx context.Context, req resource.Imp
 	state.Name = types.StringValue(req.ID)
 	state.DeletionProtection = types.BoolValue(true)
 
-	diags := r.readVirtualIndex(ctx, &state)
+	found, diags := r.readVirtualIndex(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		// Unlike Read, an import of an absent index must fail loudly.
+		resp.Diagnostics.AddError("Error reading index", "Could not read index "+req.ID+": the index does not exist.")
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *VirtualIndexResourceModel) diag.Diagnostics {
+// readVirtualIndex populates model from the Algolia API, reporting whether the
+// index exists. See readIndex for why absence is returned rather than raised.
+func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *VirtualIndexResourceModel) (bool, diag.Diagnostics) {
 	indexModel := virtualToIndexModel(*model)
-	diags := r.readIndexModel(ctx, &indexModel)
+	found, diags := r.readIndexModel(ctx, &indexModel)
+	if diags.HasError() || !found {
+		return found, diags
+	}
+
 	virtualFromIndexModel(indexModel, model)
 	if model.PrimaryIndexName.IsNull() || model.PrimaryIndexName.ValueString() == "" {
 		diags.AddError("Index is not a virtual replica", "The requested index does not report a primary index and cannot be managed as algolia_virtual_index.")
 	}
-	return diags
+	return true, diags
 }
 
-func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexResourceModel) diag.Diagnostics {
+// readIndexModel populates model from the Algolia API, reporting whether the
+// index exists. The flag is only meaningful when the returned diagnostics carry
+// no error.
+func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexResourceModel) (bool, diag.Diagnostics) {
 	indexName := model.Name.ValueString()
 
 	settingsResp, err := r.client.GetSettings(r.client.NewApiGetSettingsRequest(indexName))
 	if err != nil {
 		var diags diag.Diagnostics
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
-			diags.AddError("Error reading index", "Could not read index "+indexName+": "+err.Error())
-			return diags
+		if algoliaerr.IsNotFound(err) {
+			return false, diags
 		}
 		diags.AddError("Error reading index", "Could not read index "+indexName+": "+err.Error())
-		return diags
+		return false, diags
 	}
 
 	diags := flattenSettingsResponse(ctx, settingsResp, model)
 	if diags.HasError() {
-		return diags
+		return false, diags
 	}
 
 	listResp, err := r.client.ListIndices(r.client.NewApiListIndicesRequest())
@@ -264,7 +290,7 @@ func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexR
 		model.DataSize = types.Int64Value(0)
 		model.CreatedAt = types.StringValue("")
 		model.UpdatedAt = types.StringValue("")
-		return diags
+		return true, diags
 	}
 
 	for _, idx := range listResp.Items {
@@ -273,7 +299,7 @@ func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexR
 			model.DataSize = types.Int64Value(idx.DataSize)
 			model.CreatedAt = types.StringValue(idx.CreatedAt)
 			model.UpdatedAt = types.StringValue(idx.UpdatedAt)
-			return diags
+			return true, diags
 		}
 	}
 
@@ -281,10 +307,10 @@ func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexR
 	model.DataSize = types.Int64Value(0)
 	model.CreatedAt = types.StringValue("")
 	model.UpdatedAt = types.StringValue("")
-	return diags
+	return true, diags
 }
 
-func ensureVirtualReplicaLinked(client *search.APIClient, primaryIndexName, replicaName string) error {
+func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
 	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName))
 	if err != nil {
 		return err
@@ -306,14 +332,13 @@ func ensureVirtualReplicaLinked(client *search.APIClient, primaryIndexName, repl
 		return err
 	}
 
-	return waitForIndexTask(client, primaryIndexName, setResp.TaskID)
+	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
 }
 
-func removeVirtualReplicaLink(client *search.APIClient, primaryIndexName, replicaName string) error {
+func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
 	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -341,7 +366,7 @@ func removeVirtualReplicaLink(client *search.APIClient, primaryIndexName, replic
 		return err
 	}
 
-	return waitForIndexTask(client, primaryIndexName, setResp.TaskID)
+	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
 }
 
 func restoreVirtualNullBlocks(model *VirtualIndexResourceModel, blocks nullBlocks) {

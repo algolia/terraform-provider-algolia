@@ -57,18 +57,28 @@ func TestAccPersonalizationStrategyResource_drift(t *testing.T) {
 		CheckDestroy:             testAccCheckPersonalizationStrategyDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccPersonalizationStrategyConfig(80, 50, 30),
+				Config: testAccPersonalizationStrategyUnsortedConfig(80, 50, 30),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "personalization_impact", "80"),
-					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "events_scoring.0.event_name", "Product Clicked"),
+					// Index 0 is the first block in configuration order, not the
+					// alphabetically first rule.
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "events_scoring.0.event_name", "Zebra Viewed"),
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "events_scoring.1.event_name", "Product Clicked"),
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "facets_scoring.0.facet_name", "category"),
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "facets_scoring.1.facet_name", "brand"),
 				),
 			},
 			{
 				PreConfig: testAccMutatePersonalizationStrategy(t, 15, 10, 5),
-				Config:    testAccPersonalizationStrategyConfig(80, 50, 30),
+				Config:    testAccPersonalizationStrategyUnsortedConfig(80, 50, 30),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "personalization_impact", "80"),
-					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "events_scoring.0.event_name", "Product Clicked"),
+					// Index 0 is the first block in configuration order, not the
+					// alphabetically first rule.
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "events_scoring.0.event_name", "Zebra Viewed"),
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "events_scoring.1.event_name", "Product Clicked"),
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "facets_scoring.0.facet_name", "category"),
+					resource.TestCheckResourceAttr("algolia_personalization_strategy.test", "facets_scoring.1.facet_name", "brand"),
 				),
 			},
 		},
@@ -185,20 +195,62 @@ func testAccWaitForPersonalizationStrategy(t *testing.T, client *api.APIClient, 
 	}
 }
 
+// testAccPersonalizationStrategyConfig holds a single rule per block, so state
+// order is unambiguous and ImportStateVerify can compare it: an import has no
+// configuration to take block order from, so it falls back to a deterministic
+// sorted order (see orderEventsScoring), which for one rule per block is the
+// configured order as well.
 func testAccPersonalizationStrategyConfig(impact, eventScore, facetScore int) string {
 	return fmt.Sprintf(`
 resource "algolia_personalization_strategy" "test" {
-  personalization_impact = %d
+  personalization_impact = %[1]d
 
   events_scoring {
     event_name = "Product Clicked"
     event_type = "click"
-    score      = %d
+    score      = %[2]d
   }
 
   facets_scoring {
     facet_name = "category"
-    score      = %d
+    score      = %[3]d
+  }
+}
+`, impact, eventScore, facetScore)
+}
+
+// testAccPersonalizationStrategyUnsortedConfig deliberately lists the scoring
+// blocks in an order that is NOT the sorted one - "Zebra Viewed" (view) sorts
+// after "Product Clicked" (click), and "category" after "brand". events_scoring
+// and facets_scoring are list blocks, so block order is part of the value
+// Terraform compares between plan and apply: a provider that imposes its own
+// order here fails every apply with "Provider produced inconsistent result after
+// apply".
+func testAccPersonalizationStrategyUnsortedConfig(impact, eventScore, facetScore int) string {
+	return fmt.Sprintf(`
+resource "algolia_personalization_strategy" "test" {
+  personalization_impact = %[1]d
+
+  events_scoring {
+    event_name = "Zebra Viewed"
+    event_type = "view"
+    score      = %[2]d
+  }
+
+  events_scoring {
+    event_name = "Product Clicked"
+    event_type = "click"
+    score      = %[2]d
+  }
+
+  facets_scoring {
+    facet_name = "category"
+    score      = %[3]d
+  }
+
+  facets_scoring {
+    facet_name = "brand"
+    score      = %[3]d
   }
 }
 `, impact, eventScore, facetScore)

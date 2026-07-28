@@ -2,6 +2,7 @@ package allowedsources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
@@ -154,33 +155,37 @@ func (r *allowedSourcesResource) Update(ctx context.Context, req resource.Update
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *allowedSourcesResource) Delete(ctx context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Allowed sources are application-level global state: there is no
-	// "delete" endpoint for the whole list. Removing the Terraform resource
-	// instead clears the allowlist entirely (no IP restrictions), mirroring
-	// how algolia_dictionary_settings resets to defaults on Delete.
+func (r *allowedSourcesResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Allowed sources are application-level global state: there is no "delete"
+	// endpoint for the whole list, and a single ReplaceSources([]) call is not
+	// an option either because the generated Go client rejects an empty
+	// `source` slice client-side ("Parameter `source` is required when calling
+	// `ReplaceSources`") before ever making the HTTP request. Each entry is
+	// therefore removed individually via DeleteSource.
 	//
-	// Note this cannot be done with a single ReplaceSources([]) call: the
-	// generated Go client rejects an empty `source` slice client-side
-	// ("Parameter `source` is required when calling `ReplaceSources`")
-	// before ever making the HTTP request. Instead, every currently
-	// configured source is deleted individually via DeleteSource.
-	tflog.Debug(ctx, "Clearing allowed sources", map[string]any{"app_id": r.appID})
-
-	current, err := r.client.GetSources()
-	if err != nil {
-		resp.Diagnostics.AddError("Error reading allowed sources", err.Error())
+	// The entries to remove come from state, never from GetSources: enumerating
+	// the application's allowlist and deleting all of it would destroy entries
+	// this resource never created - for example an address added through the
+	// Algolia dashboard after the last apply.
+	var state AllowedSourcesResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	for _, source := range current {
-		if _, err := r.client.DeleteSource(r.client.NewApiDeleteSourceRequest(source.GetSource())); err != nil {
-			resp.Diagnostics.AddError(
-				"Error clearing allowed sources",
-				fmt.Sprintf("Could not delete source %q: %s", source.GetSource(), err.Error()),
-			)
-			return
-		}
+	managed, diags := managedSourceValues(ctx, state.Source)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	tflog.Debug(ctx, "Clearing managed allowed sources", map[string]any{"app_id": r.appID, "count": len(managed)})
+
+	if err := deleteSources(managed, func(value string) error {
+		_, err := r.client.DeleteSource(r.client.NewApiDeleteSourceRequest(value))
+		return err
+	}); err != nil {
+		resp.Diagnostics.AddError("Error clearing allowed sources", err.Error())
 	}
 }
 
@@ -213,4 +218,24 @@ func (r *allowedSourcesResource) ImportState(ctx context.Context, req resource.I
 func (r *allowedSourcesResource) replaceSources(sources []search.Source) error {
 	_, err := r.client.ReplaceSources(r.client.NewApiReplaceSourcesRequest(sources))
 	return err
+}
+
+// deleteSources removes exactly the given source values, one call per value, and
+// stops at the first real failure. An entry that is already gone is not a
+// failure: a destroy has to stay idempotent, whether the entry was removed out
+// of band or by an earlier destroy that failed part-way through this loop.
+func deleteSources(values []string, deleteSource func(value string) error) error {
+	for _, value := range values {
+		if err := deleteSource(value); err != nil && !isSourceNotFound(err) {
+			return fmt.Errorf("could not delete source %q: %w", value, err)
+		}
+	}
+
+	return nil
+}
+
+func isSourceNotFound(err error) bool {
+	var apiErr *search.APIError
+
+	return errors.As(err, &apiErr) && apiErr.Status == 404
 }

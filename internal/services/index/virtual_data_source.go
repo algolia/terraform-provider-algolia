@@ -56,9 +56,15 @@ func (d *virtualIndexDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	resource := &virtualIndexResource{client: d.client}
 	indexModel := IndexResourceModel{Name: config.Name}
-	diags := resource.readIndexModel(ctx, &indexModel)
+	found, diags := resource.readIndexModel(ctx, &indexModel)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		// A data source names an index the configuration expects to exist, so its
+		// absence is a configuration error rather than drift to be reconciled.
+		resp.Diagnostics.AddError("Error reading index", "Could not read index "+config.Name.ValueString()+": the index does not exist.")
 		return
 	}
 
@@ -70,4 +76,3 @@ func (d *virtualIndexDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
-

@@ -58,7 +58,9 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 
 	key := model.Key.ValueString()
-	// The key value is Sensitive; do not include it in logs.
+	// The key value is Sensitive; do not include it in logs. maskKeyValue also
+	// redacts it from anything logged further down this context.
+	ctx = maskKeyValue(ctx, key)
 	tflog.Debug(ctx, "Reading API key data source")
 
 	apiResp, err := d.client.GetApiKey(d.client.NewApiGetApiKeyRequest(key))
@@ -73,7 +75,7 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading API key", "Could not read the API key: "+err.Error())
+		resp.Diagnostics.AddError("Error reading API key", "Could not read the API key: "+redactKey(err, key))
 		return
 	}
 

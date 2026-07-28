@@ -395,6 +395,60 @@ func TestAccIndexResource_importPartialBlocks(t *testing.T) {
 	})
 }
 
+// testAccDeleteIndexOutOfBand removes an index behind Terraform's back, the way
+// `algolia indices delete` or a dashboard click would.
+func testAccDeleteIndexOutOfBand(t *testing.T, indexName string) {
+	t.Helper()
+
+	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	if err != nil {
+		t.Fatalf("could not build Search client: %v", err)
+	}
+
+	delResp, err := client.DeleteIndex(client.NewApiDeleteIndexRequest(indexName))
+	if err != nil {
+		t.Fatalf("could not delete index %s out of band: %v", indexName, err)
+	}
+	if _, err := client.WaitForTask(indexName, delResp.TaskID); err != nil {
+		t.Fatalf("could not confirm out-of-band deletion of index %s: %v", indexName, err)
+	}
+}
+
+// TestAccIndexResource_recoversFromOutOfBandDeletion covers the case that used to
+// wedge the resource: with the index gone, Read raised "Error reading index", so
+// plan, apply and destroy all failed and only `terraform state rm` unblocked the
+// operator. Read must instead drop the resource from state, leaving a plan that
+// recreates it.
+func TestAccIndexResource_recoversFromOutOfBandDeletion(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_basic(indexName),
+			},
+			{
+				// Refreshing against a deleted index must succeed and empty the
+				// state, which surfaces as a plan that wants to create it again.
+				PreConfig:          func() { testAccDeleteIndexOutOfBand(t, indexName) },
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// And the recreate has to go through rather than failing on a
+				// leftover state entry.
+				Config: testAccIndexResourceConfig_basic(indexName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_index.test", "name", indexName),
+					resource.TestCheckResourceAttr("algolia_index.test", "deletion_protection", "false"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccIndexResource_importNonexistent(t *testing.T) {
 	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
 

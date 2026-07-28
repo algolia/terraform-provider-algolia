@@ -29,6 +29,15 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 				Description: "Whether the rule is active.",
 				Computed:    true,
 			},
+			"tags": datasourceschema.ListAttribute{
+				Description: "Free-form tags used to group and filter rules in the Algolia dashboard.",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"scope": datasourceschema.StringAttribute{
+				Description: "Rule scope. Algolia currently only returns `redirect` for redirect rules.",
+				Computed:    true,
+			},
 		},
 		Blocks: map[string]datasourceschema.Block{
 			"conditions": datasourceschema.ListNestedBlock{
@@ -52,7 +61,9 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 							Computed:    true,
 							ElementType: types.StringType,
 						},
-						"user_data": datasourceschema.StringAttribute{Computed: true},
+						"user_data":           datasourceschema.StringAttribute{Computed: true},
+						"filter_promotes":     datasourceschema.BoolAttribute{Computed: true},
+						"redirect_index_name": datasourceschema.StringAttribute{Computed: true},
 					},
 					Blocks: map[string]datasourceschema.Block{
 						"promote": datasourceschema.ListNestedBlock{

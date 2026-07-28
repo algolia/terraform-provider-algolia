@@ -27,10 +27,10 @@ type IndexResourceModel struct {
 
 // AttributesModel describes the attributes block.
 type AttributesModel struct {
-	SearchableAttributes   types.List   `tfsdk:"searchable_attributes"`
-	AttributesToRetrieve   types.List   `tfsdk:"attributes_to_retrieve"`
-	UnretrievableAttributes types.List  `tfsdk:"unretrievable_attributes"`
-	AttributeForDistinct   types.String `tfsdk:"attribute_for_distinct"`
+	SearchableAttributes    types.List   `tfsdk:"searchable_attributes"`
+	AttributesToRetrieve    types.List   `tfsdk:"attributes_to_retrieve"`
+	UnretrievableAttributes types.List   `tfsdk:"unretrievable_attributes"`
+	AttributeForDistinct    types.String `tfsdk:"attribute_for_distinct"`
 }
 
 // RankingModel describes the ranking block.
@@ -50,12 +50,12 @@ type FacetingModel struct {
 
 // HighlightingModel describes the highlighting block.
 type HighlightingModel struct {
-	AttributesToHighlight              types.List   `tfsdk:"attributes_to_highlight"`
-	AttributesToSnippet                types.List   `tfsdk:"attributes_to_snippet"`
-	HighlightPreTag                    types.String `tfsdk:"highlight_pre_tag"`
-	HighlightPostTag                   types.String `tfsdk:"highlight_post_tag"`
-	SnippetEllipsisText                types.String `tfsdk:"snippet_ellipsis_text"`
-	RestrictHighlightAndSnippetArrays  types.Bool   `tfsdk:"restrict_highlight_and_snippet_arrays"`
+	AttributesToHighlight             types.List   `tfsdk:"attributes_to_highlight"`
+	AttributesToSnippet               types.List   `tfsdk:"attributes_to_snippet"`
+	HighlightPreTag                   types.String `tfsdk:"highlight_pre_tag"`
+	HighlightPostTag                  types.String `tfsdk:"highlight_post_tag"`
+	SnippetEllipsisText               types.String `tfsdk:"snippet_ellipsis_text"`
+	RestrictHighlightAndSnippetArrays types.Bool   `tfsdk:"restrict_highlight_and_snippet_arrays"`
 }
 
 // PaginationModel describes the pagination block.
@@ -76,36 +76,36 @@ type TyposModel struct {
 
 // LanguagesModel describes the languages block.
 type LanguagesModel struct {
-	IndexLanguages              types.List   `tfsdk:"index_languages"`
-	QueryLanguages              types.List   `tfsdk:"query_languages"`
-	IgnorePlurals               types.Bool   `tfsdk:"ignore_plurals"`
-	IgnorePluralsLanguages      types.List   `tfsdk:"ignore_plurals_languages"`
-	RemoveStopWords             types.Bool   `tfsdk:"remove_stop_words"`
-	RemoveStopWordsLanguages    types.List   `tfsdk:"remove_stop_words_languages"`
-	DecompoundQuery             types.Bool   `tfsdk:"decompound_query"`
-	RemoveWordsIfNoResults      types.String `tfsdk:"remove_words_if_no_results"`
-	AttributesToTransliterate   types.List   `tfsdk:"attributes_to_transliterate"`
-	CamelCaseAttributes         types.List   `tfsdk:"camel_case_attributes"`
-	DecompoundedAttributes      types.String `tfsdk:"decompounded_attributes"`
-	CustomNormalization         types.String `tfsdk:"custom_normalization"`
-	KeepDiacriticsOnCharacters  types.String `tfsdk:"keep_diacritics_on_characters"`
+	IndexLanguages             types.List   `tfsdk:"index_languages"`
+	QueryLanguages             types.List   `tfsdk:"query_languages"`
+	IgnorePlurals              types.Bool   `tfsdk:"ignore_plurals"`
+	IgnorePluralsLanguages     types.List   `tfsdk:"ignore_plurals_languages"`
+	RemoveStopWords            types.Bool   `tfsdk:"remove_stop_words"`
+	RemoveStopWordsLanguages   types.List   `tfsdk:"remove_stop_words_languages"`
+	DecompoundQuery            types.Bool   `tfsdk:"decompound_query"`
+	RemoveWordsIfNoResults     types.String `tfsdk:"remove_words_if_no_results"`
+	AttributesToTransliterate  types.List   `tfsdk:"attributes_to_transliterate"`
+	CamelCaseAttributes        types.List   `tfsdk:"camel_case_attributes"`
+	DecompoundedAttributes     types.String `tfsdk:"decompounded_attributes"`
+	CustomNormalization        types.String `tfsdk:"custom_normalization"`
+	KeepDiacriticsOnCharacters types.String `tfsdk:"keep_diacritics_on_characters"`
 }
 
 // QueryStrategyModel describes the query_strategy block.
 type QueryStrategyModel struct {
-	QueryType                types.String `tfsdk:"query_type"`
-	AdvancedSyntax           types.Bool   `tfsdk:"advanced_syntax"`
-	AdvancedSyntaxFeatures   types.List   `tfsdk:"advanced_syntax_features"`
-	OptionalWords            types.List   `tfsdk:"optional_words"`
-	DisablePrefixOnAttributes types.List  `tfsdk:"disable_prefix_on_attributes"`
-	DisableExactOnAttributes types.List   `tfsdk:"disable_exact_on_attributes"`
-	ExactOnSingleWordQuery   types.String `tfsdk:"exact_on_single_word_query"`
-	AlternativesAsExact      types.List   `tfsdk:"alternatives_as_exact"`
+	QueryType                 types.String `tfsdk:"query_type"`
+	AdvancedSyntax            types.Bool   `tfsdk:"advanced_syntax"`
+	AdvancedSyntaxFeatures    types.List   `tfsdk:"advanced_syntax_features"`
+	OptionalWords             types.List   `tfsdk:"optional_words"`
+	DisablePrefixOnAttributes types.List   `tfsdk:"disable_prefix_on_attributes"`
+	DisableExactOnAttributes  types.List   `tfsdk:"disable_exact_on_attributes"`
+	ExactOnSingleWordQuery    types.String `tfsdk:"exact_on_single_word_query"`
+	AlternativesAsExact       types.List   `tfsdk:"alternatives_as_exact"`
 }
 
 // PerformanceModel describes the performance block.
 type PerformanceModel struct {
-	NumericAttributesForFiltering types.List `tfsdk:"numeric_attributes_for_filtering"`
+	NumericAttributesForFiltering  types.List `tfsdk:"numeric_attributes_for_filtering"`
 	AllowCompressionOfIntegerArray types.Bool `tfsdk:"allow_compression_of_integer_array"`
 }
 

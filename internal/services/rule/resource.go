@@ -62,30 +62,30 @@ func (r *ruleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	objectID := plan.ObjectID.ValueString()
 	tflog.Debug(ctx, "Creating rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	ruleReq, diags := buildRuleRequest(&plan)
+	body, diags := ruleRequestBodyFromModel(&plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	saveResp, err := r.client.SaveRule(r.client.NewApiSaveRuleRequest(indexName, objectID, ruleReq))
+	taskID, err := saveRuleRaw(r.client, indexName, objectID, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating rule", "Could not create rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, saveResp.TaskID); err != nil {
+	if err := waitForRuleTask(r.client, indexName, taskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for rule creation", "Could not confirm rule creation: "+err.Error())
 		return
 	}
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &plan)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -104,7 +104,7 @@ func (r *ruleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	objectID := state.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -117,7 +117,7 @@ func (r *ruleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &state)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -136,30 +136,30 @@ func (r *ruleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	objectID := plan.ObjectID.ValueString()
 	tflog.Debug(ctx, "Updating rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	ruleReq, diags := buildRuleRequest(&plan)
+	body, diags := ruleRequestBodyFromModel(&plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	saveResp, err := r.client.SaveRule(r.client.NewApiSaveRuleRequest(indexName, objectID, ruleReq))
+	taskID, err := saveRuleRaw(r.client, indexName, objectID, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating rule", "Could not update rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, saveResp.TaskID); err != nil {
+	if err := waitForRuleTask(r.client, indexName, taskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for rule update", "Could not confirm rule update: "+err.Error())
 		return
 	}
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &plan)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -205,14 +205,14 @@ func (r *ruleResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing rule", "Could not import rule "+req.ID+": "+err.Error())
 		return
 	}
 
 	var state RuleResourceModel
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &state)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

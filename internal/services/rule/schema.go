@@ -23,12 +23,18 @@ func ruleResourceSchema() schema.Schema {
 				},
 			},
 			"index_name": schema.StringAttribute{
-				Description: "The index that owns the rule.",
+				Description: "The index that owns the rule. Changing this forces a new rule to be created.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"object_id": schema.StringAttribute{
-				Description: "Unique identifier of the rule.",
+				Description: "Unique identifier of the rule. Changing this forces a new rule to be created.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"description": schema.StringAttribute{
 				Description: "Human-readable description of the rule.",
@@ -39,6 +45,15 @@ func ruleResourceSchema() schema.Schema {
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
+			},
+			"tags": schema.ListAttribute{
+				Description: "Free-form tags used to group and filter rules in the Algolia dashboard.",
+				Optional:    true,
+				ElementType: types.StringType,
+			},
+			"scope": schema.StringAttribute{
+				Description: "Rule scope. Algolia currently only accepts `redirect`, which turns the rule into a redirect rule and requires `consequence.redirect_index_name` to point at a virtual replica of the index.",
+				Optional:    true,
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -81,7 +96,7 @@ func ruleResourceSchema() schema.Schema {
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"params_json": schema.StringAttribute{
-							Description: "JSON-encoded consequence params object.",
+							Description: "JSON-encoded consequence params object. The document is sent to Algolia verbatim, so search parameters that this provider release does not know about can still be set here.",
 							Optional:    true,
 						},
 						"hide": schema.SetAttribute{
@@ -91,6 +106,14 @@ func ruleResourceSchema() schema.Schema {
 						},
 						"user_data": schema.StringAttribute{
 							Description: "JSON-encoded userData payload appended to search responses.",
+							Optional:    true,
+						},
+						"filter_promotes": schema.BoolAttribute{
+							Description: "Whether promoted records must also match the active filters for the consequence to apply. Shown as \"Pinned items must match active filters to be displayed\" in the Algolia dashboard.",
+							Optional:    true,
+						},
+						"redirect_index_name": schema.StringAttribute{
+							Description: "Name of the virtual replica index searches are redirected to. Only valid together with `scope = \"redirect\"`.",
 							Optional:    true,
 						},
 					},
