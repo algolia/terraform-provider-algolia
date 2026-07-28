@@ -39,7 +39,6 @@ output "searchable_attributes" {
 - `attributes` (Block, Read-only) Configuration for searchable and retrievable attributes. (see [below for nested schema](#nestedblock--attributes))
 - `created_at` (String) The creation date of the index.
 - `data_size` (Number) The size of the index data in bytes.
-- `deletion_protection` (Boolean) Whether deletion protection is enabled.
 - `entries` (Number) The number of records in the index.
 - `faceting` (Block, Read-only) Configuration for faceting behavior. (see [below for nested schema](#nestedblock--faceting))
 - `highlighting` (Block, Read-only) Configuration for highlighting and snippeting. (see [below for nested schema](#nestedblock--highlighting))

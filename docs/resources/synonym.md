@@ -32,8 +32,8 @@ resource "algolia_synonym" "example" {
 
 ### Required
 
-- `index_name` (String) The index that owns the synonym.
-- `object_id` (String) Unique identifier of the synonym object.
+- `index_name` (String) The index that owns the synonym. Changing this forces a new synonym to be created.
+- `object_id` (String) Unique identifier of the synonym object. Changing this forces a new synonym to be created.
 - `type` (String) Synonym type.
 
 ### Optional
@@ -52,6 +52,8 @@ resource "algolia_synonym" "example" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import a synonym using the form "index_name/object_id".

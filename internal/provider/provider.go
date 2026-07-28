@@ -81,14 +81,21 @@ func (p *algoliaProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 					stringvalidator.OneOf("us", "eu"),
 				},
 			},
+			// No crawler resource or data source exists, and none is planned: the
+			// crawler was descoped on 2026-07-18 (see ROADMAP.md). These two
+			// attributes therefore configure nothing. They are kept, deprecated
+			// rather than removed, so that a configuration which already sets them
+			// keeps planning instead of failing on an unknown attribute.
 			"crawler_user_id": schema.StringAttribute{
-				Description: "Crawler user ID, from the Crawler settings page in the Algolia dashboard. Required only for crawler resources/data sources. Can also be set via the ALGOLIA_CRAWLER_USER_ID environment variable.",
-				Optional:    true,
+				Description:        "Deprecated and unused. No crawler resource or data source exists, so setting this has no effect. Can also be set via the ALGOLIA_CRAWLER_USER_ID environment variable.",
+				DeprecationMessage: "The crawler was descoped and no crawler resource or data source will be built, so crawler_user_id configures nothing. Remove it from your provider block.",
+				Optional:           true,
 			},
 			"crawler_api_key": schema.StringAttribute{
-				Description: "Crawler API key, from the Crawler settings page in the Algolia dashboard. Required only for crawler resources/data sources. Can also be set via the ALGOLIA_CRAWLER_API_KEY environment variable.",
-				Optional:    true,
-				Sensitive:   true,
+				Description:        "Deprecated and unused. No crawler resource or data source exists, so setting this has no effect. Can also be set via the ALGOLIA_CRAWLER_API_KEY environment variable.",
+				DeprecationMessage: "The crawler was descoped and no crawler resource or data source will be built, so crawler_api_key configures nothing. Remove it from your provider block.",
+				Optional:           true,
+				Sensitive:          true,
 			},
 		},
 	}

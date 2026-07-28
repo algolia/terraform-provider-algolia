@@ -65,6 +65,8 @@ resource "algolia_recommend_rule" "hide_discontinued" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Import a Recommend rule using the form "index_name/model/object_id".
 terraform import algolia_recommend_rule.hide_discontinued products/related-products/hide-discontinued

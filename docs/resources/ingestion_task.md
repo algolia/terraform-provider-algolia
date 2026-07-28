@@ -92,7 +92,7 @@ resource "algolia_ingestion_task" "push_to_products" {
 
 ### Required
 
-- `action` (String) Action to perform on the destination index for each record. One of: replace, save, partial, partialNoCreate, append. Changing this forces replacement: the Ingestion API's task update endpoint has no way to change a task's action after creation.
+- `action` (String) Action to perform on the destination index for each record. One of: replace, save, partial, partialNoCreate, append. Changing this forces replacement: the Ingestion API's task update endpoint has no way to change a task's action after creation. Note the API does not return this field when reading a task back, so it cannot be recovered by `terraform import`: set it in configuration after importing, which will plan a replacement.
 - `destination_id` (String) Universally unique identifier (UUID) of the `algolia_ingestion_destination` this task writes to.
 - `source_id` (String) Universally unique identifier (UUID) of the `algolia_ingestion_source` this task reads from. Changing this forces replacement: the Ingestion API's task update endpoint has no way to change a task's source after creation.
 
@@ -101,10 +101,10 @@ resource "algolia_ingestion_task" "push_to_products" {
 - `cron` (String) Cron expression for the task's schedule (e.g. `0 0 * * *` for daily). Omit for an on-demand task that only runs when triggered manually.
 - `cursor` (String) Date and time when the last cursor was created, in RFC 3339 format; used to resume a streaming task from a specific point. The Ingestion API's task update endpoint has no way to change this after creation, and its true value advances automatically as the task runs (a runtime concern outside this provider's scope) - so, unlike `input`/`notifications`/`policies`, it is never refreshed from the API on read; the configured value (or null, if omitted) is always preserved as-is. Because it can only be set at creation, changing it forces the task to be replaced. Not recoverable on import.
 - `enabled` (Boolean) Whether the task is enabled. Defaults to true.
-- `failure_threshold` (Number) Maximum accepted percentage of failures for a task run to finish successfully.
+- `failure_threshold` (Number) Maximum accepted percentage of failures for a task run to finish successfully. Computed because the API substitutes its own default when this is omitted.
 - `input` (String) JSON-encoded configuration for the task's input, when its source's type needs one (e.g. `jsonencode({ streams = [...] })` for a Docker-based source). Not every task needs input - a task on a "push" source, for example, has none, so `input` may be omitted. The Ingestion API returns a task's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (key order, array order), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned.
-- `notifications` (String) JSON-encoded notification settings, e.g. `jsonencode({ email = { enabled = true } })`. Refreshed on read using the same semantic-equality preservation as `input`.
-- `policies` (String) JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 50 })`. Refreshed on read using the same semantic-equality preservation as `input`.
+- `notifications` (String) JSON-encoded notification settings, e.g. `jsonencode({ email = { enabled = true } })`. Refreshed on read using the same semantic-equality preservation as `input`. Computed because the API substitutes its own defaults when this is omitted.
+- `policies` (String) JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 50 })`. Refreshed on read using the same semantic-equality preservation as `input`. Computed because the API substitutes its own defaults when this is omitted.
 - `subscription_action` (String) Action to perform on the destination index for records ingested through a streaming/subscription-based source. One of: replace, save, partial, partialNoCreate, append.
 
 ### Read-Only
@@ -119,6 +119,8 @@ resource "algolia_ingestion_task" "push_to_products" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import an Ingestion task by its UUID. The `cursor` cannot be recovered on

@@ -92,7 +92,7 @@ resource "algolia_ingestion_transformation" "with_authentication" {
 ### Optional
 
 - `authentication_ids` (List of String) Universally unique identifiers (UUIDs) of the `algolia_ingestion_authentication` resources associated with this transformation.
-- `code` (String) The transformation's source code (for `type = "code"` transformations). This is the deprecated, legacy way of specifying a code transformation's logic directly - the Ingestion API recommends `input` with a matching `type` instead. Leave it unset for no-code transformations (which have no `code`); an unset `code` reads back as null. The Ingestion API returns `code` in full (nothing is redacted), so this attribute is refreshed on read.
+- `code` (String) The transformation's source code (for `type = "code"` transformations). This is the deprecated, legacy way of specifying a code transformation's logic directly - the Ingestion API recommends `input` with a matching `type` instead. Leave it unset for no-code transformations (which have no `code`); an unset `code` reads back as null. The Ingestion API returns `code` in full (nothing is redacted), so this attribute is refreshed on read. Computed because the API derives it from `input.code` when the logic is supplied that way.
 - `description` (String) A descriptive name for the transformation explaining what it does.
 - `input` (String) JSON-encoded configuration matching `type` (e.g. `jsonencode({ steps = [...] })` for a no-code transformation, or `jsonencode({ code = "..." })` for a code transformation). Optional: a transformation's logic can instead be supplied via the legacy `code` attribute. The Ingestion API returns a transformation's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (object key order, and the order of arrays of scalars), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned. Note the order of arrays of objects (e.g. `steps`) is significant and preserved.
 - `type` (String) Type of transformation. One of: code, noCode. The Ingestion API's transformation update endpoint accepts the same body as create (including `type`), so changing this does not force replacement - unlike `algolia_ingestion_source`/`algolia_ingestion_destination`, whose update endpoints have no `type` field at all.
@@ -107,6 +107,8 @@ resource "algolia_ingestion_transformation" "with_authentication" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import an Ingestion transformation by its UUID.

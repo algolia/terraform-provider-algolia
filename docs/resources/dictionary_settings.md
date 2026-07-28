@@ -44,6 +44,8 @@ Optional:
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Dictionary settings are a singleton. Any import ID is accepted; the
 # application ID is the conventional choice.

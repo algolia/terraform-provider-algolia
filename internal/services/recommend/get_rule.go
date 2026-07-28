@@ -41,8 +41,11 @@ const metadataJSONKey = "_metadata"
 // Remove this helper (and its test) and call client.GetRecommendRule directly
 // once the upstream client decodes a numeric `lastUpdate` - i.e. once
 // recommend.RuleMetadata.LastUpdate is no longer a plain *string. See
-// https://github.com/algolia/api-clients-automation. The
-// ALGOLIA_RUN_RECOMMEND_ACC gate in resource_test.go exists for the same bug.
+// https://github.com/algolia/api-clients-automation.
+//
+// This workaround is what made the acceptance tests runnable, so they are no
+// longer gated behind an extra environment variable: testAccPreCheck asks only
+// for TF_ACC and credentials, and the whole suite passes against the live API.
 func getRecommendRule(
 	client *recommendapi.APIClient,
 	req recommendapi.ApiGetRecommendRuleRequest,

@@ -101,6 +101,8 @@ resource "algolia_ingestion_source" "shopify" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Import an Ingestion source by its UUID.
 terraform import algolia_ingestion_source.csv 6c02aeb1-775e-418e-870b-1faccd4b2c0f

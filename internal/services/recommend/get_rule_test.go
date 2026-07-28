@@ -31,13 +31,13 @@ const ruleBodyWithNumericLastUpdate = `{
 // TestUpstreamClientStillMistypesLastUpdate documents the upstream bug this
 // package works around. If this ever reports that the plain decode now works,
 // recommend.RuleMetadata.LastUpdate has been fixed upstream and getRecommendRule
-// (plus the ALGOLIA_RUN_RECOMMEND_ACC gate in resource_test.go) can be removed.
+// can be removed.
 func TestUpstreamClientStillMistypesLastUpdate(t *testing.T) {
 	var rule recommendapi.RecommendRule
 	err := json.Unmarshal([]byte(ruleBodyWithNumericLastUpdate), &rule)
 	if err == nil {
 		t.Log("recommend.RecommendRule now decodes a numeric _metadata.lastUpdate; " +
-			"the getRecommendRule workaround and the ALGOLIA_RUN_RECOMMEND_ACC gate can be removed")
+			"the getRecommendRule workaround can be removed")
 		return
 	}
 	if !strings.Contains(err.Error(), "RuleMetadata") {

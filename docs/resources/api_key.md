@@ -48,6 +48,7 @@ output "search_api_key" {
 - `indexes` (Set of String) Index names or patterns the API key can access.
 - `max_hits_per_query` (Number) Maximum number of results this API key can retrieve in one query.
 - `max_queries_per_ip_per_hour` (Number) Maximum number of API requests allowed per IP address or user token per hour.
+- `query_parameters` (String) Query parameters added to every search made with this API key, as a URL query string - for example `filters=tenant%3Aacme` to scope the key to one tenant, or `restrictSources=1.2.3.4` to restrict it to an IP range. Note that Algolia rejects a `restrictSources` value that does not cover the address Terraform itself is applying from.
 - `referers` (Set of String) Allowed HTTP referrers for this API key.
 
 ### Read-Only
@@ -58,6 +59,8 @@ output "search_api_key" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import an API key by its key value (the secret string itself).

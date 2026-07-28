@@ -111,6 +111,8 @@ Optional:
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Import an Agent Studio provider by its UUID.
 terraform import algolia_agent_provider.openai 01234567-89ab-cdef-0123-456789abcdef

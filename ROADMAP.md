@@ -36,7 +36,8 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **query-suggestions** | resource + data source | ✅ `algolia_query_suggestions` |
 | **personalization** — strategy | resource + data source | ✅ `algolia_personalization_strategy` |
 | **advanced-personalization** | new resource (singleton `/2/config`); needs a custom region-routed client | ⏸️ Deferred (spike done 2026-07-18): separate product from classic Personalization, not in the v4 client |
-| **agent-studio** | resource + data source | ✅ `algolia_agent`, `algolia_agent_provider` |
+| **agent-studio** — agents, providers | resource + data source | ✅ `algolia_agent`, `algolia_agent_provider` |
+| **agent-studio** — allowed domains, secret keys | resource + data source | ❌ Not started. The v4 client has full CRUD for both (`CreateAgentAllowedDomain`, `CreateSecretKey`, ...), but neither has a provider surface. A published agent is therefore not reachable from any origin without an out-of-band step, and the keys behind secured user tokens cannot be provisioned or rotated as code. |
 | **ingestion** — authentications | resource + data source | ✅ `algolia_ingestion_authentication` |
 | **ingestion** — sources | resource + data source | ✅ `algolia_ingestion_source` |
 | **ingestion** — destinations | resource + data source | ✅ `algolia_ingestion_destination` |
@@ -54,7 +55,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 
 ## Current state (baseline)
 
-12 resources and 15 data sources across `search`, `query-suggestions`, `personalization`, and `agent-studio`. Registered in `internal/provider/provider.go`; each lives under `internal/services/<name>/` following the model / schema / expand / flatten / resource / data_source layout described in `AGENTS.md`.
+21 resources and 26 data sources across `search`, `query-suggestions`, `personalization`, `agent-studio`, `abtesting-v3`, `composition`, `recommend`, `ingestion`, and `monitoring` (MCM, data sources only). Registered in `internal/provider/provider.go`; each lives under `internal/services/<name>/` following the model / schema / expand / flatten / resource / data_source layout described in `AGENTS.md`.
 
 ## Phased roadmap
 

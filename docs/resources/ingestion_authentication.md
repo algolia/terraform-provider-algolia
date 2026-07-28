@@ -104,6 +104,8 @@ resource "algolia_ingestion_authentication" "shopify_source" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Import an Ingestion authentication by its UUID. Secret values in `input`
 # are redacted by the API and cannot be recovered on import; set them in
