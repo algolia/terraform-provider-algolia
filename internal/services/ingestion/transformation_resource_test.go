@@ -32,7 +32,7 @@ func TestAccIngestionTransformationResource_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "name", name),
 					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "type", "code"),
-					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "code", "function transform(record) { return record; }"),
+					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "input", `{"code":"function transform(record) { return record; }"}`),
 					resource.TestCheckResourceAttrSet("algolia_ingestion_transformation.test", "transformation_id"),
 					resource.TestCheckResourceAttrSet("algolia_ingestion_transformation.test", "created_at"),
 					resource.TestCheckResourceAttrPair("algolia_ingestion_transformation.test", "id", "algolia_ingestion_transformation.test", "transformation_id"),
@@ -44,7 +44,7 @@ func TestAccIngestionTransformationResource_basic(t *testing.T) {
 				Config: testAccIngestionTransformationConfig(name+"-renamed", "function transform(record) { record.updated = true; return record; }"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "name", name+"-renamed"),
-					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "code", "function transform(record) { record.updated = true; return record; }"),
+					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "input", `{"code":"function transform(record) { record.updated = true; return record; }"}`),
 				),
 			},
 			{
@@ -101,11 +101,17 @@ func testAccCheckIngestionTransformationDestroy(s *terraform.State) error {
 }
 
 func testAccIngestionTransformationConfig(name, code string) string {
+	// The API rejects `type` alongside a top-level `code` with no `input`
+	// ("'input' is required if 'Type' is present"), so the code goes in `input`.
+	// This is also the shape that exercises the TransformationInput union.
 	return fmt.Sprintf(`
 resource "algolia_ingestion_transformation" "test" {
   name = %[1]q
   type = "code"
-  code = %[2]q
+
+  input = jsonencode({
+    code = %[2]q
+  })
 }
 `, name, code)
 }

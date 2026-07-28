@@ -45,19 +45,26 @@ func TestAccIngestionTaskResource_basic(t *testing.T) {
 				),
 			},
 			{
-				// Toggling enabled and adding a cron schedule exercises
-				// UpdateTask rather than a replace, since only source_id
-				// and action are RequiresReplace.
-				Config: testAccIngestionTaskConfig(sourceName, destinationName, indexName, false, "0 0 * * *"),
+				// Toggling enabled exercises UpdateTask rather than a replace,
+				// since only source_id and action are RequiresReplace. No cron
+				// here: the source is type "push", and the API rejects a
+				// schedule on one ("a source of type 'push' isn't able to
+				// schedule tasks").
+				Config: testAccIngestionTaskConfig(sourceName, destinationName, indexName, false, ""),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_ingestion_task.test", "enabled", "false"),
-					resource.TestCheckResourceAttr("algolia_ingestion_task.test", "cron", "0 0 * * *"),
 				),
 			},
 			{
 				ResourceName:      "algolia_ingestion_task.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+				// The Ingestion API returns "action": null on read - verified
+				// directly against /2/tasks, including for tasks this provider
+				// never touched - so it is write-only in practice and cannot be
+				// recovered on import. Read preserves the prior value, but an
+				// import has no prior to preserve.
+				ImportStateVerifyIgnore: []string{"action"},
 			},
 		},
 	})
@@ -77,10 +84,21 @@ func TestAccIngestionTaskDataSource_basic(t *testing.T) {
 			{
 				Config: testAccIngestionTaskDataSourceConfig(sourceName, destinationName, indexName),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.algolia_ingestion_task.test", "action", "replace"),
+					// Not `action`: the Ingestion API returns it as null on read,
+					// so a data source cannot surface it. Assert the fields the
+					// API does return instead.
+					resource.TestCheckResourceAttr("data.algolia_ingestion_task.test", "enabled", "true"),
 					resource.TestCheckResourceAttrPair(
 						"data.algolia_ingestion_task.test", "task_id",
 						"algolia_ingestion_task.test", "task_id",
+					),
+					resource.TestCheckResourceAttrPair(
+						"data.algolia_ingestion_task.test", "source_id",
+						"algolia_ingestion_source.test", "source_id",
+					),
+					resource.TestCheckResourceAttrPair(
+						"data.algolia_ingestion_task.test", "destination_id",
+						"algolia_ingestion_destination.test", "destination_id",
 					),
 				),
 			},
@@ -129,9 +147,20 @@ resource "algolia_ingestion_source" "test" {
   type = "push"
 }
 
+resource "algolia_ingestion_authentication" "test" {
+  name = "%[2]s-auth"
+  type = "algolia"
+
+  input = jsonencode({
+    appID  = %[6]q
+    apiKey = %[7]q
+  })
+}
+
 resource "algolia_ingestion_destination" "test" {
-  name = %[2]q
-  type = "search"
+  name              = %[2]q
+  type              = "search"
+  authentication_id = algolia_ingestion_authentication.test.authentication_id
 
   input = jsonencode({
     indexName = %[3]q
@@ -145,7 +174,7 @@ resource "algolia_ingestion_task" "test" {
   enabled        = %[4]t
   %[5]s
 }
-`, sourceName, destinationName, indexName, enabled, cronAttr)
+`, sourceName, destinationName, indexName, enabled, cronAttr, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 }
 
 func testAccIngestionTaskDataSourceConfig(sourceName, destinationName, indexName string) string {

@@ -30,9 +30,20 @@ func expandTransformationCreate(model *TransformationResourceModel) (*ingestiona
 	}
 
 	create := ingestionapi.NewTransformationCreate(model.Name.ValueString())
-	create.Code = model.Code.ValueStringPointer()
 	create.Description = model.Description.ValueStringPointer()
-	create.Input = input
+
+	// `code` and `input` are mutually exclusive: the API rejects a payload
+	// carrying both with "'input' can't be defined if 'code' is present". `code`
+	// is Optional+Computed because the API derives and returns it from
+	// `input.code`, so it holds a value in state even when the operator only
+	// configured `input` - sending it back would fail every apply. `input`
+	// therefore wins when present, and a configuration setting both is rejected
+	// at plan time by the schema's ConflictsWith validator.
+	if input != nil {
+		create.Input = input
+	} else {
+		create.Code = model.Code.ValueStringPointer()
+	}
 	create.AuthenticationIDs = expandAuthenticationIDs(model.AuthenticationIDs)
 
 	if !model.Type.IsNull() && !model.Type.IsUnknown() && model.Type.ValueString() != "" {

@@ -73,7 +73,7 @@ func (r *synonymResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	if err := waitForSynonymTask(r.client, indexName, saveResp.TaskID); err != nil {
+	if err := waitForSynonymTask(ctx, r.client, indexName, saveResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for synonym creation", "Could not confirm synonym creation: "+err.Error())
 		return
 	}
@@ -145,7 +145,7 @@ func (r *synonymResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	if err := waitForSynonymTask(r.client, indexName, saveResp.TaskID); err != nil {
+	if err := waitForSynonymTask(ctx, r.client, indexName, saveResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for synonym update", "Could not confirm synonym update: "+err.Error())
 		return
 	}
@@ -185,7 +185,7 @@ func (r *synonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	if err := waitForSynonymTask(r.client, indexName, deleteResp.TaskID); err != nil {
+	if err := waitForSynonymTask(ctx, r.client, indexName, deleteResp.TaskID); err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			return

@@ -70,7 +70,7 @@ func (r *compositionResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	if err := waitForCompositionTask(client, objectID, putResp.TaskID); err != nil {
+	if err := waitForCompositionTask(ctx, client, objectID, putResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for composition creation", "Could not confirm composition creation: "+err.Error())
 		return
 	}
@@ -153,7 +153,7 @@ func (r *compositionResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if err := waitForCompositionTask(client, objectID, putResp.TaskID); err != nil {
+	if err := waitForCompositionTask(ctx, client, objectID, putResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for composition update", "Could not confirm composition update: "+err.Error())
 		return
 	}
@@ -199,7 +199,7 @@ func (r *compositionResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	if err := waitForCompositionTask(client, objectID, deleteResp.TaskID); err != nil {
+	if err := waitForCompositionTask(ctx, client, objectID, deleteResp.TaskID); err != nil {
 		var apiErr *compositionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			return
@@ -236,7 +236,7 @@ func (r *compositionResource) ImportState(ctx context.Context, req resource.Impo
 // differently-routed task-status endpoint per index/model - Composition has
 // its own, scoped by compositionID, shared by both algolia_composition and
 // algolia_composition_rule).
-func waitForCompositionTask(client *compositionapi.APIClient, compositionID string, taskID int64) error {
+func waitForCompositionTask(ctx context.Context, client *compositionapi.APIClient, compositionID string, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
@@ -247,7 +247,13 @@ func waitForCompositionTask(client *compositionapi.APIClient, compositionID stri
 		if resp.Status == compositionapi.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}

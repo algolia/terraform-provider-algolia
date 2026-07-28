@@ -1,6 +1,7 @@
 package synonym
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -133,7 +134,7 @@ func apiSynonymType(value string) search.SynonymType {
 	}
 }
 
-func waitForSynonymTask(client *search.APIClient, indexName string, taskID int64) error {
+func waitForSynonymTask(ctx context.Context, client *search.APIClient, indexName string, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
@@ -144,7 +145,13 @@ func waitForSynonymTask(client *search.APIClient, indexName string, taskID int64
 		if resp.Status == search.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}

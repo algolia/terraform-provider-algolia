@@ -81,7 +81,7 @@ func (r *compositionRuleResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	if err := waitForCompositionTask(client, compositionID, putResp.TaskID); err != nil {
+	if err := waitForCompositionTask(ctx, client, compositionID, putResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for composition rule creation", "Could not confirm composition rule creation: "+err.Error())
 		return
 	}
@@ -167,7 +167,7 @@ func (r *compositionRuleResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if err := waitForCompositionTask(client, compositionID, putResp.TaskID); err != nil {
+	if err := waitForCompositionTask(ctx, client, compositionID, putResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for composition rule update", "Could not confirm composition rule update: "+err.Error())
 		return
 	}
@@ -215,7 +215,7 @@ func (r *compositionRuleResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	if err := waitForCompositionTask(client, compositionID, deleteResp.TaskID); err != nil {
+	if err := waitForCompositionTask(ctx, client, compositionID, deleteResp.TaskID); err != nil {
 		var apiErr *compositionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			return

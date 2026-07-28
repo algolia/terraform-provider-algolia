@@ -97,16 +97,31 @@ func testAccCheckIngestionDestinationDestroy(s *terraform.State) error {
 }
 
 func testAccIngestionDestinationConfig(name, indexName string) string {
+	// A "search" destination requires an authentication of type "algolia", and
+	// the API requires that authentication's appID to match the application
+	// making the request - a placeholder is rejected with "appID must match the
+	// appID used to do the request".
 	return fmt.Sprintf(`
+resource "algolia_ingestion_authentication" "destination" {
+  name = "%[1]s-auth"
+  type = "algolia"
+
+  input = jsonencode({
+    appID  = %[3]q
+    apiKey = %[4]q
+  })
+}
+
 resource "algolia_ingestion_destination" "test" {
-  name = %[1]q
-  type = "search"
+  name              = %[1]q
+  type              = "search"
+  authentication_id = algolia_ingestion_authentication.destination.authentication_id
 
   input = jsonencode({
     indexName = %[2]q
   })
 }
-`, name, indexName)
+`, name, indexName, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 }
 
 func testAccIngestionDestinationDataSourceConfig(name, indexName string) string {

@@ -32,7 +32,7 @@ func TestAccIngestionAuthenticationResource_basic(t *testing.T) {
 		CheckDestroy:             testAccCheckIngestionAuthenticationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccIngestionAuthenticationConfig(name, "APPID123", "dummy-api-key"),
+				Config: testAccIngestionAuthenticationConfig(name, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY")),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_ingestion_authentication.test", "name", name),
 					resource.TestCheckResourceAttr("algolia_ingestion_authentication.test", "type", "algolia"),
@@ -45,7 +45,7 @@ func TestAccIngestionAuthenticationResource_basic(t *testing.T) {
 				// Renaming (and rotating the dummy credentials) exercises
 				// UpdateAuthentication rather than a replace, since only
 				// `type` and `platform` are RequiresReplace.
-				Config: testAccIngestionAuthenticationConfig(name+"-renamed", "APPID123", "rotated-dummy-api-key"),
+				Config: testAccIngestionAuthenticationConfig(name+"-renamed", os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY")),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("algolia_ingestion_authentication.test", "name", name+"-renamed"),
 				),
@@ -70,7 +70,7 @@ func TestAccIngestionAuthenticationDataSource_basic(t *testing.T) {
 		CheckDestroy:             testAccCheckIngestionAuthenticationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccIngestionAuthenticationDataSourceConfig(name, "APPID123", "dummy-api-key"),
+				Config: testAccIngestionAuthenticationDataSourceConfig(name, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY")),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.algolia_ingestion_authentication.test", "name", name),
 					resource.TestCheckResourceAttr("data.algolia_ingestion_authentication.test", "type", "algolia"),

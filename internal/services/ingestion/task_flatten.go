@@ -39,8 +39,8 @@ func flattenTask(task *ingestionapi.Task, model *TaskResourceModel) diag.Diagnos
 	model.UpdatedAt = types.StringValue(task.UpdatedAt)
 	model.LastRun = types.StringPointerValue(task.LastRun)
 	model.NextRun = types.StringPointerValue(task.NextRun)
-	model.Action = flattenActionType(task.Action)
-	model.SubscriptionAction = flattenActionType(task.SubscriptionAction)
+	model.Action = flattenActionTypeOrPrior(task.Action, model.Action)
+	model.SubscriptionAction = flattenActionTypeOrPrior(task.SubscriptionAction, model.SubscriptionAction)
 	model.FailureThreshold = flattenFailureThreshold(task.FailureThreshold)
 
 	inputValue, inputDiags := flattenTaskInput(task.Input, model.Input)
@@ -56,6 +56,23 @@ func flattenTask(task *ingestionapi.Task, model *TaskResourceModel) diag.Diagnos
 	model.Policies = policiesValue
 
 	return diags
+}
+
+// flattenActionTypeOrPrior converts an *ActionType into a types.String, keeping
+// the prior value when the API omits the field.
+//
+// Task.Action and Task.SubscriptionAction are both `omitempty` on the client's
+// read model and the Ingestion API does not echo them back, so reading them as
+// null would report `action` as removed on every apply - and since `action` is
+// Required, that surfaced as "Provider produced inconsistent result after apply:
+// .action: was cty.StringVal(...), but now null". Both attributes are
+// RequiresReplace, so a configured value cannot drift and preserving it is safe.
+func flattenActionTypeOrPrior(action *ingestionapi.ActionType, prior types.String) types.String {
+	if action == nil {
+		return prior
+	}
+
+	return types.StringValue(string(*action))
 }
 
 // flattenActionType converts an *ActionType into a types.String, null if

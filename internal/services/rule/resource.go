@@ -74,7 +74,7 @@ func (r *ruleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, taskID); err != nil {
+	if err := waitForRuleTask(ctx, r.client, indexName, taskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for rule creation", "Could not confirm rule creation: "+err.Error())
 		return
 	}
@@ -148,7 +148,7 @@ func (r *ruleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, taskID); err != nil {
+	if err := waitForRuleTask(ctx, r.client, indexName, taskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for rule update", "Could not confirm rule update: "+err.Error())
 		return
 	}
@@ -188,7 +188,7 @@ func (r *ruleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, deleteResp.TaskID); err != nil {
+	if err := waitForRuleTask(ctx, r.client, indexName, deleteResp.TaskID); err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			return
@@ -220,7 +220,7 @@ func (r *ruleResource) ImportState(ctx context.Context, req resource.ImportState
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func waitForRuleTask(client *search.APIClient, indexName string, taskID int64) error {
+func waitForRuleTask(ctx context.Context, client *search.APIClient, indexName string, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
@@ -231,7 +231,13 @@ func waitForRuleTask(client *search.APIClient, indexName string, taskID int64) e
 		if resp.Status == search.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}
