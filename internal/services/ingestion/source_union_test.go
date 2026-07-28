@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
@@ -120,7 +121,7 @@ func TestExpandSourceUpdate_MarshalsDeclaredVariant(t *testing.T) {
 				Input: types.StringValue(tt.input),
 			}
 
-			update, diags := expandSourceUpdate(model)
+			update, diags := expandSourceUpdate(model, types.StringNull())
 
 			if tt.noUpdateVariant {
 				if !diags.HasError() {
@@ -230,7 +231,7 @@ func TestExpandSourceInput_RejectsInputForPush(t *testing.T) {
 		t.Fatal("expected a diagnostic for a push source configured with input")
 	}
 
-	if _, diags := expandSourceUpdate(model); !diags.HasError() {
+	if _, diags := expandSourceUpdate(model, types.StringNull()); !diags.HasError() {
 		t.Fatal("expected a diagnostic for a push source configured with input on update")
 	}
 }
@@ -244,4 +245,79 @@ func decodeSourceInput(t *testing.T, raw string) *ingestionapi.SourceInput {
 	}
 
 	return &input
+}
+
+// TestExpandSourceUpdate_UnchangedInputIsOmitted covers a regression found in
+// review: bigcommerce has no SourceUpdateInput variant, so refusing on the mere
+// presence of `input` blocked every update to such a source -- including changes
+// to unrelated fields like name. Only an actual attempt to change the input of a
+// source whose type has no update variant may fail.
+func TestExpandSourceUpdate_UnchangedInputIsOmitted(t *testing.T) {
+	const bigcommerceInput = `{"storeHash":"abc123","channel":"web"}`
+
+	t.Run("bigcommerce rename succeeds when input is unchanged", func(t *testing.T) {
+		model := &SourceResourceModel{
+			Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_BIGCOMMERCE)),
+			Name:  types.StringValue("renamed"),
+			Input: types.StringValue(bigcommerceInput),
+		}
+
+		update, diags := expandSourceUpdate(model, types.StringValue(bigcommerceInput))
+		if diags.HasError() {
+			t.Fatalf("unexpected diagnostics renaming a bigcommerce source: %v", diags.Errors())
+		}
+		if update.Input != nil {
+			t.Errorf("Input = %+v, want nil so the API keeps the existing input", update.Input)
+		}
+		if update.GetName() != "renamed" {
+			t.Errorf("Name = %q, want %q", update.GetName(), "renamed")
+		}
+	})
+
+	t.Run("bigcommerce input change still fails loudly", func(t *testing.T) {
+		model := &SourceResourceModel{
+			Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_BIGCOMMERCE)),
+			Name:  types.StringValue("same"),
+			Input: types.StringValue(`{"storeHash":"CHANGED","channel":"web"}`),
+		}
+
+		if _, diags := expandSourceUpdate(model, types.StringValue(bigcommerceInput)); !diags.HasError() {
+			t.Error("changing a bigcommerce source's input should fail: the client has no update variant for it")
+		}
+	})
+
+	t.Run("reformatted input is not treated as a change", func(t *testing.T) {
+		model := &SourceResourceModel{
+			Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_BIGCOMMERCE)),
+			Name:  types.StringValue("same"),
+			Input: types.StringValue(`{ "channel": "web",  "storeHash": "abc123" }`),
+		}
+
+		if _, diags := expandSourceUpdate(model, types.StringValue(bigcommerceInput)); diags.HasError() {
+			t.Errorf("semantically equal input should not count as a change: %v", diags.Errors())
+		}
+	})
+
+	t.Run("updatable type still sends changed input", func(t *testing.T) {
+		model := &SourceResourceModel{
+			Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_ALGOLIA_INDEX)),
+			Name:  types.StringValue("same"),
+			Input: types.StringValue(`{"indexName":"products","filters":"brand:new"}`),
+		}
+
+		update, diags := expandSourceUpdate(model, types.StringValue(`{"indexName":"products","filters":"brand:old"}`))
+		if diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags.Errors())
+		}
+		if update.Input == nil {
+			t.Fatal("Input = nil, want the changed input to be sent")
+		}
+		out, err := json.Marshal(update.Input)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if !strings.Contains(string(out), "brand:new") {
+			t.Errorf("Input marshaled to %s, want it to carry the new filters", string(out))
+		}
+	})
 }

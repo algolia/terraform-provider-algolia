@@ -16,6 +16,9 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_ingestion_source`: `input` is omitted from an update request when it has not changed,
+  so a source whose type has no update variant in the Algolia client (`bigcommerce`) can still have
+  its other fields changed. Only an actual attempt to change such a source's `input` is refused.
 - `algolia_index`: **fixed silent deletion of protected indexes.** `terraform import` left
   `deletion_protection` unset, and the delete guard read that absent value as `false`, so an
   `import` followed by `destroy` permanently deleted the index and its records even with

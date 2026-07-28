@@ -95,7 +95,7 @@ func TestExpandSourceUpdate(t *testing.T) {
 		AuthenticationID: types.StringValue("auth-456"),
 	}
 
-	update, diags := expandSourceUpdate(model)
+	update, diags := expandSourceUpdate(model, types.StringNull())
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -121,7 +121,7 @@ func TestExpandSourceUpdate_NoInput(t *testing.T) {
 		Input: types.StringNull(),
 	}
 
-	update, diags := expandSourceUpdate(model)
+	update, diags := expandSourceUpdate(model, types.StringNull())
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -138,7 +138,7 @@ func TestExpandSourceUpdate_InvalidInputJSON(t *testing.T) {
 		Input: types.StringValue(`not json at all`),
 	}
 
-	_, diags := expandSourceUpdate(model)
+	_, diags := expandSourceUpdate(model, types.StringNull())
 	if !diags.HasError() {
 		t.Fatal("expected a diagnostic error for invalid input JSON")
 	}

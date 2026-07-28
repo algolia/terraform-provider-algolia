@@ -38,13 +38,22 @@ func expandSourceCreate(model *SourceResourceModel) (*ingestionapi.SourceCreate,
 // Update. There is no `type` field on SourceUpdate at all: the Ingestion
 // API gives no way to change a source's type after creation, which is why
 // `type` is RequiresReplace in the resource schema.
-func expandSourceUpdate(model *SourceResourceModel) (*ingestionapi.SourceUpdate, diag.Diagnostics) {
+// priorInput is the `input` currently in state. When the planned input matches
+// it, `input` is omitted from the request entirely so the API keeps what it has.
+// That omission is what lets a source whose type has no update variant at all
+// (bigcommerce) still have its other fields changed: only an actual attempt to
+// change such a source's input is refused.
+func expandSourceUpdate(model *SourceResourceModel, priorInput types.String) (*ingestionapi.SourceUpdate, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	input, inputDiags := expandSourceUpdateInput(model.Type.ValueString(), model.Input)
-	diags.Append(inputDiags...)
-	if diags.HasError() {
-		return nil, diags
+	var input *ingestionapi.SourceUpdateInput
+	if !sourceInputUnchanged(model.Input, priorInput) {
+		expanded, inputDiags := expandSourceUpdateInput(model.Type.ValueString(), model.Input)
+		diags.Append(inputDiags...)
+		if diags.HasError() {
+			return nil, diags
+		}
+		input = expanded
 	}
 
 	update := ingestionapi.NewSourceUpdate(ingestionapi.WithSourceUpdateName(model.Name.ValueString()))
@@ -52,6 +61,20 @@ func expandSourceUpdate(model *SourceResourceModel) (*ingestionapi.SourceUpdate,
 	update.AuthenticationID = model.AuthenticationID.ValueStringPointer()
 
 	return update, diags
+}
+
+// sourceInputUnchanged reports whether the planned `input` carries the same
+// configuration as the one in state, comparing JSON semantically so that a
+// re-encoding (key order, whitespace) does not read as a change.
+func sourceInputUnchanged(planned, prior types.String) bool {
+	if planned.IsUnknown() || prior.IsNull() || prior.IsUnknown() {
+		return false
+	}
+	if planned.IsNull() {
+		return false
+	}
+
+	return jsonSemanticallyEqual(planned.ValueString(), prior.ValueString())
 }
 
 // expandSourceInput decodes the `input` attribute into the SourceInput union
