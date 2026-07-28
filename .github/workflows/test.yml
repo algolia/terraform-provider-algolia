@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -62,7 +62,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ALGOLIA_APP_ID != ''
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -70,7 +70,7 @@ jobs:
       # is on PATH; pre-installing it avoids that (and its expired-GPG-key
       # verification failure). terraform_wrapper: false keeps the real binary on
       # PATH so the framework can exec it directly.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
       - run: go mod download
@@ -89,7 +89,7 @@ jobs:
     if: vars.ALGOLIA_APP_ID != ''
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -97,7 +97,7 @@ jobs:
       # is on PATH; pre-installing it avoids that (and its expired-GPG-key
       # verification failure). terraform_wrapper: false keeps the real binary on
       # PATH so the framework can exec it directly.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
       - run: go mod download

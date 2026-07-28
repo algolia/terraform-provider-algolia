@@ -52,6 +52,13 @@ func agentResourceSchema() schema.Schema {
 			"config": schema.StringAttribute{
 				Description: "JSON-encoded configuration parameters (e.g. temperature, max_tokens).",
 				Optional:    true,
+				// Computed: Agent Studio populates server-side defaults (e.g.
+				// {"enableAlgoliaMcp":true}) when config is omitted, so the
+				// applied value can be non-null even when the config was null.
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"publish": schema.BoolAttribute{
 				Description: "Whether to publish the agent after create/update. When false, the agent stays in draft status.",

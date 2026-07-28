@@ -20,14 +20,10 @@ type DictionarySettingsDataSourceModel = DictionarySettingsResourceModel
 // Algolia's built-in standard entries for that language are disabled.
 type DisableStandardEntriesModel struct {
 	Stopwords types.Map `tfsdk:"stopwords"`
-	Plurals   types.Map `tfsdk:"plurals"`
-	Compounds types.Map `tfsdk:"compounds"`
 }
 
 // disableStandardEntriesAttrTypes mirrors the disable_standard_entries
 // schema exactly; used to convert to/from types.Object.
 var disableStandardEntriesAttrTypes = map[string]attr.Type{
 	"stopwords": types.MapType{ElemType: types.BoolType},
-	"plurals":   types.MapType{ElemType: types.BoolType},
-	"compounds": types.MapType{ElemType: types.BoolType},
 }

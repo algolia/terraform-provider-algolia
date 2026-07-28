@@ -43,8 +43,8 @@ func TestExpandDictionarySettings_NullBlock(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
 
-	if entries.Stopwords != nil || entries.Plurals != nil || entries.Compounds != nil {
-		t.Fatalf("expected all maps nil for a null block, got %#v", entries)
+	if entries.Stopwords != nil {
+		t.Fatalf("expected stopwords nil for a null block, got %#v", entries)
 	}
 }
 
@@ -52,8 +52,6 @@ func TestExpandDictionarySettings_Empty(t *testing.T) {
 	model := DictionarySettingsResourceModel{
 		DisableStandardEntries: disableStandardEntriesObject(t, DisableStandardEntriesModel{
 			Stopwords: types.MapNull(types.BoolType),
-			Plurals:   types.MapNull(types.BoolType),
-			Compounds: types.MapNull(types.BoolType),
 		}),
 	}
 
@@ -62,8 +60,8 @@ func TestExpandDictionarySettings_Empty(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
 
-	if entries.Stopwords != nil || entries.Plurals != nil || entries.Compounds != nil {
-		t.Fatalf("expected all maps nil when every map is null, got %#v", entries)
+	if entries.Stopwords != nil {
+		t.Fatalf("expected stopwords nil when the map is null, got %#v", entries)
 	}
 }
 
@@ -71,8 +69,6 @@ func TestExpandDictionarySettings_Partial(t *testing.T) {
 	model := DictionarySettingsResourceModel{
 		DisableStandardEntries: disableStandardEntriesObject(t, DisableStandardEntriesModel{
 			Stopwords: boolMapValue(t, map[string]bool{"en": true}),
-			Plurals:   types.MapNull(types.BoolType),
-			Compounds: types.MapNull(types.BoolType),
 		}),
 	}
 
@@ -84,20 +80,12 @@ func TestExpandDictionarySettings_Partial(t *testing.T) {
 	if len(entries.Stopwords) != 1 || !entries.Stopwords["en"] {
 		t.Fatalf("stopwords = %#v, want {en: true}", entries.Stopwords)
 	}
-	if entries.Plurals != nil {
-		t.Fatalf("plurals = %#v, want nil", entries.Plurals)
-	}
-	if entries.Compounds != nil {
-		t.Fatalf("compounds = %#v, want nil", entries.Compounds)
-	}
 }
 
-func TestExpandDictionarySettings_AllThreeTypes(t *testing.T) {
+func TestExpandDictionarySettings_MultipleLanguages(t *testing.T) {
 	model := DictionarySettingsResourceModel{
 		DisableStandardEntries: disableStandardEntriesObject(t, DisableStandardEntriesModel{
 			Stopwords: boolMapValue(t, map[string]bool{"en": true, "fr": false}),
-			Plurals:   boolMapValue(t, map[string]bool{"de": true}),
-			Compounds: boolMapValue(t, map[string]bool{"nl": true}),
 		}),
 	}
 
@@ -108,12 +96,6 @@ func TestExpandDictionarySettings_AllThreeTypes(t *testing.T) {
 
 	if len(entries.Stopwords) != 2 || !entries.Stopwords["en"] || entries.Stopwords["fr"] {
 		t.Fatalf("stopwords = %#v, want {en: true, fr: false}", entries.Stopwords)
-	}
-	if len(entries.Plurals) != 1 || !entries.Plurals["de"] {
-		t.Fatalf("plurals = %#v, want {de: true}", entries.Plurals)
-	}
-	if len(entries.Compounds) != 1 || !entries.Compounds["nl"] {
-		t.Fatalf("compounds = %#v, want {nl: true}", entries.Compounds)
 	}
 }
 
@@ -130,7 +112,7 @@ func TestFlattenDictionarySettings_Empty(t *testing.T) {
 	}
 
 	attrs := model.DisableStandardEntries.Attributes()
-	for _, key := range []string{"stopwords", "plurals", "compounds"} {
+	for _, key := range []string{"stopwords"} {
 		m, ok := attrs[key].(types.Map)
 		if !ok || m.IsNull() {
 			t.Fatalf("%s: want a non-null empty map, got %#v", key, attrs[key])
@@ -159,23 +141,11 @@ func TestFlattenDictionarySettings_Partial(t *testing.T) {
 	if !ok || !boolValue.ValueBool() {
 		t.Fatalf("stopwords[en] = %#v, want true", stopwords.Elements()["en"])
 	}
-
-	plurals := attrs["plurals"].(types.Map)
-	if len(plurals.Elements()) != 0 {
-		t.Fatalf("plurals = %#v, want empty", plurals.Elements())
-	}
-
-	compounds := attrs["compounds"].(types.Map)
-	if len(compounds.Elements()) != 0 {
-		t.Fatalf("compounds = %#v, want empty", compounds.Elements())
-	}
 }
 
-func TestFlattenDictionarySettings_AllThreeTypes(t *testing.T) {
+func TestFlattenDictionarySettings_MultipleLanguages(t *testing.T) {
 	entries := search.StandardEntries{
-		Stopwords: map[string]bool{"en": true},
-		Plurals:   map[string]bool{"fr": true, "de": false},
-		Compounds: map[string]bool{"nl": true},
+		Stopwords: map[string]bool{"en": true, "fr": false},
 	}
 
 	var model DictionarySettingsResourceModel
@@ -187,29 +157,20 @@ func TestFlattenDictionarySettings_AllThreeTypes(t *testing.T) {
 	attrs := model.DisableStandardEntries.Attributes()
 
 	stopwords := attrs["stopwords"].(types.Map)
+	if len(stopwords.Elements()) != 2 {
+		t.Fatalf("stopwords = %#v, want 2 entries", stopwords.Elements())
+	}
 	if v, ok := stopwords.Elements()["en"].(types.Bool); !ok || !v.ValueBool() {
 		t.Fatalf("stopwords[en] = %#v, want true", stopwords.Elements()["en"])
 	}
-
-	plurals := attrs["plurals"].(types.Map)
-	if len(plurals.Elements()) != 2 {
-		t.Fatalf("plurals = %#v, want 2 entries", plurals.Elements())
-	}
-	if v, ok := plurals.Elements()["de"].(types.Bool); !ok || v.ValueBool() {
-		t.Fatalf("plurals[de] = %#v, want false", plurals.Elements()["de"])
-	}
-
-	compounds := attrs["compounds"].(types.Map)
-	if v, ok := compounds.Elements()["nl"].(types.Bool); !ok || !v.ValueBool() {
-		t.Fatalf("compounds[nl] = %#v, want true", compounds.Elements()["nl"])
+	if v, ok := stopwords.Elements()["fr"].(types.Bool); !ok || v.ValueBool() {
+		t.Fatalf("stopwords[fr] = %#v, want false", stopwords.Elements()["fr"])
 	}
 }
 
 func TestExpandFlattenDictionarySettings_RoundTrip(t *testing.T) {
 	entries := search.StandardEntries{
 		Stopwords: map[string]bool{"en": true},
-		Plurals:   map[string]bool{"fr": true},
-		Compounds: map[string]bool{"de": true},
 	}
 
 	var model DictionarySettingsResourceModel
@@ -224,12 +185,6 @@ func TestExpandFlattenDictionarySettings_RoundTrip(t *testing.T) {
 
 	if len(roundTripped.Stopwords) != 1 || !roundTripped.Stopwords["en"] {
 		t.Fatalf("stopwords = %#v, want {en: true}", roundTripped.Stopwords)
-	}
-	if len(roundTripped.Plurals) != 1 || !roundTripped.Plurals["fr"] {
-		t.Fatalf("plurals = %#v, want {fr: true}", roundTripped.Plurals)
-	}
-	if len(roundTripped.Compounds) != 1 || !roundTripped.Compounds["de"] {
-		t.Fatalf("compounds = %#v, want {de: true}", roundTripped.Compounds)
 	}
 }
 
@@ -246,7 +201,7 @@ func TestDictionarySettingsSchemas_RegisterExpectedAttributes(t *testing.T) {
 		t.Fatal("expected disable_standard_entries to be an optional+computed single nested attribute")
 	}
 
-	for _, key := range []string{"stopwords", "plurals", "compounds"} {
+	for _, key := range []string{"stopwords"} {
 		mapAttr, ok := disableAttr.Attributes[key].(resourceschema.MapAttribute)
 		if !ok || mapAttr.ElementType != types.BoolType {
 			t.Fatalf("expected %s to be a map(bool) attribute", key)

@@ -150,6 +150,10 @@ func testAccRequireCredentials(t *testing.T) {
 		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
 	}
 
+	if os.Getenv("ALGOLIA_RUN_ALLOWEDSOURCES_ACC") != "1" {
+		t.Skip("Set ALGOLIA_RUN_ALLOWEDSOURCES_ACC=1 to run allowed sources acceptance tests; the endpoint requires the Vault feature, which is not enabled on most applications (returns HTTP 402 otherwise)")
+	}
+
 	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" {
 		t.Skip("ALGOLIA_APP_ID and ALGOLIA_API_KEY must be set for acceptance tests")
 	}

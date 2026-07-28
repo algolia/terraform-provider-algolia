@@ -105,6 +105,10 @@ func testAccRequireCredentials(t *testing.T) {
 		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
 	}
 
+	if os.Getenv("ALGOLIA_RUN_COMPOSITION_ACC") != "1" {
+		t.Skip("Set ALGOLIA_RUN_COMPOSITION_ACC=1 to run Compositions acceptance tests; the Compositions API is not enabled on most applications (returns HTTP 404 otherwise)")
+	}
+
 	if os.Getenv("ALGOLIA_APP_ID") == "" || os.Getenv("ALGOLIA_API_KEY") == "" {
 		t.Skip("ALGOLIA_APP_ID and ALGOLIA_API_KEY must be set for acceptance tests")
 	}

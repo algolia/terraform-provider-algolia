@@ -3,8 +3,5 @@ resource "algolia_dictionary_settings" "example" {
     stopwords = {
       en = true
     }
-    plurals = {
-      fr = true
-    }
   }
 }
