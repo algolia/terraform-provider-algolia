@@ -105,3 +105,6 @@ jobs:
         env:
           ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
           ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+          # Lets the install-script e2e test (TestE2EInstallScript) download the
+          # published release via gh; that test skips if unauthenticated.
+          GH_TOKEN: ${{ github.token }}

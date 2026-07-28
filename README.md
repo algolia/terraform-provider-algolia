@@ -4,7 +4,7 @@
 
 Manage your [Algolia](https://www.algolia.com/) search infrastructure as code.
 
-[![Terraform Registry](https://img.shields.io/badge/Terraform-Registry-purple.svg)](https://registry.terraform.io/providers/algolia/algolia/latest)
+[![Status](https://img.shields.io/badge/status-internal%20beta-orange.svg)](https://github.com/algolia/terraform-provider-algolia/releases)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](LICENSE)
 
 </div>
@@ -18,14 +18,22 @@ The Algolia Terraform provider lets you configure and manage Algolia resources d
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
 - [Go](https://go.dev/doc/install) >= 1.25 (for building from source)
 
+## Installation (internal)
+
+> **This provider is distributed internally only.** It is not published to the public Terraform Registry. Every internal developer installs it from the signed release artifacts on [GitHub Releases](https://github.com/algolia/terraform-provider-algolia/releases) using a local [filesystem mirror](https://developer.hashicorp.com/terraform/cli/config/config-file#filesystem_mirror). No private registry is required.
+
+**Quick install:** from a checkout of this repo, run [`scripts/install.sh`](scripts/install.sh). It detects your platform, downloads the signed release with `gh`, populates the filesystem mirror, and writes the `provider_installation` block for you (without clobbering an existing one). Add `--dev-overrides` to install a local binary via `dev_overrides` instead (no version pin, no `terraform init`; handy for a quick smoke test). Prefer to do it by hand? See [Install from a release archive](#install-from-a-release-archive) at the end of this README.
+
 ## Getting Started
+
+The provider is currently a pre-release (`0.1.0-beta.1`). Terraform excludes pre-release versions from range constraints (e.g. `~> 0.1` will **not** match a `-beta` build), so pin the exact version:
 
 ```hcl
 terraform {
   required_providers {
     algolia = {
       source  = "algolia/algolia"
-      version = "~> 0.1"
+      version = "0.1.0-beta.1"
     }
   }
 }
@@ -198,3 +206,42 @@ Interested in contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for developme
 ## License
 
 [Mozilla Public License 2.0](LICENSE)
+
+## Install from a release archive
+
+The [Quick install](#installation-internal) script (`scripts/install.sh`) automates the steps below. Follow them by hand if you would rather not run the script, or if you want to understand what it does. This is the same [filesystem mirror](https://developer.hashicorp.com/terraform/cli/config/config-file#filesystem_mirror) setup either way.
+
+**1. Download the release archive for your platform.** Grab the `terraform-provider-algolia_<version>_<os>_<arch>.zip` for the version you want from the [releases page](https://github.com/algolia/terraform-provider-algolia/releases) (`darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`, or `windows_arm64`).
+
+**2. Drop it into your filesystem mirror** (do **not** unzip it; the mirror uses the packed layout):
+
+```bash
+# macOS / Linux
+mkdir -p ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia
+mv ~/Downloads/terraform-provider-algolia_0.1.0-beta.1_darwin_arm64.zip \
+   ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia/
+```
+
+On Windows the mirror directory is `%APPDATA%\terraform.d\plugins\registry.terraform.io\algolia\algolia\`.
+
+**3. Tell Terraform to resolve this provider from the mirror** by adding a `provider_installation` block to your CLI config (`~/.terraformrc` on macOS/Linux, `%APPDATA%\terraform.rc` on Windows). This keeps every other provider coming from the public registry while pulling `algolia/algolia` from disk:
+
+```hcl
+provider_installation {
+  filesystem_mirror {
+    path    = "/Users/<you>/.terraform.d/plugins"
+    include = ["registry.terraform.io/algolia/algolia"]
+  }
+  direct {
+    exclude = ["registry.terraform.io/algolia/algolia"]
+  }
+}
+```
+
+**4. (Optional) Verify the download.** Each release ships a GPG-signed `SHA256SUMS` (`SHA256SUMS.sig`). Filesystem-mirror installs are not signature-checked by Terraform, so verify manually if you need the assurance:
+
+```bash
+shasum -a 256 -c terraform-provider-algolia_0.1.0-beta.1_SHA256SUMS 2>&1 | grep OK
+```
+
+Then run `terraform init`, and Terraform will pick up the mirrored provider without contacting the network. Pin the exact pre-release version in `required_providers` as shown in [Getting Started](#getting-started).
