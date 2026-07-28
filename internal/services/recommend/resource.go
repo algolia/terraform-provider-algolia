@@ -2,11 +2,11 @@ package recommend
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	recommendapi "github.com/algolia/algoliasearch-client-go/v4/algolia/recommend"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -142,8 +142,7 @@ func (r *recommendRuleResource) Read(ctx context.Context, req resource.ReadReque
 
 	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *recommendapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Recommend rule not found; removing from state", map[string]any{
 				"index_name": indexName,
 				"model":      string(recommendModel),
@@ -246,8 +245,7 @@ func (r *recommendRuleResource) Delete(ctx context.Context, req resource.DeleteR
 
 	deleteResp, err := client.DeleteRecommendRule(client.NewApiDeleteRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *recommendapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -256,8 +254,7 @@ func (r *recommendRuleResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	if err := waitForRecommendRuleTask(ctx, client, indexName, recommendModel, deleteResp.TaskID); err != nil {
-		var apiErr *recommendapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

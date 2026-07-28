@@ -2,9 +2,9 @@ package composition
 
 import (
 	"context"
-	"errors"
 
 	compositionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/composition"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -118,8 +118,7 @@ func (r *compositionRuleResource) Read(ctx context.Context, req resource.ReadReq
 
 	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *compositionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Composition rule not found; removing from state", map[string]any{"composition_id": compositionID, "object_id": objectID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -206,8 +205,7 @@ func (r *compositionRuleResource) Delete(ctx context.Context, req resource.Delet
 
 	deleteResp, err := client.DeleteCompositionRule(client.NewApiDeleteCompositionRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *compositionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -216,8 +214,7 @@ func (r *compositionRuleResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	if err := waitForCompositionTask(ctx, client, compositionID, deleteResp.TaskID); err != nil {
-		var apiErr *compositionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

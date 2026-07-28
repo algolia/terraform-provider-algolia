@@ -2,11 +2,11 @@ package composition
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	compositionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/composition"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -106,8 +106,7 @@ func (r *compositionResource) Read(ctx context.Context, req resource.ReadRequest
 
 	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *compositionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Composition not found; removing from state", map[string]any{"object_id": objectID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -190,8 +189,7 @@ func (r *compositionResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	deleteResp, err := client.DeleteComposition(client.NewApiDeleteCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *compositionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -200,8 +198,7 @@ func (r *compositionResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	if err := waitForCompositionTask(ctx, client, objectID, deleteResp.TaskID); err != nil {
-		var apiErr *compositionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

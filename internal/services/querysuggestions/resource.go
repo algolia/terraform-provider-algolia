@@ -7,6 +7,7 @@ import (
 	"time"
 
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -110,8 +111,7 @@ func (r *querySuggestionsResource) Read(ctx context.Context, req resource.ReadRe
 
 	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(state.IndexName.ValueString()), suggestions.WithContext(ctx))
 	if err != nil {
-		var apiErr *suggestions.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -182,8 +182,7 @@ func (r *querySuggestionsResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	if _, err := client.DeleteConfig(client.NewApiDeleteConfigRequest(state.IndexName.ValueString()), suggestions.WithContext(ctx)); err != nil {
-		var apiErr *suggestions.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

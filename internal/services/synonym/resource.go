@@ -2,10 +2,10 @@ package synonym
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -104,8 +104,7 @@ func (r *synonymResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Synonym not found; removing from state", map[string]any{"index_name": indexName, "object_id": objectID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -176,8 +175,7 @@ func (r *synonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	deleteResp, err := r.client.DeleteSynonym(r.client.NewApiDeleteSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -186,8 +184,7 @@ func (r *synonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	if err := waitForSynonymTask(ctx, r.client, indexName, deleteResp.TaskID); err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

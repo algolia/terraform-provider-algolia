@@ -2,10 +2,10 @@ package abtest
 
 import (
 	"context"
-	"errors"
 	"strconv"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -141,8 +141,7 @@ func (r *abTestResource) Read(ctx context.Context, req resource.ReadRequest, res
 	abTestID := int32(state.ABTestID.ValueInt64())
 	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID), abtestingapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *abtestingapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "A/B test not found; removing from state", map[string]any{"ab_test_id": abTestID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -215,8 +214,7 @@ func (r *abTestResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	tflog.Debug(ctx, "Deleting A/B test", map[string]any{"ab_test_id": abTestID})
 
 	if _, err := client.DeleteABTest(client.NewApiDeleteABTestRequest(abTestID), abtestingapi.WithContext(ctx)); err != nil {
-		var apiErr *abtestingapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
