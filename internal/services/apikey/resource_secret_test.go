@@ -233,6 +233,7 @@ func resourceStateWithKey(t *testing.T) tfsdk.State {
 		Referers:               types.SetNull(types.StringType),
 		MaxHitsPerQuery:        types.Int64Null(),
 		MaxQueriesPerIPPerHour: types.Int64Null(),
+		QueryParameters:        types.StringNull(),
 		CreatedAt:              types.StringValue("2024-01-01T00:00:00Z"),
 	})
 	if diags.HasError() {

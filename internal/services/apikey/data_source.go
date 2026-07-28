@@ -2,10 +2,10 @@ package apikey
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -65,8 +65,7 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 
 	apiResp, err := d.client.GetApiKey(d.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			resp.Diagnostics.AddError(
 				"API key not found",
 				"No API key found for the provided value. Check that the key is correct and that the "+

@@ -97,6 +97,7 @@ func apiKeyCreatePlan(t *testing.T) tfsdk.Plan {
 		Referers:               types.SetNull(types.StringType),
 		MaxHitsPerQuery:        types.Int64Null(),
 		MaxQueriesPerIPPerHour: types.Int64Null(),
+		QueryParameters:        types.StringNull(),
 		CreatedAt:              types.StringUnknown(),
 	})
 	if diags.HasError() {

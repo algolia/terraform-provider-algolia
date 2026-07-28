@@ -91,6 +91,110 @@ func TestAccAPIKeyResource_drift(t *testing.T) {
 	})
 }
 
+// TestAccAPIKeyResource_queryParameters covers what actually cures the
+// wipe-on-update blocker for this attribute: modelling it at all. Import has to
+// hydrate the restriction, because state is what lets a later apply either
+// preserve it or show its removal. Clearing it with an empty string also has to
+// reach the key, since that is the one value the API treats as "drop the field".
+func TestAccAPIKeyResource_queryParameters(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	description := fmt.Sprintf("tf-acc-api-key-qp-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	restriction := "filters=tenant%3Aacme"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAPIKeyDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAPIKeyQueryParametersConfig(description, fmt.Sprintf("query_parameters = %q", restriction)),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_api_key.test", "query_parameters", restriction),
+					testAccCheckAPIKeyQueryParameters("algolia_api_key.test", restriction),
+				),
+			},
+			{
+				// Before the fix there was no attribute for import to fill, so
+				// state had no record of the restriction at all.
+				ResourceName:            "algolia_api_key.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"expires_at"},
+			},
+			{
+				// Changing the restriction is an ordinary update. This stays a
+				// filters restriction on purpose: the API rejects a
+				// restrictSources value that does not contain the caller's own IP.
+				Config: testAccAPIKeyQueryParametersConfig(description, `query_parameters = "filters=tenant%3Abeta"`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_api_key.test", "query_parameters", "filters=tenant%3Abeta"),
+					testAccCheckAPIKeyQueryParameters("algolia_api_key.test", "filters=tenant%3Abeta"),
+				),
+			},
+			{
+				Config: testAccAPIKeyQueryParametersConfig(description, `query_parameters = ""`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_api_key.test", "query_parameters", ""),
+					testAccCheckAPIKeyQueryParameters("algolia_api_key.test", ""),
+				),
+			},
+		},
+	})
+}
+
+// TestAccAPIKeyResource_optionalRestrictionsPlanTheirRemoval is the guard on the
+// wipe-on-update hazard as a whole. UpdateApiKey resets every attribute the
+// request omits, and the provider does send a request that omits them - but all
+// five are Optional and not Computed and are hydrated from the API on every Read
+// and Import, so state records them and Terraform plans the removal rather than
+// performing it unannounced. The PlanOnly step is the assertion that matters:
+// dropping them from configuration produces a non-empty plan. The step after it
+// confirms the plan was honest and the values really are gone.
+func TestAccAPIKeyResource_optionalRestrictionsPlanTheirRemoval(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	description := fmt.Sprintf("tf-acc-api-key-restrict-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAPIKeyDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAPIKeyRestrictionsConfig(description),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_api_key.test", "indexes.0", "products_*"),
+					resource.TestCheckResourceAttr("algolia_api_key.test", "referers.0", "https://example.com/*"),
+					resource.TestCheckResourceAttr("algolia_api_key.test", "max_hits_per_query", "100"),
+					resource.TestCheckResourceAttr("algolia_api_key.test", "max_queries_per_ip_per_hour", "1000"),
+					resource.TestCheckResourceAttr("algolia_api_key.test", "query_parameters", "filters=tenant%3Aacme"),
+				),
+			},
+			{
+				ResourceName:            "algolia_api_key.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"expires_at"},
+			},
+			{
+				Config:             testAccAPIKeyNoRestrictionsConfig(description),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				Config: testAccAPIKeyNoRestrictionsConfig(description),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("algolia_api_key.test", "indexes.0"),
+					resource.TestCheckNoResourceAttr("algolia_api_key.test", "referers.0"),
+					resource.TestCheckNoResourceAttr("algolia_api_key.test", "max_hits_per_query"),
+					resource.TestCheckNoResourceAttr("algolia_api_key.test", "max_queries_per_ip_per_hour"),
+					resource.TestCheckNoResourceAttr("algolia_api_key.test", "query_parameters"),
+					testAccCheckAPIKeyQueryParameters("algolia_api_key.test", ""),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckAPIKeyDestroy(s *terraform.State) error {
 	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 	if err != nil {
@@ -183,6 +287,67 @@ func testAccMutateAPIKey(t *testing.T, key *string, description string, maxHits 
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
+}
+
+// testAccCheckAPIKeyQueryParameters asserts what the live key carries, not just
+// what state records: the point of the fail-safe is the restriction still being
+// enforced by Algolia.
+func testAccCheckAPIKeyQueryParameters(resourceName, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceName)
+		}
+
+		client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			return err
+		}
+
+		apiKey, err := client.GetApiKey(client.NewApiGetApiKeyRequest(rs.Primary.ID))
+		if err != nil {
+			return fmt.Errorf("read API key described as %q: %w", rs.Primary.Attributes["description"], err)
+		}
+
+		if got := apiKey.GetQueryParameters(); got != want {
+			return fmt.Errorf("live query parameters = %q, want %q", got, want)
+		}
+
+		return nil
+	}
+}
+
+func testAccAPIKeyQueryParametersConfig(description, queryParameters string) string {
+	return fmt.Sprintf(`
+resource "algolia_api_key" "test" {
+  acl         = ["search"]
+  description = %[1]q
+  %[2]s
+}
+`, description, queryParameters)
+}
+
+func testAccAPIKeyRestrictionsConfig(description string) string {
+	return fmt.Sprintf(`
+resource "algolia_api_key" "test" {
+  acl                         = ["search"]
+  description                 = %[1]q
+  indexes                     = ["products_*"]
+  referers                    = ["https://example.com/*"]
+  max_hits_per_query          = 100
+  max_queries_per_ip_per_hour = 1000
+  query_parameters            = %[2]q
+}
+`, description, "filters=tenant%3Aacme")
+}
+
+func testAccAPIKeyNoRestrictionsConfig(description string) string {
+	return fmt.Sprintf(`
+resource "algolia_api_key" "test" {
+  acl         = ["search"]
+  description = %[1]q
+}
+`, description)
 }
 
 func testAccAPIKeyResourceConfig(description string, maxHits int) string {

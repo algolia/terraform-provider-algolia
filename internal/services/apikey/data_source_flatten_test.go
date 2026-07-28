@@ -12,9 +12,11 @@ import (
 func TestFlattenAPIKeyDataSource_Full(t *testing.T) {
 	createdAt := time.Date(2026, time.April, 7, 12, 0, 0, 0, time.UTC)
 
+	// The API reports createdAt in seconds since the Unix epoch, despite the
+	// generated client documenting the field as milliseconds.
 	resp := search.NewGetApiKeyResponse(
 		"key-value",
-		createdAt.UnixMilli(),
+		createdAt.Unix(),
 		[]search.Acl{search.ACL_SEARCH, search.ACL_BROWSE},
 		search.WithGetApiKeyResponseDescription("desc"),
 		search.WithGetApiKeyResponseIndexes([]string{"products"}),
@@ -78,7 +80,7 @@ func TestFlattenAPIKeyDataSource_Full(t *testing.T) {
 func TestFlattenAPIKeyDataSource_Minimal(t *testing.T) {
 	resp := search.NewGetApiKeyResponse(
 		"key-value",
-		time.Now().UnixMilli(),
+		time.Now().Unix(),
 		[]search.Acl{search.ACL_SEARCH},
 	)
 
@@ -106,13 +108,16 @@ func TestFlattenAPIKeyDataSource_Minimal(t *testing.T) {
 }
 
 func TestFlattenAPIKeysDataSource_Multiple(t *testing.T) {
+	createdAt := time.Date(2026, time.April, 7, 12, 0, 0, 0, time.UTC)
+
 	resp := search.NewListApiKeysResponse([]search.GetApiKeyResponse{
-		*search.NewGetApiKeyResponse("key-1", 1000, []search.Acl{search.ACL_SEARCH}),
+		*search.NewGetApiKeyResponse("key-1", createdAt.Unix(), []search.Acl{search.ACL_SEARCH}),
 		*search.NewGetApiKeyResponse(
 			"key-2",
-			2000,
+			createdAt.Unix(),
 			[]search.Acl{search.ACL_BROWSE, search.ACL_SEARCH},
 			search.WithGetApiKeyResponseDescription("second key"),
+			search.WithGetApiKeyResponseQueryParameters("filters=tenant%3Aacme"),
 		),
 	})
 
@@ -138,6 +143,9 @@ func TestFlattenAPIKeysDataSource_Multiple(t *testing.T) {
 	if v, ok := first.Attributes()["value"].(types.String); !ok || v.ValueString() != "key-1" {
 		t.Fatalf("keys[0].value = %#v, want %q", first.Attributes()["value"], "key-1")
 	}
+	if v, ok := first.Attributes()["created_at"].(types.String); !ok || v.ValueString() != createdAt.Format(time.RFC3339) {
+		t.Fatalf("keys[0].created_at = %#v, want %q", first.Attributes()["created_at"], createdAt.Format(time.RFC3339))
+	}
 
 	second, ok := elements[1].(types.Object)
 	if !ok {
@@ -145,6 +153,9 @@ func TestFlattenAPIKeysDataSource_Multiple(t *testing.T) {
 	}
 	if v, ok := second.Attributes()["description"].(types.String); !ok || v.ValueString() != "second key" {
 		t.Fatalf("keys[1].description = %#v, want %q", second.Attributes()["description"], "second key")
+	}
+	if v, ok := second.Attributes()["query_parameters"].(types.String); !ok || v.ValueString() != "filters=tenant%3Aacme" {
+		t.Fatalf("keys[1].query_parameters = %#v, want %q", second.Attributes()["query_parameters"], "filters=tenant%3Aacme")
 	}
 }
 

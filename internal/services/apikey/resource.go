@@ -2,12 +2,12 @@ package apikey
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -104,7 +104,7 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	if _, err = r.client.WaitForApiKey(key, search.API_KEY_OPERATION_ADD); err != nil {
+	if _, err = r.client.WaitForApiKey(key, search.API_KEY_OPERATION_ADD, search.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error waiting for API key creation", "Could not confirm API key creation: "+redactKey(err, key))
 		return
 	}
@@ -137,8 +137,7 @@ func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	apiResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "API key not found; removing from state")
 			resp.State.RemoveResource(ctx)
 			return
@@ -178,7 +177,7 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	if _, err := r.client.UpdateApiKey(r.client.NewApiUpdateApiKeyRequest(key, apiKey)); err != nil {
+	if _, err := r.client.UpdateApiKey(r.client.NewApiUpdateApiKeyRequest(key, apiKey), search.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating API key", "Could not update "+keyLabel(plan.Description)+": "+redactKey(err, key))
 		return
 	}
@@ -229,9 +228,8 @@ func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// The id is the key value itself, so it is never logged (see keyLabel).
 	tflog.Debug(ctx, "Deleting API key")
 
-	if _, err := r.client.DeleteApiKey(r.client.NewApiDeleteApiKeyRequest(key)); err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := r.client.DeleteApiKey(r.client.NewApiDeleteApiKeyRequest(key), search.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -239,9 +237,8 @@ func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	if _, err := r.client.WaitForApiKey(key, search.API_KEY_OPERATION_DELETE); err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := r.client.WaitForApiKey(key, search.API_KEY_OPERATION_DELETE, search.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

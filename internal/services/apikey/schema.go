@@ -58,6 +58,13 @@ func apiKeyResourceSchema() schema.Schema {
 				Description: "Maximum number of API requests allowed per IP address or user token per hour.",
 				Optional:    true,
 			},
+			"query_parameters": schema.StringAttribute{
+				Description: "Query parameters added to every search made with this API key, as a URL query string - " +
+					"for example `filters=tenant%3Aacme` to scope the key to one tenant, or `restrictSources=1.2.3.4` to " +
+					"restrict it to an IP range. Note that Algolia rejects a `restrictSources` value that does not cover " +
+					"the address Terraform itself is applying from.",
+				Optional: true,
+			},
 			"created_at": schema.StringAttribute{
 				Description: "RFC3339 timestamp of when the API key was created.",
 				Computed:    true,

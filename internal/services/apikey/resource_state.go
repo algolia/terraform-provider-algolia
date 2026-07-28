@@ -60,6 +60,13 @@ func buildAPIKeyRequest(model *APIKeyResourceModel, now time.Time) (*search.ApiK
 		apiKey.SetMaxQueriesPerIPPerHour(value)
 	}
 
+	// Unlike the fields above, an empty string is sent rather than skipped: it is
+	// a valid way to ask for the restriction to be cleared, and the API resets
+	// the field either way.
+	if !model.QueryParameters.IsNull() && !model.QueryParameters.IsUnknown() {
+		apiKey.SetQueryParameters(model.QueryParameters.ValueString())
+	}
+
 	if !model.ExpiresAt.IsNull() && !model.ExpiresAt.IsUnknown() {
 		expiresAt, err := time.Parse(time.RFC3339, model.ExpiresAt.ValueString())
 		if err != nil {
@@ -112,6 +119,10 @@ func apiKeyResponseMatches(response *search.GetApiKeyResponse, expected *search.
 		return false
 	}
 
+	if expected.GetQueryParameters() != response.GetQueryParameters() {
+		return false
+	}
+
 	if !slicesEqualUnordered(expected.GetAcl(), response.GetAcl()) {
 		return false
 	}
@@ -134,8 +145,17 @@ func apiKeyResponseMatches(response *search.GetApiKeyResponse, expected *search.
 	}
 
 	expectedValidity := int32(expiresAt.Sub(now).Seconds())
-	return int32(math.Abs(float64(*actualValidity-expectedValidity))) <= 5
+	return math.Abs(float64(*actualValidity-expectedValidity)) <= expiresAtToleranceSeconds
 }
+
+// expiresAtToleranceSeconds is how far a key's reported validity may sit from the
+// configured expires_at before the difference counts as a real change rather than
+// the clock and network latency between computing a validity and the API
+// recording it. Shared by the apply-consistency check above and by
+// flattenExpiresAt, which must agree with it: if one treated a gap as drift while
+// the other treated it as equal, a key could refresh into a state the same code
+// then judged inconsistent.
+const expiresAtToleranceSeconds = 5
 
 func slicesEqualUnordered[T ~string](left, right []T) bool {
 	if len(left) != len(right) {
@@ -173,12 +193,14 @@ func hydrateAPIKeyModel(resp *search.GetApiKeyResponse, preserved *APIKeyResourc
 	preserved.ID = types.StringValue(resp.GetValue())
 	preserved.ACL = types.SetValueMust(types.StringType, aclValues)
 	preserved.Description = nullableString(resp.GetDescriptionOk())
-	preserved.ExpiresAt = preservedExpiry
+	validity, hasValidity := resp.GetValidityOk()
+	preserved.ExpiresAt = flattenExpiresAt(preservedExpiry, validity, hasValidity)
 	preserved.Indexes = nullableStringSet(preserved.Indexes, resp.GetIndexes())
 	preserved.Referers = nullableStringSet(preserved.Referers, resp.GetReferers())
 	preserved.MaxHitsPerQuery = nullableInt32(resp.GetMaxHitsPerQueryOk())
 	preserved.MaxQueriesPerIPPerHour = nullableInt32(resp.GetMaxQueriesPerIPPerHourOk())
-	preserved.CreatedAt = types.StringValue(time.UnixMilli(resp.GetCreatedAt()).UTC().Format(time.RFC3339))
+	preserved.QueryParameters = nullableStringPreservingEmpty(preserved.QueryParameters, nullableString(resp.GetQueryParametersOk()))
+	preserved.CreatedAt = types.StringValue(createdAtTimestamp(resp.GetCreatedAt()))
 
 	return diags
 }
@@ -234,6 +256,22 @@ func nullableStringSet(prior types.Set, values []string) types.Set {
 	return types.SetValueMust(types.StringType, attrValues)
 }
 
+// nullableStringPreservingEmpty restores an explicitly configured empty string
+// that nullableString collapsed to null. It is the string counterpart of
+// nullableStringSet and exists for exactly the same reason: `query_parameters`
+// is Optional and not Computed, so its planned value is the configuration
+// verbatim, and emitting null where the plan held a known "" makes Terraform
+// reject the apply with "Provider produced inconsistent result after apply".
+// The API drops the field entirely once it is cleared, so when it comes back
+// absent the prior value decides: a known "" stays "", anything else stays null.
+func nullableStringPreservingEmpty(prior, value types.String) types.String {
+	if value.IsNull() && !prior.IsNull() && !prior.IsUnknown() && prior.ValueString() == "" {
+		return types.StringValue("")
+	}
+
+	return value
+}
+
 func nullableInt32(value *int32, ok bool) types.Int64 {
 	if !ok || value == nil {
 		return types.Int64Null()
@@ -241,3 +279,53 @@ func nullableInt32(value *int32, ok bool) types.Int64 {
 
 	return types.Int64Value(int64(*value))
 }
+
+// createdAtTimestamp renders an API key's creation time as RFC3339.
+//
+// The value is in *seconds* since the Unix epoch, even though the generated
+// client documents GetApiKeyResponse.CreatedAt as milliseconds: the API returned
+// 1785269593 for a key created at 2026-07-28T20:13:13Z. Reading it as
+// milliseconds put every key in January 1970.
+func createdAtTimestamp(seconds int64) string {
+	return time.Unix(seconds, 0).UTC().Format(time.RFC3339)
+}
+
+// flattenExpiresAt resolves expires_at from the key's validity.
+//
+// The API reports `validity` as the number of seconds the key still has to live,
+// not the value originally requested, so the stable quantity is now+validity:
+// the absolute instant the key expires, which does not move between reads except
+// by clock and latency jitter. That instant is what expires_at holds.
+//
+// A configured timestamp is kept verbatim whenever it denotes the same instant
+// within expiresAtToleranceSeconds, because expires_at is Optional and not
+// Computed: rewriting it to a re-derived string differing by a second would make
+// Terraform reject the apply as an inconsistent result, and would otherwise
+// produce a diff on every refresh. Beyond the tolerance the recomputed value
+// wins, so shortening or extending a key's life out of band surfaces as drift.
+//
+// Deriving rather than preserving matters most on import, where there is no
+// prior value: leaving it null recorded no expiry at all, and because
+// expandAPIKey only sends `validity` when expires_at is known, the next apply
+// then reset the key to never expire with nothing in state or plan to show it.
+func flattenExpiresAt(prior types.String, validity *int32, hasValidity bool) types.String {
+	if !hasValidity || validity == nil || *validity == 0 {
+		return types.StringNull()
+	}
+
+	expiry := timeNow().Add(time.Duration(*validity) * time.Second)
+
+	if !prior.IsNull() && !prior.IsUnknown() {
+		if parsed, err := time.Parse(time.RFC3339, prior.ValueString()); err == nil {
+			drift := parsed.Sub(expiry).Seconds()
+			if math.Abs(drift) <= expiresAtToleranceSeconds {
+				return prior
+			}
+		}
+	}
+
+	return types.StringValue(expiry.UTC().Format(time.RFC3339))
+}
+
+// timeNow is indirected so tests can pin the clock that flattenExpiresAt reads.
+var timeNow = time.Now
