@@ -24,7 +24,13 @@ func TestSourceResourceSchema_TypeIsRequiredWithReplace(t *testing.T) {
 	}
 }
 
-func TestSourceResourceSchema_InputIsOptionalAndNotSensitive(t *testing.T) {
+// TestSourceResourceSchema_InputIsOptionalAndSensitive pins `input` as sensitive.
+// It is not merely configuration: a `docker` source's `configuration` is an
+// arbitrary map holding the connector's own credentials, and `csv`/`json` take a
+// `url` that is commonly presigned, so the querystring is the credential. The
+// Ingestion API returns `input` unredacted, so the value round-trips into state
+// and would otherwise render in cleartext in plan output.
+func TestSourceResourceSchema_InputIsOptionalAndSensitive(t *testing.T) {
 	s := sourceResourceSchema()
 
 	inputAttr, ok := s.Attributes["input"].(resourceschema.StringAttribute)
@@ -37,8 +43,8 @@ func TestSourceResourceSchema_InputIsOptionalAndNotSensitive(t *testing.T) {
 	if inputAttr.Required {
 		t.Fatal("expected input to not be required")
 	}
-	if inputAttr.Sensitive {
-		t.Fatal("expected input to not be sensitive: it is configuration, not a secret")
+	if !inputAttr.Sensitive {
+		t.Fatal("expected input to be sensitive: docker `configuration` and presigned csv/json `url` values carry credentials")
 	}
 }
 

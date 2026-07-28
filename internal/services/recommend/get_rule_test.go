@@ -166,3 +166,58 @@ func newTestRecommendClient(t *testing.T, server *httptest.Server) *recommendapi
 
 	return client
 }
+
+// TestDecodeRecommendRule_RejectsNullBody covers a review finding: a literal
+// `null` body unmarshals into a nil map without error, and stripping _metadata
+// then re-marshalling are both no-ops on nil, so a 200 null would have produced a
+// zero-value rule with an empty objectID and flattened that into state.
+func TestDecodeRecommendRule_RejectsNullBody(t *testing.T) {
+	for _, body := range []string{`null`, "  null\n"} {
+		rule, err := decodeRecommendRule([]byte(body))
+		if err == nil {
+			t.Errorf("decodeRecommendRule(%q) returned rule %+v, want an error", body, rule)
+			continue
+		}
+		if !strings.Contains(err.Error(), "got null") {
+			t.Errorf("decodeRecommendRule(%q) error = %q, want it to mention null", body, err.Error())
+		}
+	}
+}
+
+// TestSummarizeErrorBody bounds and flattens an untrusted error body before it
+// reaches a diagnostic. The body is read unbounded by the client's transport and
+// may come from an intermediary rather than Algolia, so it is neither size- nor
+// content-trusted.
+func TestSummarizeErrorBody(t *testing.T) {
+	t.Run("collapses newlines so it cannot forge log lines", func(t *testing.T) {
+		got := summarizeErrorBody([]byte("upstream failed\nERROR: injected line\r\n\tindented"))
+		if strings.ContainsAny(got, "\n\r\t") {
+			t.Errorf("summarizeErrorBody kept a control character: %q", got)
+		}
+		if !strings.Contains(got, "upstream failed") {
+			t.Errorf("summarizeErrorBody dropped the message: %q", got)
+		}
+	})
+
+	t.Run("truncates an oversized body", func(t *testing.T) {
+		got := summarizeErrorBody([]byte(strings.Repeat("A", maxErrorBodyLen*3)))
+		if len(got) > maxErrorBodyLen+len("... (truncated)") {
+			t.Errorf("summarizeErrorBody returned %d bytes, want it bounded near %d", len(got), maxErrorBodyLen)
+		}
+		if !strings.HasSuffix(got, "... (truncated)") {
+			t.Error("summarizeErrorBody did not mark the body as truncated")
+		}
+	})
+
+	t.Run("drops invalid UTF-8", func(t *testing.T) {
+		if got := summarizeErrorBody([]byte{0xff, 0xfe, 'o', 'k'}); got != "ok" {
+			t.Errorf("summarizeErrorBody = %q, want %q", got, "ok")
+		}
+	})
+
+	t.Run("a structured message is preferred over the raw body", func(t *testing.T) {
+		if got := apiErrorMessage([]byte(`{"message":"Rule not found","status":404}`), 404); got != "Rule not found" {
+			t.Errorf("apiErrorMessage = %q, want the structured message", got)
+		}
+	})
+}

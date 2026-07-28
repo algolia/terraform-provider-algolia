@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	recommendapi "github.com/algolia/algoliasearch-client-go/v4/algolia/recommend"
 )
@@ -78,6 +79,12 @@ func decodeRecommendRule(body []byte) (*recommendapi.RecommendRule, error) {
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return nil, fmt.Errorf("cannot decode Recommend rule response: %w", err)
 	}
+	// A literal `null` unmarshals into a nil map without error, and every step
+	// below is a no-op on nil, so it would otherwise yield a zero-value rule with
+	// an empty objectID and flatten that into state.
+	if fields == nil {
+		return nil, fmt.Errorf("cannot decode Recommend rule response: expected an object, got null")
+	}
 	delete(fields, metadataJSONKey)
 
 	sanitized, err := json.Marshal(fields)
@@ -104,8 +111,36 @@ func apiErrorMessage(body []byte, status int) string {
 		return *payload.Message
 	}
 	if len(body) > 0 {
-		return string(body)
+		return summarizeErrorBody(body)
 	}
 
 	return http.StatusText(status)
+}
+
+// maxErrorBodyLen bounds how much of an unrecognised error body reaches a
+// diagnostic. Bodies are read unbounded by the client's transport and may come
+// from an intermediary rather than Algolia (a proxy or WAF error page), so they
+// are neither size- nor content-trusted.
+const maxErrorBodyLen = 2048
+
+// summarizeErrorBody makes an arbitrary response body safe to put in a
+// diagnostic: newlines collapse to spaces so it cannot forge extra log lines,
+// invalid UTF-8 is dropped, and the result is truncated.
+func summarizeErrorBody(body []byte) string {
+	// Drop invalid sequences first: strings.Map turns an invalid byte into
+	// U+FFFD, which is itself valid UTF-8 and would then survive the cleanup.
+	flattened := strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' {
+			return ' '
+		}
+
+		return r
+	}, strings.ToValidUTF8(string(body), ""))
+
+	msg := strings.TrimSpace(flattened)
+	if len(msg) > maxErrorBodyLen {
+		return msg[:maxErrorBodyLen] + "... (truncated)"
+	}
+
+	return msg
 }

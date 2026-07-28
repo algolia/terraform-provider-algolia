@@ -16,6 +16,16 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_ingestion_source`: `input` is now marked sensitive, on both the resource and the data
+  source. Several source types carry credentials in it - a `docker` source's `configuration` is an
+  arbitrary map holding the connector's own secrets, and `csv`/`json` take a `url` that is commonly
+  presigned - and the Ingestion API returns `input` unredacted. Before the union fix above, a
+  `docker` or `shopify` source's `input` was corrupted to `{"url":""}` on the way out, which
+  incidentally kept the credentials out of state; now that it round-trips faithfully, the value
+  reaches state and plan output and must be redacted. It is still stored in plaintext in state.
+- `algolia_recommend_rule`: an unrecognised error response body is now flattened, truncated and
+  UTF-8 sanitised before it reaches a diagnostic, instead of being interpolated whole. A `200 null`
+  response is now an error rather than a rule with an empty `object_id`.
 - `algolia_ingestion_source`: `input` is omitted from an update request when it has not changed,
   so a source whose type has no update variant in the Algolia client (`bigcommerce`) can still have
   its other fields changed. Only an actual attempt to change such a source's `input` is refused.

@@ -56,8 +56,13 @@ func sourceResourceSchema() schema.Schema {
 					"`input` in full when reading it back (nothing is redacted), so this attribute is refreshed on " +
 					"read. To avoid a perpetual diff caused by harmless JSON differences (key order, array " +
 					"order), the refresh only replaces the configured value when it is not semantically " +
-					"equivalent to what the API returned.",
-				Optional: true,
+					"equivalent to what the API returned. Treated as sensitive: several source types carry " +
+					"credentials here - a `docker` source's `configuration` is an arbitrary map holding the " +
+					"connector's secrets, and `csv`/`json` take a `url` that is commonly presigned - and since " +
+					"the API returns `input` unredacted, whatever it contains is persisted in plaintext in " +
+					"Terraform state.",
+				Optional:  true,
+				Sensitive: true,
 			},
 			"authentication_id": schema.StringAttribute{
 				Description: "Universally unique identifier (UUID) of the `algolia_ingestion_authentication` " +
