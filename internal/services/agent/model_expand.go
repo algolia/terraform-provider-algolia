@@ -99,15 +99,18 @@ func expandAgentConfigUpdate(ctx context.Context, model *AgentResourceModel) (*a
 	return cfg, diags
 }
 
-// expandConfig parses the JSON-encoded config string into a map for the API.
+// expandConfig parses the JSON-encoded config string into a map for the API. A
+// configured empty object stays a non-nil empty map, which the client's own
+// encoder sends as `{}` rather than omitting the field, so `config =
+// jsonencode({})` is not silently turned into "no config at all".
 func expandConfig(config types.String) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if !isKnown(config) {
 		return nil, diags
 	}
 
-	var configObj map[string]any
-	if err := json.Unmarshal([]byte(config.ValueString()), &configObj); err != nil {
+	configObj, err := decodeJSONObject([]byte(config.ValueString()))
+	if err != nil {
 		diags.AddError("Invalid config JSON", "Could not parse config: "+err.Error())
 		return nil, diags
 	}
@@ -133,7 +136,7 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, *agentStudio.AlgoliaSearchToolConfigAsToolConfigInput(tool))
+			tools = append(tools, *tool)
 		}
 	}
 
@@ -150,7 +153,7 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, *agentStudio.AlgoliaRecommendToolConfigInputAsToolConfigInput(tool))
+			tools = append(tools, *tool)
 		}
 	}
 
@@ -162,8 +165,7 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.
 			return nil, diags
 		}
 		for i := range displayResultsTools {
-			tool := expandAlgoliaDisplayResultsTool(&displayResultsTools[i])
-			tools = append(tools, *agentStudio.AlgoliaDisplayResultsToolConfigAsToolConfigInput(tool))
+			tools = append(tools, *expandAlgoliaDisplayResultsTool(&displayResultsTools[i]))
 		}
 	}
 
@@ -180,7 +182,7 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, *agentStudio.ClientSideToolConfigAsToolConfigInput(tool))
+			tools = append(tools, *tool)
 		}
 	}
 
@@ -197,14 +199,14 @@ func expandTools(ctx context.Context, model *AgentResourceModel) ([]agentStudio.
 			if diags.HasError() {
 				return nil, diags
 			}
-			tools = append(tools, *agentStudio.McpServerToolConfigAsToolConfigInput(tool))
+			tools = append(tools, *tool)
 		}
 	}
 
 	return tools, diags
 }
 
-func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel) (*agentStudio.AlgoliaSearchToolConfig, diag.Diagnostics) {
+func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel) (*agentStudio.ToolConfigInput, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var indices []AlgoliaSearchIndexModel
@@ -213,7 +215,7 @@ func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel)
 		return nil, diags
 	}
 
-	var apiIndices []agentStudio.AlgoliaSearchToolIndexConfig
+	indexDocuments := make([]any, 0, len(indices))
 	for _, idx := range indices {
 		entry := agentStudio.AlgoliaSearchToolIndexConfig{
 			Index:       idx.Name.ValueString(),
@@ -222,25 +224,43 @@ func expandAlgoliaSearchTool(ctx context.Context, model *ToolAlgoliaSearchModel)
 		if isKnown(idx.EnhancedDescription) {
 			entry.EnhancedDescription = strPtr(idx.EnhancedDescription.ValueString())
 		}
+
+		document, err := jsonDocumentOf(entry)
+		if err != nil {
+			diags.AddError("Error encoding index configuration", err.Error())
+			return nil, diags
+		}
+
+		// searchParameters is spliced in as the user's own bytes. Decoding it
+		// into agentStudio.SearchParameters, which has no catch-all field, would
+		// drop every search parameter the vendored client does not model yet
+		// before the request is even sent.
 		if isKnown(idx.SearchParameters) {
-			var params agentStudio.SearchParameters
-			if err := json.Unmarshal([]byte(idx.SearchParameters.ValueString()), &params); err != nil {
+			params, err := jsonObjectBytes(idx.SearchParameters.ValueString())
+			if err != nil {
 				diags.AddError("Invalid search_parameters JSON", "Could not parse search_parameters: "+err.Error())
 				return nil, diags
 			}
-			entry.SearchParameters = *utils.NewNullable(&params)
+			document["searchParameters"] = params
 		}
-		apiIndices = append(apiIndices, entry)
+
+		indexDocuments = append(indexDocuments, document)
 	}
 
-	return &agentStudio.AlgoliaSearchToolConfig{
-		Name:    model.Name.ValueString(),
-		Type:    "algolia_search_index",
-		Indices: apiIndices,
-	}, diags
+	document, err := jsonDocumentOf(agentStudio.AlgoliaSearchToolConfig{
+		Name: model.Name.ValueString(),
+		Type: "algolia_search_index",
+	})
+	if err != nil {
+		diags.AddError("Error encoding algolia_search_index tool", err.Error())
+		return nil, diags
+	}
+	document["indices"] = indexDocuments
+
+	return rawToolConfig(document), diags
 }
 
-func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommendModel) (*agentStudio.AlgoliaRecommendToolConfigInput, diag.Diagnostics) {
+func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommendModel) (*agentStudio.ToolConfigInput, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var configs []AlgoliaRecommendConfigModel
@@ -267,19 +287,22 @@ func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommend
 		AllowedConfigs: apiConfigs,
 	}
 
+	// PredefinedRecommendParameters is a map[string]any on the client, so no key
+	// is lost, and a configured empty object stays a non-nil empty map that the
+	// client's encoder sends as `{}` rather than omitting.
 	if isKnown(model.PredefinedRecommendParameters) {
-		var params map[string]any
-		if err := json.Unmarshal([]byte(model.PredefinedRecommendParameters.ValueString()), &params); err != nil {
+		params, err := decodeJSONObject([]byte(model.PredefinedRecommendParameters.ValueString()))
+		if err != nil {
 			diags.AddError("Invalid predefined_recommend_parameters JSON", "Could not parse predefined_recommend_parameters: "+err.Error())
 			return nil, diags
 		}
 		tool.PredefinedRecommendParameters = params
 	}
 
-	return tool, diags
+	return agentStudio.AlgoliaRecommendToolConfigInputAsToolConfigInput(tool), diags
 }
 
-func expandAlgoliaDisplayResultsTool(model *ToolAlgoliaDisplayResultsModel) *agentStudio.AlgoliaDisplayResultsToolConfig {
+func expandAlgoliaDisplayResultsTool(model *ToolAlgoliaDisplayResultsModel) *agentStudio.ToolConfigInput {
 	tool := &agentStudio.AlgoliaDisplayResultsToolConfig{
 		Type: "algolia_display_results",
 	}
@@ -292,27 +315,38 @@ func expandAlgoliaDisplayResultsTool(model *ToolAlgoliaDisplayResultsModel) *age
 	tool.MinResultsPerGroup = int32Ptr(model.MinResultsPerGroup)
 	tool.MaxResultsPerGroup = int32Ptr(model.MaxResultsPerGroup)
 
-	return tool
+	return agentStudio.AlgoliaDisplayResultsToolConfigAsToolConfigInput(tool)
 }
 
-func expandClientSideTool(model *ToolClientSideModel) (*agentStudio.ClientSideToolConfig, diag.Diagnostics) {
+func expandClientSideTool(model *ToolClientSideModel) (*agentStudio.ToolConfigInput, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	var inputSchema agentStudio.ClientToolsArgsSchema
-	if err := json.Unmarshal([]byte(model.InputSchema.ValueString()), &inputSchema); err != nil {
+	// inputSchema is spliced in as the user's own bytes. Decoding it into
+	// agentStudio.ClientToolsArgsSchema, which models only `type`, `properties`
+	// and `required` and has no catch-all field, would drop every other JSON
+	// Schema keyword - `additionalProperties`, `$schema`, `items`, `enum`, ... -
+	// before the request is even sent.
+	inputSchema, err := jsonObjectBytes(model.InputSchema.ValueString())
+	if err != nil {
 		diags.AddError("Invalid input_schema JSON", "Could not parse input_schema: "+err.Error())
 		return nil, diags
 	}
 
-	return &agentStudio.ClientSideToolConfig{
+	document, err := jsonDocumentOf(agentStudio.ClientSideToolConfig{
 		Name:        model.Name.ValueString(),
 		Type:        "client_side",
 		Description: model.Description.ValueString(),
-		InputSchema: inputSchema,
-	}, diags
+	})
+	if err != nil {
+		diags.AddError("Error encoding client_side tool", err.Error())
+		return nil, diags
+	}
+	document["inputSchema"] = inputSchema
+
+	return rawToolConfig(document), diags
 }
 
-func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.McpServerToolConfig, diag.Diagnostics) {
+func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.ToolConfigInput, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	tool := &agentStudio.McpServerToolConfig{
@@ -357,7 +391,64 @@ func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.McpSe
 		}
 	}
 
-	return tool, diags
+	return agentStudio.McpServerToolConfigAsToolConfigInput(tool), diags
+}
+
+// rawToolConfig wraps an encoded tool document in a ToolConfigInput that
+// marshals back to exactly those bytes.
+//
+// The tools carrying a user-supplied JSON document cannot go out through their
+// own typed variant: agentStudio.ClientToolsArgsSchema and
+// agentStudio.SearchParameters have no catch-all field, so encoding through them
+// drops every key the vendored client does not model yet. UnknownToolConfig is
+// the client's own forward-compatibility carrier - it serialises `name`, `type`
+// and every AdditionalProperties entry at the top level - so a document routed
+// through it keeps every key, in the order it was written, with its numeric
+// literals intact. Only insignificant whitespace changes, because json.Marshal
+// compacts what a json.Marshaler returns; the response is matched against the
+// configured document semantically, so that costs nothing (see
+// flattenJSONDocument). Reads are unaffected: ToolConfigInput.UnmarshalJSON
+// routes on `type`, so a response never decodes into an UnknownToolConfig for a
+// type the provider supports.
+func rawToolConfig(document map[string]any) *agentStudio.ToolConfigInput {
+	name, _ := document["name"].(string)
+	toolType, _ := document["type"].(string)
+
+	properties := make(map[string]any, len(document))
+	for key, value := range document {
+		if key != "name" && key != "type" {
+			properties[key] = value
+		}
+	}
+
+	return agentStudio.UnknownToolConfigAsToolConfigInput(agentStudio.UnknownToolConfig{
+		Name:                 name,
+		Type:                 toolType,
+		AdditionalProperties: properties,
+	})
+}
+
+// jsonDocumentOf encodes a typed tool config into a generic JSON object so a
+// user-supplied document can be spliced into it before the request is sent. The
+// client's own struct tags stay authoritative for every modelled field.
+func jsonDocumentOf(value any) (map[string]any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeJSONObject(encoded)
+}
+
+// jsonObjectBytes checks that a configured attribute holds a JSON object and
+// returns its bytes unchanged, so the document reaches the API exactly as
+// written.
+func jsonObjectBytes(document string) (json.RawMessage, error) {
+	if _, err := decodeJSONObject([]byte(document)); err != nil {
+		return nil, err
+	}
+
+	return json.RawMessage(document), nil
 }
 
 // isKnown returns true if the value is neither null nor unknown.

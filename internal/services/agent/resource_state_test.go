@@ -26,7 +26,7 @@ func TestHydrateAgentResourceState_UsesRemotePublishStateAndPreservesDeletionPro
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 
-	diags := hydrateAgentResourceState(ctx, resp, model.DeletionProtection, model)
+	diags := hydrateAgentResourceState(ctx, agentDocumentOf(t, resp), model.DeletionProtection, model)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags.Errors())
 	}
@@ -53,7 +53,7 @@ func TestHydrateImportedAgentResourceState_DefaultsDeletionProtection(t *testing
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 
-	diags := hydrateImportedAgentResourceState(ctx, resp, model)
+	diags := hydrateImportedAgentResourceState(ctx, agentDocumentOf(t, resp), model)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags.Errors())
 	}

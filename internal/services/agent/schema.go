@@ -50,8 +50,12 @@ func agentResourceSchema() schema.Schema {
 				Optional:    true,
 			},
 			"config": schema.StringAttribute{
-				Description: "JSON-encoded configuration parameters (e.g. temperature, max_tokens).",
-				Optional:    true,
+				Description: "JSON-encoded configuration parameters (e.g. temperature, max_tokens). " +
+					"Stored as written: Agent Studio merges its own defaults into the config it returns " +
+					"(such as `enableAlgoliaMcp`), so the configured document is kept rather than the " +
+					"one read back, and changes made outside Terraform are not reported for this " +
+					"attribute. When it is not set, the value read from Agent Studio is stored instead.",
+				Optional: true,
 				// Computed: Agent Studio populates server-side defaults (e.g.
 				// {"enableAlgoliaMcp":true}) when config is omitted, so the
 				// applied value can be non-null even when the config was null.
@@ -133,9 +137,15 @@ func toolAlgoliaSearchBlockSchema() schema.Block {
 								Computed:    true,
 							},
 							"search_parameters": schema.StringAttribute{
-								Description: "JSON-encoded Algolia search parameters.",
-								Optional:    true,
-								Computed:    true,
+								Description: "JSON-encoded Algolia search parameters. Sent to Algolia in full, " +
+									"including parameters this provider version does not model. Stored as " +
+									"written: Algolia answers with only the parameters it recognises, expanded " +
+									"into the full parameter schema, so the configured document is kept rather " +
+									"than the one read back, and changes made outside Terraform are not " +
+									"reported for this attribute. When it is not set, the value read from " +
+									"Algolia is stored instead, with its null parameters removed.",
+								Optional: true,
+								Computed: true,
 							},
 						},
 					},
@@ -257,8 +267,12 @@ func toolClientSideBlockSchema() schema.Block {
 					},
 				},
 				"input_schema": schema.StringAttribute{
-					Description: "JSON-encoded input schema for the tool.",
-					Required:    true,
+					Description: "JSON-encoded JSON Schema for the tool's arguments. Sent to Algolia in " +
+						"full, including keywords this provider version does not model, such as `$schema` " +
+						"and `additionalProperties`. Stored as written: Algolia strips those keywords from " +
+						"the schema it returns, so the configured document is kept rather than the one read " +
+						"back, and changes made outside Terraform are not reported for this attribute.",
+					Required: true,
 				},
 			},
 		},
