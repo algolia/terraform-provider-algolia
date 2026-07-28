@@ -105,59 +105,6 @@ jobs:
         env:
           ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
           ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
-
-  install-script:
-    name: Install Script
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_wrapper: false
-
-      # Exercise scripts/install.sh (the README "Quick install") end to end
-      # against the latest published release, in both install modes, so a
-      # regression in the script or the release assets fails CI.
-      - name: Quick install (filesystem mirror) + terraform init
-        env:
+          # Lets the install-script e2e test (TestE2EInstallScript) download the
+          # published release via gh; that test skips if unauthenticated.
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          work="$(mktemp -d)"
-          tag="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName')"
-          version="${tag#v}"
-          echo "Testing quick install of $tag (filesystem mirror)"
-
-          ./scripts/install.sh --tag "$tag" \
-            --config "$work/terraformrc" \
-            --mirror-dir "$work/mirror"
-
-          # the release archive must have landed in the packed mirror layout
-          ls "$work/mirror/registry.terraform.io/algolia/algolia/"*.zip
-
-          mkdir -p "$work/tf"
-          printf 'terraform {\n  required_providers {\n    algolia = {\n      source  = "algolia/algolia"\n      version = "%s"\n    }\n  }\n}\n' "$version" > "$work/tf/main.tf"
-
-          TF_CLI_CONFIG_FILE="$work/terraformrc" terraform -chdir="$work/tf" init -input=false
-
-      - name: Quick install (dev_overrides) + terraform plan
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          work="$(mktemp -d)"
-          tag="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName')"
-          echo "Testing quick install of $tag (dev_overrides)"
-
-          ./scripts/install.sh --dev-overrides --tag "$tag" \
-            --config "$work/terraformrc" \
-            --bin-dir "$work/bin"
-
-          test -x "$work/bin/terraform-provider-algolia"
-
-          mkdir -p "$work/tf"
-          printf 'terraform {\n  required_providers {\n    algolia = { source = "algolia/algolia" }\n  }\n}\nprovider "algolia" {\n  app_id  = "citestapp"\n  api_key = "ci-test-key"\n}\nresource "algolia_index" "smoke" {\n  name                = "ci-quick-install-smoke"\n  deletion_protection = false\n}\n' > "$work/tf/main.tf"
-
-          # dev_overrides needs no init; a create plan proves the binary loads
-          TF_CLI_CONFIG_FILE="$work/terraformrc" terraform -chdir="$work/tf" plan -input=false
