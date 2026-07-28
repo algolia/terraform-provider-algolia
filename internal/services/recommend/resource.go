@@ -85,7 +85,7 @@ func (r *recommendRuleResource) Create(ctx context.Context, req resource.CreateR
 
 	batchReq := client.NewApiBatchRecommendRulesRequest(indexName, recommendModel).
 		WithRecommendRule([]recommendapi.RecommendRule{*rule})
-	batchResp, err := client.BatchRecommendRules(batchReq)
+	batchResp, err := client.BatchRecommendRules(batchReq, recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Recommend rule", "Could not create Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -109,7 +109,7 @@ func (r *recommendRuleResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -140,7 +140,7 @@ func (r *recommendRuleResource) Read(ctx context.Context, req resource.ReadReque
 	recommendModel := recommendapi.RecommendModels(state.Model.ValueString())
 	objectID := state.ObjectID.ValueString()
 
-	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *recommendapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -196,7 +196,7 @@ func (r *recommendRuleResource) Update(ctx context.Context, req resource.UpdateR
 
 	batchReq := client.NewApiBatchRecommendRulesRequest(indexName, recommendModel).
 		WithRecommendRule([]recommendapi.RecommendRule{*rule})
-	batchResp, err := client.BatchRecommendRules(batchReq)
+	batchResp, err := client.BatchRecommendRules(batchReq, recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating Recommend rule", "Could not update Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -207,7 +207,7 @@ func (r *recommendRuleResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -244,7 +244,7 @@ func (r *recommendRuleResource) Delete(ctx context.Context, req resource.DeleteR
 		"object_id":  objectID,
 	})
 
-	deleteResp, err := client.DeleteRecommendRule(client.NewApiDeleteRecommendRuleRequest(indexName, recommendModel, objectID))
+	deleteResp, err := client.DeleteRecommendRule(client.NewApiDeleteRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *recommendapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -278,7 +278,7 @@ func (r *recommendRuleResource) ImportState(ctx context.Context, req resource.Im
 		return
 	}
 
-	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendapi.RecommendModels(modelName), objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendapi.RecommendModels(modelName), objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Recommend rule", "Could not import Recommend rule "+req.ID+": "+err.Error())
 		return
@@ -301,7 +301,7 @@ func waitForRecommendRuleTask(ctx context.Context, client *recommendapi.APIClien
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetRecommendStatus(client.NewApiGetRecommendStatusRequest(indexName, model, taskID))
+		resp, err := client.GetRecommendStatus(client.NewApiGetRecommendStatusRequest(indexName, model, taskID), recommendapi.WithContext(ctx))
 		if err != nil {
 			return err
 		}

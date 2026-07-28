@@ -3,6 +3,8 @@ package ingestion
 import (
 	"context"
 
+	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -53,7 +55,7 @@ func (d *taskDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	taskID := model.TaskID.ValueString()
 	tflog.Debug(ctx, "Reading Ingestion task data source", map[string]any{"task_id": taskID})
 
-	apiResp, err := client.GetTask(client.NewApiGetTaskRequest(taskID))
+	apiResp, err := client.GetTask(client.NewApiGetTaskRequest(taskID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read task "+taskID+": "+err.Error())
 		return

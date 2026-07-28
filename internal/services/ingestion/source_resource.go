@@ -6,6 +6,7 @@ import (
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -52,7 +53,16 @@ func (r *sourceResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	create, expandDiags := expandSourceCreate(&plan)
+	createSource(ctx, client, &plan, resp)
+}
+
+// createSource is the Create body, split out so that a unit test can drive it
+// against an httptest-backed client (see identity_state_test.go) - the client
+// base.client() builds always talks to the real, region-routed Ingestion API.
+// Create itself only resolves the plan and the client. Same pattern as
+// abtest.createABTest.
+func createSource(ctx context.Context, client *ingestionapi.APIClient, plan *SourceResourceModel, resp *resource.CreateResponse) {
+	create, expandDiags := expandSourceCreate(plan)
 	resp.Diagnostics.Append(expandDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -63,13 +73,24 @@ func (r *sourceResource) Create(ctx context.Context, req resource.CreateRequest,
 		"type": plan.Type.ValueString(),
 	})
 
-	createResp, err := client.CreateSource(client.NewApiCreateSourceRequest(create))
+	createResp, err := client.CreateSource(client.NewApiCreateSourceRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Ingestion source", "Could not create source "+plan.Name.ValueString()+": "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(createResp.SourceID))
+	// The source now exists in Algolia under the server-assigned UUID in
+	// createResp, which is the only handle Terraform will ever have on it.
+	// Persist it before the read-back below, so that a failure there leaves a
+	// resource Terraform can read, update and destroy instead of orphaning a
+	// source that exists remotely but not in state: the next apply would create
+	// a second source and nothing would ever adopt the first.
+	resp.Diagnostics.Append(resp.State.Set(ctx, newSourceIdentityState(*plan, createResp.SourceID))...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(createResp.SourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read back source after creation: "+err.Error())
 		return
@@ -78,12 +99,30 @@ func (r *sourceResource) Create(ctx context.Context, req resource.CreateRequest,
 	// flattenSource compares the API's input against plan.Input (the value
 	// the user just configured) and only adopts the API's encoding if it's
 	// not semantically equivalent.
-	resp.Diagnostics.Append(flattenSource(apiResp, &plan)...)
+	resp.Diagnostics.Append(flattenSource(apiResp, plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+}
+
+// newSourceIdentityState returns the state to persist immediately after a
+// successful CreateSource, before the read-back that can still fail. Terraform
+// rejects an apply result containing unknown values, so every unknown has to be
+// resolved here: id/source_id come from the create response, while
+// created_at/updated_at are knowable only from the read-back and are therefore
+// written as null - the next Read fills them in. Every other attribute is
+// Required or Optional-only, so the plan holds the configuration verbatim and
+// is already known; the model has no Object/List/Set/Map attribute, so no typed
+// null has to be constructed.
+func newSourceIdentityState(plan SourceResourceModel, sourceID string) SourceResourceModel {
+	plan.ID = types.StringValue(sourceID)
+	plan.SourceID = types.StringValue(sourceID)
+	plan.CreatedAt = types.StringNull()
+	plan.UpdatedAt = types.StringNull()
+
+	return plan
 }
 
 func (r *sourceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -100,7 +139,7 @@ func (r *sourceResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	sourceID := state.SourceID.ValueString()
-	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID))
+	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *ingestionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -158,7 +197,7 @@ func (r *sourceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID))
+	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read back source after update: "+err.Error())
 		return
@@ -206,7 +245,7 @@ func (r *sourceResource) ImportState(ctx context.Context, req resource.ImportSta
 	}
 
 	sourceID := req.ID
-	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID))
+	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Ingestion source", "Could not import source "+sourceID+": "+err.Error())
 		return

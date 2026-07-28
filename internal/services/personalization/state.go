@@ -361,7 +361,7 @@ func waitForPersonalizationStrategy(ctx context.Context, client *api.APIClient, 
 	interval := 2 * time.Second
 
 	for time.Now().Before(deadline) {
-		resp, err := client.GetPersonalizationStrategy()
+		resp, err := client.GetPersonalizationStrategy(api.WithContext(ctx))
 		if err == nil && personalizationStrategyMatches(resp, expected) {
 			return resp, nil
 		}

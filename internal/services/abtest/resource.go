@@ -139,7 +139,7 @@ func (r *abTestResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	abTestID := int32(state.ABTestID.ValueInt64())
-	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID))
+	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID), abtestingapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *abtestingapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -184,7 +184,7 @@ func (r *abTestResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	abTestID := int32(plan.ABTestID.ValueInt64())
-	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID))
+	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID), abtestingapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading A/B test", "Could not read A/B test "+strconv.Itoa(int(abTestID))+": "+err.Error())
 		return
@@ -214,7 +214,7 @@ func (r *abTestResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	abTestID := int32(state.ABTestID.ValueInt64())
 	tflog.Debug(ctx, "Deleting A/B test", map[string]any{"ab_test_id": abTestID})
 
-	if _, err := client.DeleteABTest(client.NewApiDeleteABTestRequest(abTestID)); err != nil {
+	if _, err := client.DeleteABTest(client.NewApiDeleteABTestRequest(abTestID), abtestingapi.WithContext(ctx)); err != nil {
 		var apiErr *abtestingapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
 			return
@@ -237,7 +237,7 @@ func (r *abTestResource) ImportState(ctx context.Context, req resource.ImportSta
 		return
 	}
 
-	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(int32(abTestID)))
+	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(int32(abTestID)), abtestingapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing A/B test", "Could not import A/B test "+req.ID+": "+err.Error())
 		return

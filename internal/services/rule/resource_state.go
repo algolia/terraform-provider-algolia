@@ -2,6 +2,7 @@ package rule
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -121,9 +122,10 @@ func ruleRequestBody(rule *search.Rule, rawParams json.RawMessage) (map[string]a
 // saveRuleRaw performs the SaveRule PUT with a hand-built body instead of
 // search.APIClient.SaveRule, which would re-encode the params through the typed
 // struct and drop unmodelled keys.
-func saveRuleRaw(client *search.APIClient, indexName, objectID string, body map[string]any) (int64, error) {
+func saveRuleRaw(ctx context.Context, client *search.APIClient, indexName, objectID string, body map[string]any) (int64, error) {
 	res, resBody, err := client.CustomPutWithHTTPInfo(
 		client.NewApiCustomPutRequest(rulePath(indexName, objectID)).WithBody(body),
+		search.WithContext(ctx),
 	)
 	if err != nil {
 		return 0, err
@@ -147,9 +149,10 @@ func saveRuleRaw(client *search.APIClient, indexName, objectID string, body map[
 
 // getRuleRaw reads the rule and returns both the typed representation and the
 // untouched `consequence.params` document.
-func getRuleRaw(client *search.APIClient, indexName, objectID string) (*search.Rule, json.RawMessage, error) {
+func getRuleRaw(ctx context.Context, client *search.APIClient, indexName, objectID string) (*search.Rule, json.RawMessage, error) {
 	res, resBody, err := client.CustomGetWithHTTPInfo(
 		client.NewApiCustomGetRequest(rulePath(indexName, objectID)),
+		search.WithContext(ctx),
 	)
 	if err != nil {
 		return nil, nil, err

@@ -59,7 +59,7 @@ func (d *synonymDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	objectID := model.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading synonym data source", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	apiResp, err := d.client.GetSynonym(d.client.NewApiGetSynonymRequest(indexName, objectID))
+	apiResp, err := d.client.GetSynonym(d.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
 		return

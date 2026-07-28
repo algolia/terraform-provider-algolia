@@ -86,7 +86,7 @@ func (r *personalizationStrategyResource) Create(ctx context.Context, req resour
 		return
 	}
 
-	if _, err := client.SetPersonalizationStrategy(client.NewApiSetPersonalizationStrategyRequest(strategy)); err != nil {
+	if _, err := client.SetPersonalizationStrategy(client.NewApiSetPersonalizationStrategyRequest(strategy), api.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error setting personalization strategy", err.Error())
 		return
 	}
@@ -114,7 +114,7 @@ func (r *personalizationStrategyResource) Read(ctx context.Context, req resource
 		return
 	}
 
-	apiResp, err := client.GetPersonalizationStrategy()
+	apiResp, err := client.GetPersonalizationStrategy(api.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading personalization strategy", err.Error())
 		return
@@ -143,7 +143,7 @@ func (r *personalizationStrategyResource) Update(ctx context.Context, req resour
 		return
 	}
 
-	if _, err := client.SetPersonalizationStrategy(client.NewApiSetPersonalizationStrategyRequest(strategy)); err != nil {
+	if _, err := client.SetPersonalizationStrategy(client.NewApiSetPersonalizationStrategyRequest(strategy), api.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating personalization strategy", err.Error())
 		return
 	}
@@ -165,14 +165,14 @@ func (r *personalizationStrategyResource) Delete(ctx context.Context, req resour
 		return
 	}
 
-	current, err := client.GetPersonalizationStrategy()
+	current, err := client.GetPersonalizationStrategy(api.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading personalization strategy", err.Error())
 		return
 	}
 
 	strategy := disabledPersonalizationStrategy(current)
-	if _, err := client.SetPersonalizationStrategy(client.NewApiSetPersonalizationStrategyRequest(strategy)); err != nil {
+	if _, err := client.SetPersonalizationStrategy(client.NewApiSetPersonalizationStrategyRequest(strategy), api.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error resetting personalization strategy", err.Error())
 		return
 	}
@@ -195,7 +195,7 @@ func (r *personalizationStrategyResource) ImportState(ctx context.Context, req r
 		return
 	}
 
-	apiResp, err := client.GetPersonalizationStrategy()
+	apiResp, err := client.GetPersonalizationStrategy(api.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing personalization strategy", err.Error())
 		return
@@ -256,7 +256,7 @@ func (d *personalizationStrategyDataSource) Read(ctx context.Context, req dataso
 		return
 	}
 
-	apiResp, err := client.GetPersonalizationStrategy()
+	apiResp, err := client.GetPersonalizationStrategy(api.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading personalization strategy", err.Error())
 		return

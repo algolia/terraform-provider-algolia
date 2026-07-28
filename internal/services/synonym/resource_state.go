@@ -138,7 +138,7 @@ func waitForSynonymTask(ctx context.Context, client *search.APIClient, indexName
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID), search.WithContext(ctx))
 		if err != nil {
 			return err
 		}

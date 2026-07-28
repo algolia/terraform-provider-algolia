@@ -54,7 +54,7 @@ func (d *clustersDataSource) Configure(_ context.Context, req datasource.Configu
 func (d *clustersDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
 	tflog.Debug(ctx, "Reading clusters data source", map[string]any{"app_id": d.appID})
 
-	apiResp, err := d.client.ListClusters()
+	apiResp, err := d.client.ListClusters(search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error listing clusters", "Could not list clusters: "+err.Error())
 		return

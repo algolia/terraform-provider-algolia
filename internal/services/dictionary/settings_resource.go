@@ -77,6 +77,29 @@ func (r *dictionarySettingsResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
+	// The settings are now applied to the application. Persist them before the
+	// read-back so a failure there cannot leave standard entries disabled with
+	// no Terraform record of it: this resource is a singleton with nothing to
+	// "create", but its Delete is what resets the entries, so a settings change
+	// that never reached state would never be undone either.
+	//
+	// Terraform rejects an apply result that still contains unknown values.
+	// disable_standard_entries is Optional+Computed, so it is unknown when the
+	// configuration omits it; flattening the entries that were just written
+	// resolves it to the values the application now holds, and does so as a
+	// *typed* Object built from disableStandardEntriesAttrTypes (a zero-value
+	// types.Object carries no attribute types and fails conversion at runtime).
+	early := plan
+	early.ID = types.StringValue(r.appID)
+	resp.Diagnostics.Append(flattenDictionarySettings(ctx, entries, &early)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &early)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	current, err := r.client.GetDictionarySettings()
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading dictionary settings", "Could not read back dictionary settings after creation: "+err.Error())

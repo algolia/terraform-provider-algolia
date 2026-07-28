@@ -68,7 +68,7 @@ func (r *ruleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	taskID, err := saveRuleRaw(r.client, indexName, objectID, body)
+	taskID, err := saveRuleRaw(ctx, r.client, indexName, objectID, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating rule", "Could not create rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -79,7 +79,7 @@ func (r *ruleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -104,7 +104,7 @@ func (r *ruleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	objectID := state.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -142,7 +142,7 @@ func (r *ruleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	taskID, err := saveRuleRaw(r.client, indexName, objectID, body)
+	taskID, err := saveRuleRaw(ctx, r.client, indexName, objectID, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating rule", "Could not update rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -153,7 +153,7 @@ func (r *ruleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -177,7 +177,7 @@ func (r *ruleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	indexName := state.IndexName.ValueString()
 	objectID := state.ObjectID.ValueString()
 
-	deleteResp, err := r.client.DeleteRule(r.client.NewApiDeleteRuleRequest(indexName, objectID))
+	deleteResp, err := r.client.DeleteRule(r.client.NewApiDeleteRuleRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -205,7 +205,7 @@ func (r *ruleResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 
-	apiResp, rawParams, err := getRuleRaw(r.client, indexName, objectID)
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing rule", "Could not import rule "+req.ID+": "+err.Error())
 		return
@@ -224,7 +224,7 @@ func waitForRuleTask(ctx context.Context, client *search.APIClient, indexName st
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID), search.WithContext(ctx))
 		if err != nil {
 			return err
 		}

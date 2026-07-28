@@ -6,6 +6,7 @@ import (
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -53,7 +54,16 @@ func (r *transformationResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	create, expandDiags := expandTransformationCreate(&plan)
+	createTransformation(ctx, client, &plan, resp)
+}
+
+// createTransformation is the Create body, split out so that a unit test can
+// drive it against an httptest-backed client (see identity_state_test.go) - the
+// client base.client() builds always talks to the real, region-routed Ingestion
+// API. Create itself only resolves the plan and the client. Same pattern as
+// abtest.createABTest.
+func createTransformation(ctx context.Context, client *ingestionapi.APIClient, plan *TransformationResourceModel, resp *resource.CreateResponse) {
+	create, expandDiags := expandTransformationCreate(plan)
 	resp.Diagnostics.Append(expandDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -61,13 +71,25 @@ func (r *transformationResource) Create(ctx context.Context, req resource.Create
 
 	tflog.Debug(ctx, "Creating Ingestion transformation", map[string]any{"name": plan.Name.ValueString()})
 
-	createResp, err := client.CreateTransformation(client.NewApiCreateTransformationRequest(create))
+	createResp, err := client.CreateTransformation(client.NewApiCreateTransformationRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Ingestion transformation", "Could not create transformation "+plan.Name.ValueString()+": "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(createResp.TransformationID))
+	// The transformation now exists in Algolia under the server-assigned UUID in
+	// createResp, which is the only handle Terraform will ever have on it.
+	// Persist it before the read-back below, so that a failure there leaves a
+	// resource Terraform can read, update and destroy instead of orphaning a
+	// transformation that exists remotely but not in state: the next apply would
+	// create a second one (and fail, since transformation names must be unique)
+	// and nothing would ever adopt the first.
+	resp.Diagnostics.Append(resp.State.Set(ctx, newTransformationIdentityState(*plan, createResp.TransformationID))...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(createResp.TransformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read back transformation after creation: "+err.Error())
 		return
@@ -76,12 +98,39 @@ func (r *transformationResource) Create(ctx context.Context, req resource.Create
 	// flattenTransformation compares the API's input against plan.Input
 	// (the value the user just configured) and only adopts the API's
 	// encoding if it's not semantically equivalent.
-	resp.Diagnostics.Append(flattenTransformation(apiResp, &plan)...)
+	resp.Diagnostics.Append(flattenTransformation(apiResp, plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+}
+
+// newTransformationIdentityState returns the state to persist immediately after
+// a successful CreateTransformation, before the read-back that can still fail.
+// Terraform rejects an apply result containing unknown values, so every unknown
+// has to be resolved here: id/transformation_id come from the create response,
+// while created_at/updated_at are knowable only from the read-back and are
+// therefore written as null - the next Read fills them in.
+//
+// code needs the same treatment for a different reason: it is Optional+Computed
+// with no UseStateForUnknown (the API re-derives it from input.code), so it is
+// unknown in the plan whenever the configuration omits it, and only the
+// read-back can tell what the API derived. authentication_ids, the only
+// non-scalar attribute, is Optional without Computed, so the plan carries the
+// configured list or a *typed* null list - which is what the framework requires
+// (a zero-value types.List carries no element type and fails conversion at
+// runtime) - and it is passed through untouched rather than rebuilt.
+func newTransformationIdentityState(plan TransformationResourceModel, transformationID string) TransformationResourceModel {
+	plan.ID = types.StringValue(transformationID)
+	plan.TransformationID = types.StringValue(transformationID)
+	plan.CreatedAt = types.StringNull()
+	plan.UpdatedAt = types.StringNull()
+	if plan.Code.IsUnknown() {
+		plan.Code = types.StringNull()
+	}
+
+	return plan
 }
 
 func (r *transformationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -98,7 +147,7 @@ func (r *transformationResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	transformationID := state.TransformationID.ValueString()
-	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID))
+	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *ingestionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -153,7 +202,7 @@ func (r *transformationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID))
+	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read back transformation after update: "+err.Error())
 		return
@@ -201,7 +250,7 @@ func (r *transformationResource) ImportState(ctx context.Context, req resource.I
 	}
 
 	transformationID := req.ID
-	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID))
+	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Ingestion transformation", "Could not import transformation "+transformationID+": "+err.Error())
 		return

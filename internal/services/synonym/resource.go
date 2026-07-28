@@ -67,7 +67,7 @@ func (r *synonymResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	saveResp, err := r.client.SaveSynonym(r.client.NewApiSaveSynonymRequest(indexName, objectID, hit))
+	saveResp, err := r.client.SaveSynonym(r.client.NewApiSaveSynonymRequest(indexName, objectID, hit), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating synonym", "Could not create synonym "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -78,7 +78,7 @@ func (r *synonymResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID))
+	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -102,7 +102,7 @@ func (r *synonymResource) Read(ctx context.Context, req resource.ReadRequest, re
 	indexName := state.IndexName.ValueString()
 	objectID := state.ObjectID.ValueString()
 
-	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID))
+	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -139,7 +139,7 @@ func (r *synonymResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	saveResp, err := r.client.SaveSynonym(r.client.NewApiSaveSynonymRequest(indexName, objectID, hit))
+	saveResp, err := r.client.SaveSynonym(r.client.NewApiSaveSynonymRequest(indexName, objectID, hit), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating synonym", "Could not update synonym "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -150,7 +150,7 @@ func (r *synonymResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID))
+	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -174,7 +174,7 @@ func (r *synonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 	indexName := state.IndexName.ValueString()
 	objectID := state.ObjectID.ValueString()
 
-	deleteResp, err := r.client.DeleteSynonym(r.client.NewApiDeleteSynonymRequest(indexName, objectID))
+	deleteResp, err := r.client.DeleteSynonym(r.client.NewApiDeleteSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -202,7 +202,7 @@ func (r *synonymResource) ImportState(ctx context.Context, req resource.ImportSt
 		return
 	}
 
-	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID))
+	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing synonym", "Could not import synonym "+req.ID+": "+err.Error())
 		return

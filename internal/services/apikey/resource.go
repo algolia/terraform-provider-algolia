@@ -69,7 +69,7 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	createResp, err := r.client.AddApiKey(r.client.NewApiAddApiKeyRequest(apiKey))
+	createResp, err := r.client.AddApiKey(r.client.NewApiAddApiKeyRequest(apiKey), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating API key", "Could not create API key: "+err.Error())
 		return
@@ -78,12 +78,38 @@ func (r *apiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	key := createResp.GetKey()
 	ctx = maskKeyValue(ctx, key)
 
+	// The key now exists in Algolia with the configured ACLs, and AddApiKey is
+	// the only call that ever returns its value - which is both the credential
+	// and this resource's id. Persist it immediately, before the propagation
+	// wait and the read-back below, so that a failure in either surfaces as an
+	// error on a resource Terraform knows about instead of leaving a live key
+	// that state has no record of. That orphan would be unrecoverable rather
+	// than merely untracked: the key value cannot be looked up again, so the
+	// key could never be read, rotated or deleted through Terraform, and only
+	// listing keys in the dashboard would reveal it. The propagation wait is
+	// also the step most likely to fail here.
+	//
+	// Terraform rejects an apply result that still contains unknown values, so
+	// every unknown has to be resolved. id and created_at are the only Computed
+	// attributes; created_at is knowable only from the read-back, so it is
+	// written as null and the next Read fills it in. Every other attribute is
+	// Required or Optional-only, so the plan holds the configuration verbatim
+	// and is already known - including the acl/indexes/referers sets, which are
+	// carried over from the plan as-is and are therefore correctly typed.
+	early := plan
+	early.ID = types.StringValue(key)
+	early.CreatedAt = types.StringNull()
+	resp.Diagnostics.Append(resp.State.Set(ctx, &early)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if _, err = r.client.WaitForApiKey(key, search.API_KEY_OPERATION_ADD); err != nil {
 		resp.Diagnostics.AddError("Error waiting for API key creation", "Could not confirm API key creation: "+redactKey(err, key))
 		return
 	}
 
-	readResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key))
+	readResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading API key", "Could not read "+keyLabel(plan.Description)+" after creation: "+redactKey(err, key))
 		return
@@ -109,7 +135,7 @@ func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// The id is the key value itself, so it is never logged (see keyLabel).
 	tflog.Debug(ctx, "Reading API key")
 
-	apiResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key))
+	apiResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -159,7 +185,7 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	if _, err := search.CreateIterable(
 		func(*search.GetApiKeyResponse, error) (*search.GetApiKeyResponse, error) {
-			return r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key))
+			return r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 		},
 		func(apiResp *search.GetApiKeyResponse, err error) (bool, error) {
 			if err != nil {
@@ -177,7 +203,7 @@ func (r *apiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	readResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key))
+	readResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading API key", "Could not read "+keyLabel(plan.Description)+": "+redactKey(err, key))
 		return
@@ -229,7 +255,7 @@ func (r *apiKeyResource) ImportState(ctx context.Context, req resource.ImportSta
 	// and never interpolated into a diagnostic.
 	ctx = maskKeyValue(ctx, req.ID)
 
-	apiResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(req.ID))
+	apiResp, err := r.client.GetApiKey(r.client.NewApiGetApiKeyRequest(req.ID), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error importing API key",

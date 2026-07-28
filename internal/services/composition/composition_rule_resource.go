@@ -75,7 +75,7 @@ func (r *compositionRuleResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	putResp, err := client.PutCompositionRule(client.NewApiPutCompositionRuleRequest(compositionID, objectID, rule))
+	putResp, err := client.PutCompositionRule(client.NewApiPutCompositionRuleRequest(compositionID, objectID, rule), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating composition rule", "Could not create composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
 		return
@@ -86,7 +86,7 @@ func (r *compositionRuleResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID))
+	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading composition rule", "Could not read composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
 		return
@@ -116,7 +116,7 @@ func (r *compositionRuleResource) Read(ctx context.Context, req resource.ReadReq
 	compositionID := state.CompositionID.ValueString()
 	objectID := state.ObjectID.ValueString()
 
-	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID))
+	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *compositionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -161,7 +161,7 @@ func (r *compositionRuleResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	putResp, err := client.PutCompositionRule(client.NewApiPutCompositionRuleRequest(compositionID, objectID, rule))
+	putResp, err := client.PutCompositionRule(client.NewApiPutCompositionRuleRequest(compositionID, objectID, rule), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating composition rule", "Could not update composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
 		return
@@ -172,7 +172,7 @@ func (r *compositionRuleResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID))
+	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading composition rule", "Could not read composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
 		return
@@ -204,7 +204,7 @@ func (r *compositionRuleResource) Delete(ctx context.Context, req resource.Delet
 
 	tflog.Debug(ctx, "Deleting composition rule", map[string]any{"composition_id": compositionID, "object_id": objectID})
 
-	deleteResp, err := client.DeleteCompositionRule(client.NewApiDeleteCompositionRuleRequest(compositionID, objectID))
+	deleteResp, err := client.DeleteCompositionRule(client.NewApiDeleteCompositionRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *compositionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -238,7 +238,7 @@ func (r *compositionRuleResource) ImportState(ctx context.Context, req resource.
 		return
 	}
 
-	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID))
+	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing composition rule", "Could not import composition rule "+req.ID+": "+err.Error())
 		return

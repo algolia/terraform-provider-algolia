@@ -74,12 +74,12 @@ func (r *allowedSourcesResource) Create(ctx context.Context, req resource.Create
 
 	tflog.Debug(ctx, "Replacing allowed sources", map[string]any{"app_id": r.appID, "count": len(sources)})
 
-	if err := r.replaceSources(sources); err != nil {
+	if err := r.replaceSources(ctx, sources); err != nil {
 		resp.Diagnostics.AddError("Error setting allowed sources", err.Error())
 		return
 	}
 
-	current, err := r.client.GetSources()
+	current, err := r.client.GetSources(search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading allowed sources", "Could not read back allowed sources after creation: "+err.Error())
 		return
@@ -101,7 +101,7 @@ func (r *allowedSourcesResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	current, err := r.client.GetSources()
+	current, err := r.client.GetSources(search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading allowed sources", err.Error())
 		return
@@ -135,12 +135,12 @@ func (r *allowedSourcesResource) Update(ctx context.Context, req resource.Update
 
 	tflog.Debug(ctx, "Replacing allowed sources", map[string]any{"app_id": r.appID, "count": len(sources)})
 
-	if err := r.replaceSources(sources); err != nil {
+	if err := r.replaceSources(ctx, sources); err != nil {
 		resp.Diagnostics.AddError("Error updating allowed sources", err.Error())
 		return
 	}
 
-	current, err := r.client.GetSources()
+	current, err := r.client.GetSources(search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading allowed sources", "Could not read back allowed sources after update: "+err.Error())
 		return
@@ -182,7 +182,7 @@ func (r *allowedSourcesResource) Delete(ctx context.Context, req resource.Delete
 	tflog.Debug(ctx, "Clearing managed allowed sources", map[string]any{"app_id": r.appID, "count": len(managed)})
 
 	if err := deleteSources(managed, func(value string) error {
-		_, err := r.client.DeleteSource(r.client.NewApiDeleteSourceRequest(value))
+		_, err := r.client.DeleteSource(r.client.NewApiDeleteSourceRequest(value), search.WithContext(ctx))
 		return err
 	}); err != nil {
 		resp.Diagnostics.AddError("Error clearing allowed sources", err.Error())
@@ -195,7 +195,7 @@ func (r *allowedSourcesResource) ImportState(ctx context.Context, req resource.I
 	// mirroring algolia_dictionary_settings' import.
 	tflog.Debug(ctx, "Importing allowed sources", map[string]any{"import_id": req.ID, "app_id": r.appID})
 
-	current, err := r.client.GetSources()
+	current, err := r.client.GetSources(search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing allowed sources", err.Error())
 		return
@@ -215,8 +215,8 @@ func (r *allowedSourcesResource) ImportState(ctx context.Context, req resource.I
 // task to wait on here: unlike SetSettings/SetDictionarySettings,
 // ReplaceSources takes effect immediately and its response only carries an
 // updatedAt timestamp.
-func (r *allowedSourcesResource) replaceSources(sources []search.Source) error {
-	_, err := r.client.ReplaceSources(r.client.NewApiReplaceSourcesRequest(sources))
+func (r *allowedSourcesResource) replaceSources(ctx context.Context, sources []search.Source) error {
+	_, err := r.client.ReplaceSources(r.client.NewApiReplaceSourcesRequest(sources), search.WithContext(ctx))
 	return err
 }
 

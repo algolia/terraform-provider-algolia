@@ -63,7 +63,7 @@ func (d *apiKeyDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	ctx = maskKeyValue(ctx, key)
 	tflog.Debug(ctx, "Reading API key data source")
 
-	apiResp, err := d.client.GetApiKey(d.client.NewApiGetApiKeyRequest(key))
+	apiResp, err := d.client.GetApiKey(d.client.NewApiGetApiKeyRequest(key), search.WithContext(ctx))
 	if err != nil {
 		var apiErr *search.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {

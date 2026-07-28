@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	compositionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/composition"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -53,7 +54,7 @@ func (d *compositionRuleDataSource) Read(ctx context.Context, req datasource.Rea
 	objectID := model.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading composition rule data source", map[string]any{"composition_id": compositionID, "object_id": objectID})
 
-	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID))
+	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading composition rule", "Could not read composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
 		return

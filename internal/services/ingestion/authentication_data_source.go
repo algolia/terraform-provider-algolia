@@ -3,6 +3,8 @@ package ingestion
 import (
 	"context"
 
+	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -52,7 +54,7 @@ func (d *authenticationDataSource) Read(ctx context.Context, req datasource.Read
 	authenticationID := model.AuthenticationID.ValueString()
 	tflog.Debug(ctx, "Reading Ingestion authentication data source", map[string]any{"authentication_id": authenticationID})
 
-	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID))
+	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read authentication "+authenticationID+": "+err.Error())
 		return

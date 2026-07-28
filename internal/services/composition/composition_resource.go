@@ -64,7 +64,7 @@ func (r *compositionResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	putResp, err := client.PutComposition(client.NewApiPutCompositionRequest(objectID, comp))
+	putResp, err := client.PutComposition(client.NewApiPutCompositionRequest(objectID, comp), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating composition", "Could not create composition "+objectID+": "+err.Error())
 		return
@@ -75,7 +75,7 @@ func (r *compositionResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID))
+	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading composition", "Could not read composition "+objectID+": "+err.Error())
 		return
@@ -104,7 +104,7 @@ func (r *compositionResource) Read(ctx context.Context, req resource.ReadRequest
 
 	objectID := state.ObjectID.ValueString()
 
-	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID))
+	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *compositionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -147,7 +147,7 @@ func (r *compositionResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	putResp, err := client.PutComposition(client.NewApiPutCompositionRequest(objectID, comp))
+	putResp, err := client.PutComposition(client.NewApiPutCompositionRequest(objectID, comp), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating composition", "Could not update composition "+objectID+": "+err.Error())
 		return
@@ -158,7 +158,7 @@ func (r *compositionResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID))
+	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading composition", "Could not read composition "+objectID+": "+err.Error())
 		return
@@ -188,7 +188,7 @@ func (r *compositionResource) Delete(ctx context.Context, req resource.DeleteReq
 	objectID := state.ObjectID.ValueString()
 	tflog.Debug(ctx, "Deleting composition", map[string]any{"object_id": objectID})
 
-	deleteResp, err := client.DeleteComposition(client.NewApiDeleteCompositionRequest(objectID))
+	deleteResp, err := client.DeleteComposition(client.NewApiDeleteCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
 		var apiErr *compositionapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -216,7 +216,7 @@ func (r *compositionResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 
-	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(req.ID))
+	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(req.ID), compositionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing composition", "Could not import composition "+req.ID+": "+err.Error())
 		return
@@ -240,7 +240,7 @@ func waitForCompositionTask(ctx context.Context, client *compositionapi.APIClien
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetTask(client.NewApiGetTaskRequest(compositionID, taskID))
+		resp, err := client.GetTask(client.NewApiGetTaskRequest(compositionID, taskID), compositionapi.WithContext(ctx))
 		if err != nil {
 			return err
 		}

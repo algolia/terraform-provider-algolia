@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -73,7 +74,7 @@ func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.Re
 	indexName := model.IndexName.ValueString()
 	tflog.Debug(ctx, "Reading Query Suggestions data source", map[string]any{"region": d.analyticsRegion, "index_name": indexName})
 
-	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName))
+	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName), suggestions.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Query Suggestions config", "Could not read Query Suggestions config "+indexName+": "+err.Error())
 		return
