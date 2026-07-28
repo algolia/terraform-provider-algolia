@@ -83,6 +83,75 @@ func TestHydrateAPIKeyModelPreservesConfiguredExpiry(t *testing.T) {
 	}
 }
 
+func TestHydrateAPIKeyModel_OptionalSetsPreservePriorEmptiness(t *testing.T) {
+	emptySet := types.SetValueMust(types.StringType, []attr.Value{})
+	valuedIndexes := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("products")})
+	valuedReferers := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("https://example.com/*")})
+	apiValues := []search.GetApiKeyResponseOption{
+		search.WithGetApiKeyResponseIndexes([]string{"products"}),
+		search.WithGetApiKeyResponseReferers([]string{"https://example.com/*"}),
+	}
+
+	tests := []struct {
+		name         string
+		prior        types.Set
+		responseOpts []search.GetApiKeyResponseOption
+		wantIndexes  types.Set
+		wantReferers types.Set
+	}{
+		{
+			name:         "prior null and API empty stays null",
+			prior:        types.SetNull(types.StringType),
+			wantIndexes:  types.SetNull(types.StringType),
+			wantReferers: types.SetNull(types.StringType),
+		},
+		{
+			name:         "prior empty and API empty stays empty",
+			prior:        emptySet,
+			wantIndexes:  emptySet,
+			wantReferers: emptySet,
+		},
+		{
+			name:         "API values replace a null prior",
+			prior:        types.SetNull(types.StringType),
+			responseOpts: apiValues,
+			wantIndexes:  valuedIndexes,
+			wantReferers: valuedReferers,
+		},
+		{
+			name:         "API values replace an empty prior",
+			prior:        emptySet,
+			responseOpts: apiValues,
+			wantIndexes:  valuedIndexes,
+			wantReferers: valuedReferers,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model := APIKeyResourceModel{
+				Indexes:  test.prior,
+				Referers: test.prior,
+			}
+
+			opts := append([]search.GetApiKeyResponseOption{}, test.responseOpts...)
+			resp := search.NewGetApiKeyResponse("key-value", 1712486400000, []search.Acl{search.ACL_SEARCH}, opts...)
+
+			diags := hydrateAPIKeyModel(resp, &model)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+
+			if !model.Indexes.Equal(test.wantIndexes) {
+				t.Errorf("indexes = %s, want %s", model.Indexes, test.wantIndexes)
+			}
+			if !model.Referers.Equal(test.wantReferers) {
+				t.Errorf("referers = %s, want %s", model.Referers, test.wantReferers)
+			}
+		})
+	}
+}
+
 func TestAPIKeyResponseMatches_WithExpiringKeyTolerance(t *testing.T) {
 	now := time.Date(2026, time.April, 7, 12, 0, 0, 0, time.UTC)
 	expiresAt := now.Add(2 * time.Hour)

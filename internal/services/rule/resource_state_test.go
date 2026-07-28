@@ -110,3 +110,84 @@ func TestHydrateRuleModel(t *testing.T) {
 		t.Fatal("consequence should be set")
 	}
 }
+
+func TestHydrateRuleModel_ConsequenceHidePreservesPriorEmptiness(t *testing.T) {
+	emptySet := types.SetValueMust(types.StringType, []attr.Value{})
+	valuedSet := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("3")})
+	apiHide := []search.ConsequenceHide{*search.NewConsequenceHide("3")}
+
+	priorConsequence := func(hide types.Set) types.List {
+		return types.ListValueMust(consequenceModelType, []attr.Value{
+			types.ObjectValueMust(consequenceModelAttrTypes, map[string]attr.Value{
+				"params_json": types.StringNull(),
+				"promote":     types.ListValueMust(promoteModelType, []attr.Value{}),
+				"hide":        hide,
+				"user_data":   types.StringNull(),
+			}),
+		})
+	}
+
+	tests := []struct {
+		name     string
+		prior    types.List
+		apiHide  []search.ConsequenceHide
+		wantHide types.Set
+	}{
+		{
+			name:     "prior null and API empty stays null",
+			prior:    priorConsequence(types.SetNull(types.StringType)),
+			wantHide: types.SetNull(types.StringType),
+		},
+		{
+			name:     "prior empty and API empty stays empty",
+			prior:    priorConsequence(emptySet),
+			wantHide: emptySet,
+		},
+		{
+			name:     "no prior consequence at all and API empty yields null",
+			prior:    types.ListNull(consequenceModelType),
+			wantHide: types.SetNull(types.StringType),
+		},
+		{
+			name:     "API values replace a null prior",
+			prior:    priorConsequence(types.SetNull(types.StringType)),
+			apiHide:  apiHide,
+			wantHide: valuedSet,
+		},
+		{
+			name:     "API values replace an empty prior",
+			prior:    priorConsequence(emptySet),
+			apiHide:  apiHide,
+			wantHide: valuedSet,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			consequenceOpts := []search.ConsequenceOption{}
+			if test.apiHide != nil {
+				consequenceOpts = append(consequenceOpts, search.WithConsequenceHide(test.apiHide))
+			}
+
+			ruleResp := search.NewRule("rule-1", *search.NewConsequence(consequenceOpts...))
+
+			model := RuleResourceModel{
+				IndexName:   types.StringValue("products"),
+				Consequence: test.prior,
+			}
+
+			diags := hydrateRuleModel("products", ruleResp, &model)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+
+			hide, ok := model.Consequence.Elements()[0].(types.Object).Attributes()["hide"].(types.Set)
+			if !ok {
+				t.Fatalf("hide is not a set: %#v", model.Consequence.Elements()[0])
+			}
+			if !hide.Equal(test.wantHide) {
+				t.Errorf("hide = %s, want %s", hide, test.wantHide)
+			}
+		})
+	}
+}

@@ -14,12 +14,6 @@ import (
 func hydrateAgentProviderResourceState(_ context.Context, resp *agentStudio.ProviderAuthenticationResponse, preserved AgentProviderResourceModel, model *AgentProviderResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	input, inputDiags := providerInputToMap(resp.Input)
-	diags.Append(inputDiags...)
-	if diags.HasError() {
-		return diags
-	}
-
 	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
 	model.ProviderName = types.StringValue(resp.ProviderName)
@@ -34,6 +28,12 @@ func hydrateAgentProviderResourceState(_ context.Context, resp *agentStudio.Prov
 	spec, ok := providerSpecByName(resp.ProviderName)
 	if !ok {
 		diags.AddError("Unsupported Provider Type", "Received unknown provider type "+resp.ProviderName+" from the Agent Studio API.")
+		return diags
+	}
+
+	input, inputDiags := providerInputToMap(resp.ProviderName, resp.Input)
+	diags.Append(inputDiags...)
+	if diags.HasError() {
 		return diags
 	}
 
@@ -52,12 +52,6 @@ func hydrateAgentProviderResourceState(_ context.Context, resp *agentStudio.Prov
 func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentStudio.ProviderAuthenticationResponse, model *AgentProviderResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	input, inputDiags := providerInputToMap(resp.Input)
-	diags.Append(inputDiags...)
-	if diags.HasError() {
-		return diags
-	}
-
 	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
 	model.ProviderName = types.StringValue(resp.ProviderName)
@@ -75,6 +69,12 @@ func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentStu
 		return diags
 	}
 
+	input, inputDiags := providerInputToMap(resp.ProviderName, resp.Input)
+	diags.Append(inputDiags...)
+	if diags.HasError() {
+		return diags
+	}
+
 	blockValue, blockDiags := providerBlockValueFromResponse(input, spec, providerBlockNull(spec))
 	diags.Append(blockDiags...)
 	if diags.HasError() {
@@ -87,12 +87,6 @@ func hydrateImportedAgentProviderResourceState(_ context.Context, resp *agentStu
 
 func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentStudio.ProviderAuthenticationResponse, model *AgentProviderDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
-
-	input, inputDiags := providerInputToMap(resp.Input)
-	diags.Append(inputDiags...)
-	if diags.HasError() {
-		return diags
-	}
 
 	model.ProviderID = types.StringValue(resp.Id)
 	model.ID = types.StringValue(resp.Id)
@@ -109,6 +103,12 @@ func hydrateAgentProviderDataSourceState(_ context.Context, resp *agentStudio.Pr
 	spec, ok := providerSpecByName(resp.ProviderName)
 	if !ok {
 		diags.AddError("Unsupported Provider Type", "Received unknown provider type "+resp.ProviderName+" from the Agent Studio API.")
+		return diags
+	}
+
+	input, inputDiags := providerInputToMap(resp.ProviderName, resp.Input)
+	diags.Append(inputDiags...)
+	if diags.HasError() {
 		return diags
 	}
 
@@ -313,10 +313,19 @@ func decodeProviderInputStruct(providerName string, input map[string]any) (any, 
 
 // providerInputToMap converts the typed ProviderInput union from the API response
 // into a generic map keyed by the provider's API field names.
-func providerInputToMap(input agentStudio.ProviderInput) (map[string]any, diag.Diagnostics) {
+//
+// It encodes the union member matching providerName rather than the union itself:
+// see providerInputVariant.
+func providerInputToMap(providerName string, input agentStudio.ProviderInput) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	raw, err := json.Marshal(input)
+	variant, variantDiags := providerInputVariant(providerName, input)
+	diags.Append(variantDiags...)
+	if diags.HasError() {
+		return nil, diags
+	}
+
+	raw, err := json.Marshal(variant)
 	if err != nil {
 		diags.AddError("Error reading provider input", err.Error())
 		return nil, diags
@@ -333,6 +342,55 @@ func providerInputToMap(input agentStudio.ProviderInput) (map[string]any, diag.D
 	}
 
 	return result, diags
+}
+
+// providerInputVariant returns the member of the ProviderInput union that
+// matches providerName.
+//
+// Encoding the union itself is lossy. ProviderInput is a generated oneOf with no
+// discriminator field: OpenAIProviderInput, BaseProviderInput and
+// AnthropicProviderInput are decoded unconditionally and always "succeed", so a
+// decoded API response has several pointers set at once, and MarshalJSON
+// serializes the first non-nil one in its own fixed order - AnthropicProviderInput,
+// which declares only apiKey and baseUrl. Reading an azure_openai provider back
+// therefore dropped azureEndpoint, azureDeployment and apiVersion, leaving three
+// Required attributes null in state. provider_name is the discriminator the API
+// itself uses, so it is what selects the variant here.
+func providerInputVariant(providerName string, input agentStudio.ProviderInput) (any, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	switch providerName {
+	case "openai":
+		if input.OpenAIProviderInput != nil {
+			return input.OpenAIProviderInput, diags
+		}
+	case "anthropic":
+		if input.AnthropicProviderInput != nil {
+			return input.AnthropicProviderInput, diags
+		}
+	case "azure_openai":
+		if input.AzureOpenAIProviderInput != nil {
+			return input.AzureOpenAIProviderInput, diags
+		}
+	case "openai_compatible":
+		if input.OpenAICompatibleProviderInput != nil {
+			return input.OpenAICompatibleProviderInput, diags
+		}
+	default:
+		// google_genai, deepseek and any other single-key provider use the base input.
+		if input.BaseProviderInput != nil {
+			return input.BaseProviderInput, diags
+		}
+	}
+
+	diags.AddError(
+		"Unexpected Provider Input",
+		"The Agent Studio API returned an input payload for provider_name "+providerName+" that does not match "+
+			"that provider's expected shape. The provider will not fall back to another shape, since that would "+
+			"silently drop fields.",
+	)
+
+	return nil, diags
 }
 
 func nullableString(value *string) types.String {

@@ -180,7 +180,9 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	indexName := state.Name.ValueString()
-	if !state.DeletionProtection.IsNull() && state.DeletionProtection.ValueBool() {
+	// Fail safe on an absent value: treating null as "unprotected" would delete a
+	// production index. Require an explicit false to proceed.
+	if state.DeletionProtection.IsNull() || state.DeletionProtection.ValueBool() {
 		resp.Diagnostics.AddError(
 			"Deletion Protection Enabled",
 			fmt.Sprintf("Cannot delete virtual index %q because deletion_protection is enabled. Set deletion_protection = false and apply before destroying.", indexName),

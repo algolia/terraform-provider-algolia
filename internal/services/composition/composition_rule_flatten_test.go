@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	compositionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/composition"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -179,6 +180,64 @@ func TestFlattenCompositionRule_NilConditionsAndValidityAndTags(t *testing.T) {
 			t.Fatalf("validity = %q, want the preserved prior value", got)
 		}
 	})
+}
+
+func TestFlattenCompositionRule_TagsPreservePriorEmptiness(t *testing.T) {
+	emptyList := types.ListValueMust(types.StringType, []attr.Value{})
+	valuedList := types.ListValueMust(types.StringType, []attr.Value{types.StringValue("seasonal")})
+
+	tests := []struct {
+		name     string
+		prior    types.List
+		apiTags  []string
+		wantTags types.List
+	}{
+		{
+			name:     "prior null and API empty stays null",
+			prior:    types.ListNull(types.StringType),
+			wantTags: types.ListNull(types.StringType),
+		},
+		{
+			name:     "prior empty and API empty stays empty",
+			prior:    emptyList,
+			wantTags: emptyList,
+		},
+		{
+			name:     "API values replace a null prior",
+			prior:    types.ListNull(types.StringType),
+			apiTags:  []string{"seasonal"},
+			wantTags: valuedList,
+		},
+		{
+			name:     "API values replace an empty prior",
+			prior:    emptyList,
+			apiTags:  []string{"seasonal"},
+			wantTags: valuedList,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rule := compositionapi.NewEmptyCompositionRule()
+			rule.ObjectID = "rule-1"
+			rule.Consequence = *compositionapi.NewCompositionRuleConsequence(
+				*compositionapi.CompositionMultifeedBehaviorAsCompositionBehavior(
+					compositionapi.NewCompositionMultifeedBehavior(*compositionapi.NewMultifeed(map[string]compositionapi.FeedInjection{})),
+				),
+			)
+			rule.Tags = test.apiTags
+
+			model := CompositionRuleResourceModel{Tags: test.prior}
+			diags := flattenCompositionRule("my-composition", rule, &model)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+
+			if !model.Tags.Equal(test.wantTags) {
+				t.Errorf("tags = %s, want %s", model.Tags, test.wantTags)
+			}
+		})
+	}
 }
 
 func TestFlattenCompositionRule_DisabledAndNoDescription(t *testing.T) {

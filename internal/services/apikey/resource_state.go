@@ -170,26 +170,12 @@ func hydrateAPIKeyModel(resp *search.GetApiKeyResponse, preserved *APIKeyResourc
 		aclValues = append(aclValues, types.StringValue(string(acl)))
 	}
 
-	indexValues := make([]attr.Value, 0, len(resp.GetIndexes()))
-	indexes := append([]string(nil), resp.GetIndexes()...)
-	sort.Strings(indexes)
-	for _, index := range indexes {
-		indexValues = append(indexValues, types.StringValue(index))
-	}
-
-	refererValues := make([]attr.Value, 0, len(resp.GetReferers()))
-	referers := append([]string(nil), resp.GetReferers()...)
-	sort.Strings(referers)
-	for _, referer := range referers {
-		refererValues = append(refererValues, types.StringValue(referer))
-	}
-
 	preserved.ID = types.StringValue(resp.GetValue())
 	preserved.ACL = types.SetValueMust(types.StringType, aclValues)
 	preserved.Description = nullableString(resp.GetDescriptionOk())
 	preserved.ExpiresAt = preservedExpiry
-	preserved.Indexes = types.SetValueMust(types.StringType, indexValues)
-	preserved.Referers = types.SetValueMust(types.StringType, refererValues)
+	preserved.Indexes = nullableStringSet(preserved.Indexes, resp.GetIndexes())
+	preserved.Referers = nullableStringSet(preserved.Referers, resp.GetReferers())
 	preserved.MaxHitsPerQuery = nullableInt32(resp.GetMaxHitsPerQueryOk())
 	preserved.MaxQueriesPerIPPerHour = nullableInt32(resp.GetMaxQueriesPerIPPerHourOk())
 	preserved.CreatedAt = types.StringValue(time.UnixMilli(resp.GetCreatedAt()).UTC().Format(time.RFC3339))
@@ -219,6 +205,33 @@ func nullableString(value *string, ok bool) types.String {
 	}
 
 	return types.StringValue(*value)
+}
+
+// nullableStringSet converts an API string slice into a sorted Terraform set.
+// `indexes` and `referers` are Optional and not Computed, so their planned
+// value is the configuration verbatim: emitting a known empty set where the
+// plan held null makes Terraform reject the apply with "Provider produced
+// inconsistent result after apply". When the API returns nothing, the prior
+// value therefore decides: a null prior stays null, while a prior that was
+// explicitly configured as `[]` stays a known empty set.
+func nullableStringSet(prior types.Set, values []string) types.Set {
+	if len(values) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.SetNull(types.StringType)
+		}
+
+		return types.SetValueMust(types.StringType, []attr.Value{})
+	}
+
+	sorted := append([]string(nil), values...)
+	sort.Strings(sorted)
+
+	attrValues := make([]attr.Value, 0, len(sorted))
+	for _, value := range sorted {
+		attrValues = append(attrValues, types.StringValue(value))
+	}
+
+	return types.SetValueMust(types.StringType, attrValues)
 }
 
 func nullableInt32(value *int32, ok bool) types.Int64 {

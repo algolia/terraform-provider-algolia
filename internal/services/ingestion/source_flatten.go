@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"encoding/json"
+	"reflect"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -30,7 +31,7 @@ func flattenSource(source *ingestionapi.Source, model *SourceResourceModel) diag
 	model.CreatedAt = types.StringValue(source.CreatedAt)
 	model.UpdatedAt = types.StringValue(source.UpdatedAt)
 
-	inputValue, inputDiags := flattenSourceInput(source.Input, model.Input)
+	inputValue, inputDiags := flattenSourceInput(string(source.Type), source.Input, model.Input)
 	diags.Append(inputDiags...)
 	model.Input = inputValue
 
@@ -42,7 +43,10 @@ func flattenSource(source *ingestionapi.Source, model *SourceResourceModel) diag
 // previous is model.Input's value before this Create/Read/Update call -
 // i.e. the plan's configured value (Create/Update) or the prior state
 // (Read).
-func flattenSourceInput(input *ingestionapi.SourceInput, previous types.String) (types.String, diag.Diagnostics) {
+//
+// The union is never encoded directly: see sourceInputVariant for why sourceType
+// has to pick the variant first.
+func flattenSourceInput(sourceType string, input *ingestionapi.SourceInput, previous types.String) (types.String, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	if input == nil {
@@ -57,7 +61,13 @@ func flattenSourceInput(input *ingestionapi.SourceInput, previous types.String) 
 		return previous, diags
 	}
 
-	encoded, err := json.Marshal(input)
+	variant, variantDiags := sourceInputVariant(sourceType, input)
+	diags.Append(variantDiags...)
+	if diags.HasError() {
+		return previous, diags
+	}
+
+	encoded, err := json.Marshal(variant)
 	if err != nil {
 		diags.AddError("Error encoding source input", "Could not JSON-encode the source's input: "+err.Error())
 		return previous, diags
@@ -90,7 +100,13 @@ func flattenSourceDataSource(source *ingestionapi.Source, model *SourceDataSourc
 		return diags
 	}
 
-	encoded, err := json.Marshal(source.Input)
+	variant, variantDiags := sourceInputVariant(string(source.Type), source.Input)
+	diags.Append(variantDiags...)
+	if diags.HasError() {
+		return diags
+	}
+
+	encoded, err := json.Marshal(variant)
 	if err != nil {
 		diags.AddError("Error encoding source input", "Could not JSON-encode the source's input: "+err.Error())
 		return diags
@@ -98,4 +114,65 @@ func flattenSourceDataSource(source *ingestionapi.Source, model *SourceDataSourc
 	model.Input = types.StringValue(string(encoded))
 
 	return diags
+}
+
+// sourceInputVariant returns the member of the SourceInput union that matches
+// sourceType.
+//
+// Encoding the union itself is lossy. SourceInput is a generated oneOf with no
+// discriminator field: SourceJSON and SourceCSV are decoded unconditionally and
+// always "succeed", so a decoded API response has several pointers set at once,
+// and MarshalJSON serializes the first non-nil one in its own fixed order - where
+// SourceCSV comes early. Reading a "docker" or "shopify" source back therefore
+// produced {"url":""} in state. The source's `type` is the discriminator the API
+// itself uses, so it is what selects the variant here.
+func sourceInputVariant(sourceType string, input *ingestionapi.SourceInput) (any, diag.Diagnostics) {
+	var variant any
+
+	switch ingestionapi.SourceType(sourceType) {
+	case ingestionapi.SOURCE_TYPE_ALGOLIA_INDEX:
+		variant = input.SourceAlgoliaIndex
+	case ingestionapi.SOURCE_TYPE_BIGCOMMERCE:
+		variant = input.SourceBigCommerce
+	case ingestionapi.SOURCE_TYPE_BIGQUERY:
+		variant = input.SourceBigQuery
+	case ingestionapi.SOURCE_TYPE_COMMERCETOOLS:
+		variant = input.SourceCommercetools
+	case ingestionapi.SOURCE_TYPE_CSV:
+		variant = input.SourceCSV
+	case ingestionapi.SOURCE_TYPE_DOCKER:
+		variant = input.SourceDocker
+	case ingestionapi.SOURCE_TYPE_GA4_BIGQUERY_EXPORT:
+		variant = input.SourceGA4BigQueryExport
+	case ingestionapi.SOURCE_TYPE_JSON:
+		variant = input.SourceJSON
+	case ingestionapi.SOURCE_TYPE_SHOPIFY:
+		variant = input.SourceShopify
+	default:
+		var diags diag.Diagnostics
+		diags.AddError(
+			"Unexpected input for source type",
+			"Algolia returned an `input` for source type \""+sourceType+"\", which the provider has no "+
+				"configuration shape for - a \"push\" source has none at all. The provider will not guess a "+
+				"shape, since that would write another source type's configuration into state.",
+		)
+
+		return nil, diags
+	}
+
+	// A typed nil pointer means the response did not carry the keys the declared
+	// type's shape requires. Reporting it beats encoding a different variant and
+	// writing another source type's configuration into state.
+	if reflect.ValueOf(variant).IsNil() {
+		var diags diag.Diagnostics
+		diags.AddError(
+			"Unexpected input for source type",
+			"Algolia returned an `input` that does not match source type \""+sourceType+"\". The provider will "+
+				"not fall back to another shape, since that would write the wrong configuration into state.",
+		)
+
+		return nil, diags
+	}
+
+	return variant, nil
 }

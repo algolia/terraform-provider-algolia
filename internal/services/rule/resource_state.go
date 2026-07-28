@@ -80,7 +80,7 @@ func hydrateRuleModel(indexName string, ruleResp *search.Rule, model *RuleResour
 	}
 	model.Conditions = conditions
 
-	consequence, consequenceDiags := flattenConsequence(ruleResp.GetConsequence())
+	consequence, consequenceDiags := flattenConsequence(ruleResp.GetConsequence(), model.Consequence)
 	diags.Append(consequenceDiags...)
 	if diags.HasError() {
 		return diags
@@ -249,7 +249,12 @@ func expandConsequence(list types.List) (*search.Consequence, diag.Diagnostics) 
 	return consequence, diags
 }
 
-func flattenConsequence(consequence search.Consequence) (types.List, diag.Diagnostics) {
+// flattenConsequence converts the API consequence into the single-element
+// consequence block list. prior is the model's existing consequence list; it
+// is needed because `hide` is Optional and not Computed, so its planned value
+// is the configuration verbatim and the null/known-empty distinction has to be
+// carried over when the API returns no hidden object IDs.
+func flattenConsequence(consequence search.Consequence, prior types.List) (types.List, diag.Diagnostics) {
 	var paramsValue attr.Value = types.StringNull()
 	if consequence.Params != nil {
 		raw, err := json.Marshal(consequence.GetParams())
@@ -291,14 +296,11 @@ func flattenConsequence(consequence search.Consequence) (types.List, diag.Diagno
 		return types.ListNull(consequenceModelType), promoteDiags
 	}
 
-	hideValues := make([]attr.Value, 0, len(consequence.GetHide()))
-	for _, hidden := range consequence.GetHide() {
-		hideValues = append(hideValues, types.StringValue(hidden.GetObjectID()))
+	hidden := make([]string, 0, len(consequence.GetHide()))
+	for _, hide := range consequence.GetHide() {
+		hidden = append(hidden, hide.GetObjectID())
 	}
-	hideSet, hideDiags := types.SetValue(types.StringType, hideValues)
-	if hideDiags.HasError() {
-		return types.ListNull(consequenceModelType), hideDiags
-	}
+	hideSet := nullableStringSet(priorConsequenceSet(prior, "hide"), hidden)
 
 	userDataValue := types.StringNull()
 	if consequence.UserData != nil {
@@ -418,6 +420,46 @@ func setStrings(value types.Set) []string {
 		}
 	}
 	return stringsValue
+}
+
+// nullableStringSet converts an API string slice into a Terraform set. For an
+// Optional, non-Computed attribute the planned value is the configuration
+// verbatim, so emitting a known empty set where the plan held null makes
+// Terraform reject the apply with "Provider produced inconsistent result after
+// apply". When the API returns nothing, the prior value therefore decides: a
+// null prior stays null, while a prior that was explicitly configured as `[]`
+// stays a known empty set.
+func nullableStringSet(prior types.Set, values []string) types.Set {
+	if len(values) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.SetNull(types.StringType)
+		}
+
+		return types.SetValueMust(types.StringType, []attr.Value{})
+	}
+
+	return types.SetValueMust(types.StringType, stringSliceValues(values))
+}
+
+// priorConsequenceSet reads a set attribute out of the model's existing
+// single-element consequence block, falling back to null when there is no
+// prior consequence (data source reads and imports).
+func priorConsequenceSet(prior types.List, name string) types.Set {
+	if prior.IsNull() || prior.IsUnknown() || len(prior.Elements()) == 0 {
+		return types.SetNull(types.StringType)
+	}
+
+	objValue, ok := prior.Elements()[0].(types.Object)
+	if !ok {
+		return types.SetNull(types.StringType)
+	}
+
+	setValue, ok := objValue.Attributes()[name].(types.Set)
+	if !ok {
+		return types.SetNull(types.StringType)
+	}
+
+	return setValue
 }
 
 func stringSliceValues(values []string) []attr.Value {

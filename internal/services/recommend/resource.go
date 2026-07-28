@@ -91,12 +91,25 @@ func (r *recommendRuleResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
+	// The rule now exists in Algolia. Persist the identifying attributes
+	// immediately, before waiting on the task or reading the rule back, so
+	// that a failure in either of those steps surfaces as an error on a
+	// resource Terraform knows about, instead of orphaning a rule that exists
+	// remotely but not in state (which no subsequent apply would ever adopt).
+	// Every remaining attribute is already known from the plan, so this state
+	// is consistent with what Terraform planned.
+	plan.ID = types.StringValue(recommendRuleResourceID(indexName, string(recommendModel), objectID))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if err := waitForRecommendRuleTask(client, indexName, recommendModel, batchResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for Recommend rule creation", "Could not confirm Recommend rule creation: "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -127,7 +140,7 @@ func (r *recommendRuleResource) Read(ctx context.Context, req resource.ReadReque
 	recommendModel := recommendapi.RecommendModels(state.Model.ValueString())
 	objectID := state.ObjectID.ValueString()
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
 	if err != nil {
 		var apiErr *recommendapi.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == 404 {
@@ -194,7 +207,7 @@ func (r *recommendRuleResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -265,7 +278,7 @@ func (r *recommendRuleResource) ImportState(ctx context.Context, req resource.Im
 		return
 	}
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendapi.RecommendModels(modelName), objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendapi.RecommendModels(modelName), objectID))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Recommend rule", "Could not import Recommend rule "+req.ID+": "+err.Error())
 		return

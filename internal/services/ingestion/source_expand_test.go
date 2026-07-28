@@ -87,6 +87,9 @@ func TestExpandSourceCreate_InvalidInputJSON(t *testing.T) {
 
 func TestExpandSourceUpdate(t *testing.T) {
 	model := &SourceResourceModel{
+		// `type` is RequiresReplace, so the plan always carries the source's
+		// real type - which is what selects the SourceUpdateInput variant.
+		Type:             types.StringValue(string(ingestionapi.SOURCE_TYPE_CSV)),
 		Name:             types.StringValue("renamed-source"),
 		Input:            types.StringValue(`{"url": "https://example.com/renamed.csv"}`),
 		AuthenticationID: types.StringValue("auth-456"),
@@ -113,6 +116,7 @@ func TestExpandSourceUpdate(t *testing.T) {
 
 func TestExpandSourceUpdate_NoInput(t *testing.T) {
 	model := &SourceResourceModel{
+		Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_PUSH)),
 		Name:  types.StringValue("renamed-push-source"),
 		Input: types.StringNull(),
 	}
@@ -129,6 +133,7 @@ func TestExpandSourceUpdate_NoInput(t *testing.T) {
 
 func TestExpandSourceUpdate_InvalidInputJSON(t *testing.T) {
 	model := &SourceResourceModel{
+		Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_CSV)),
 		Name:  types.StringValue("renamed"),
 		Input: types.StringValue(`not json at all`),
 	}
@@ -141,7 +146,7 @@ func TestExpandSourceUpdate_InvalidInputJSON(t *testing.T) {
 
 func TestExpandSourceInput_NullAndEmptyReturnNil(t *testing.T) {
 	t.Run("null", func(t *testing.T) {
-		input, diags := expandSourceInput(types.StringNull())
+		input, diags := expandSourceInput(string(ingestionapi.SOURCE_TYPE_CSV), types.StringNull())
 		if diags.HasError() {
 			t.Fatalf("unexpected diagnostics: %v", diags)
 		}
@@ -151,7 +156,7 @@ func TestExpandSourceInput_NullAndEmptyReturnNil(t *testing.T) {
 	})
 
 	t.Run("empty string", func(t *testing.T) {
-		input, diags := expandSourceInput(types.StringValue(""))
+		input, diags := expandSourceInput(string(ingestionapi.SOURCE_TYPE_CSV), types.StringValue(""))
 		if diags.HasError() {
 			t.Fatalf("unexpected diagnostics: %v", diags)
 		}
@@ -163,7 +168,7 @@ func TestExpandSourceInput_NullAndEmptyReturnNil(t *testing.T) {
 
 func TestExpandSourceUpdateInput_NullAndEmptyReturnNil(t *testing.T) {
 	t.Run("null", func(t *testing.T) {
-		input, diags := expandSourceUpdateInput(types.StringNull())
+		input, diags := expandSourceUpdateInput(string(ingestionapi.SOURCE_TYPE_CSV), types.StringNull())
 		if diags.HasError() {
 			t.Fatalf("unexpected diagnostics: %v", diags)
 		}
@@ -173,7 +178,7 @@ func TestExpandSourceUpdateInput_NullAndEmptyReturnNil(t *testing.T) {
 	})
 
 	t.Run("empty string", func(t *testing.T) {
-		input, diags := expandSourceUpdateInput(types.StringValue(""))
+		input, diags := expandSourceUpdateInput(string(ingestionapi.SOURCE_TYPE_CSV), types.StringValue(""))
 		if diags.HasError() {
 			t.Fatalf("unexpected diagnostics: %v", diags)
 		}

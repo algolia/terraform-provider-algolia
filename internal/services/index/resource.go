@@ -12,7 +12,6 @@ import (
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -177,7 +176,11 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	indexName := state.Name.ValueString()
 
-	if !state.DeletionProtection.IsNull() && state.DeletionProtection.ValueBool() {
+	// Fail safe on an absent value. The schema defaults deletion_protection to true,
+	// so null should not occur after a normal apply; when it does (legacy state, or a
+	// state written before import seeded the default) treating it as "unprotected"
+	// would delete a production index. Require an explicit false to proceed.
+	if state.DeletionProtection.IsNull() || state.DeletionProtection.ValueBool() {
 		resp.Diagnostics.AddError(
 			"Deletion Protection Enabled",
 			fmt.Sprintf("Cannot delete index %q because deletion_protection is enabled. "+
@@ -201,7 +204,27 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 }
 
 func (r *indexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	// Importing must populate the settings blocks here rather than relying on the
+	// subsequent Read. Read() preserves whichever blocks were null beforehand (see
+	// captureNullBlocks/restoreNullBlocks), which during a passthrough import is all
+	// of them -- so the freshly read settings would be discarded and the imported
+	// state would contain nothing but the index name.
+	model := IndexResourceModel{
+		Name: types.StringValue(req.ID),
+		// deletion_protection is a provider-side guard with no Algolia API
+		// representation, so it cannot be read back. Seed the schema default (true)
+		// so an imported index stays protected until the operator explicitly opts
+		// out. Leaving it null makes the Delete guard evaluate to false, which
+		// silently destroys an index the configuration marked as protected.
+		DeletionProtection: types.BoolValue(true),
+	}
+
+	resp.Diagnostics.Append(r.readIndex(ctx, &model)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &model)...)
 }
 
 func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel) diag.Diagnostics {
@@ -258,8 +281,8 @@ func preservePlannedValues(ctx context.Context, plan, state *IndexResourceModel)
 	var diags diag.Diagnostics
 
 	blockPairs := []struct {
-		planObj  types.Object
-		stateObj *types.Object
+		planObj   types.Object
+		stateObj  *types.Object
 		attrTypes map[string]attr.Type
 	}{
 		{plan.Ranking, &state.Ranking, rankingAttrTypes},
@@ -325,8 +348,8 @@ func preservePlannedValues(ctx context.Context, plan, state *IndexResourceModel)
 
 // nullBlocks tracks which blocks were null before a read operation.
 type nullBlocks struct {
-	attributes, ranking, faceting, highlighting, pagination       bool
-	typos, languages, queryStrategy, performance, advanced        bool
+	attributes, ranking, faceting, highlighting, pagination bool
+	typos, languages, queryStrategy, performance, advanced  bool
 }
 
 // captureNullBlocks records which blocks are currently null on the model.

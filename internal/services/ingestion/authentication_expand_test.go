@@ -98,6 +98,10 @@ func TestExpandAuthenticationCreate_InvalidInputJSON(t *testing.T) {
 
 func TestExpandAuthenticationUpdate(t *testing.T) {
 	model := &AuthenticationResourceModel{
+		// `type` is RequiresReplace, so the plan always carries the
+		// authentication's real type - which is what selects the
+		// AuthInputPartial variant.
+		Type:  types.StringValue(string(ingestionapi.AUTHENTICATION_TYPE_ALGOLIA)),
 		Name:  types.StringValue("renamed"),
 		Input: types.StringValue(`{"appID": "APPID123", "apiKey": "new-secret"}`),
 	}
@@ -121,6 +125,7 @@ func TestExpandAuthenticationUpdate(t *testing.T) {
 
 func TestExpandAuthenticationUpdate_InvalidInputJSON(t *testing.T) {
 	model := &AuthenticationResourceModel{
+		Type:  types.StringValue(string(ingestionapi.AUTHENTICATION_TYPE_ALGOLIA)),
 		Name:  types.StringValue("renamed"),
 		Input: types.StringValue(`not json at all`),
 	}

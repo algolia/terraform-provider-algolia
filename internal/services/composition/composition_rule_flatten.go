@@ -46,19 +46,27 @@ func flattenCompositionRule(compositionID string, rule *compositionapi.Compositi
 	diags.Append(validityDiags...)
 	model.Validity = validityValue
 
-	tagsValue, tagsDiags := flattenStringList(rule.GetTags())
+	tagsValue, tagsDiags := nullableStringList(model.Tags, rule.GetTags())
 	diags.Append(tagsDiags...)
 	model.Tags = tagsValue
 
 	return diags
 }
 
-// flattenStringList converts a []string into a Terraform list, returning a
-// null list for an empty/nil slice. Mirrors the identically named helper in
-// internal/services/dictionary.
-func flattenStringList(values []string) (types.List, diag.Diagnostics) {
+// nullableStringList converts a []string into a Terraform list. `tags` is
+// Optional and not Computed, so its planned value is the configuration
+// verbatim: emitting a known empty list where the plan held null (or null where
+// the plan held `[]`) makes Terraform reject the apply with "Provider produced
+// inconsistent result after apply". When the API returns nothing, the prior
+// value therefore decides: a null prior stays null, while a prior that was
+// explicitly configured as `[]` stays a known empty list.
+func nullableStringList(prior types.List, values []string) (types.List, diag.Diagnostics) {
 	if len(values) == 0 {
-		return types.ListNull(types.StringType), nil
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.ListNull(types.StringType), nil
+		}
+
+		return types.ListValue(types.StringType, []attr.Value{})
 	}
 
 	attrValues := make([]attr.Value, 0, len(values))
