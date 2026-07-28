@@ -22,7 +22,7 @@ The Algolia Terraform provider lets you configure and manage Algolia resources d
 
 > **This provider is distributed internally only.** It is not published to the public Terraform Registry. Every internal developer installs it from the signed release artifacts on [GitHub Releases](https://github.com/algolia/terraform-provider-algolia/releases) using a local [filesystem mirror](https://developer.hashicorp.com/terraform/cli/config/config-file#filesystem_mirror). No private registry is required.
 
-**Quick install:** from a checkout of this repo, run [`scripts/install.sh`](scripts/install.sh). It detects your platform, downloads the signed release with `gh`, populates the filesystem mirror, and writes the `provider_installation` block for you (without clobbering an existing one). Add `--dev-overrides` for the quick-test flow described under [While still internally available](#while-still-internally-available). Prefer to do it by hand? The manual steps follow.
+**Quick install:** from a checkout of this repo, run [`scripts/install.sh`](scripts/install.sh). It detects your platform, downloads the signed release with `gh`, populates the filesystem mirror, and writes the `provider_installation` block for you (without clobbering an existing one). Add `--dev-overrides` to install a local binary via `dev_overrides` instead (no version pin, no `terraform init`; handy for a quick smoke test). Prefer to do it by hand? The manual steps follow.
 
 **1. Download the release archive for your platform.** Grab the `terraform-provider-algolia_<version>_<os>_<arch>.zip` for the version you want from the [releases page](https://github.com/algolia/terraform-provider-algolia/releases) (`darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`, or `windows_arm64`).
 
@@ -58,64 +58,6 @@ shasum -a 256 -c terraform-provider-algolia_0.1.0-beta.1_SHA256SUMS 2>&1 | grep 
 ```
 
 Then run `terraform init`, and Terraform will pick up the mirrored provider without contacting the network.
-
-## While still internally available
-
-Until the provider is published to a registry, the fastest way to try it (or test an unreleased build) is to install it straight from GitHub with `go install` and point Terraform at the resulting binary with a [`dev_overrides`](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers) block. No release download, no filesystem mirror, and no `terraform init`.
-
-> Prefer to skip the manual steps? [`scripts/install.sh --dev-overrides`](scripts/install.sh) sets up the same `dev_overrides` flow automatically (it downloads the signed release rather than using `go install`). Use the manual `go install` steps below when you want to build an arbitrary branch or commit.
-
-**Prerequisites:** Go >= 1.25 and Git access to this (internal) repository. Because the repo is private, `go` must be able to authenticate to GitHub. If you clone Algolia repos over SSH, tell `go` to use SSH for `github.com` too (one time):
-
-```zsh
-git config --global url."git@github.com:".insteadOf "https://github.com/"
-```
-
-(Alternatively, `gh auth setup-git` configures Git to authenticate over HTTPS via the GitHub CLI.)
-
-**1. Install straight from GitHub.** Use a tag, `@main`, or `@latest`:
-
-```zsh
-export GOPRIVATE=github.com/algolia/*   # skip the public proxy/checksum DB for the internal repo
-go install github.com/algolia/terraform-provider-algolia@v0.1.0-beta.1
-```
-
-The binary lands in `$(go env GOPATH)/bin` (typically `~/go/bin`).
-
-**2. Point Terraform at it** with a `dev_overrides` block in your CLI config (`~/.terraformrc` on macOS/Linux, `%APPDATA%\terraform.rc` on Windows). Use the absolute path to your `GOPATH/bin` directory (the CLI config does not expand `~`):
-
-```hcl
-provider_installation {
-  dev_overrides {
-    "algolia/algolia" = "/Users/you/go/bin"
-  }
-  # everything else installs from the public registry as normal
-  direct {}
-}
-```
-
-**3. Plan or apply directly (no `terraform init` needed):**
-
-```hcl
-terraform {
-  required_providers {
-    algolia = { source = "algolia/algolia" }   # no version constraint under dev_overrides
-  }
-}
-
-provider "algolia" {
-  app_id  = var.algolia_app_id
-  api_key = var.algolia_api_key
-}
-```
-
-```zsh
-terraform plan
-```
-
-Terraform prints a `Provider development overrides are in effect` warning on every command. That is expected, and it confirms Terraform is using your local binary instead of a registry.
-
-> **Working on the provider itself?** Swap step 1 for `make build` in a local checkout and set the `dev_overrides` path to the repo root. Same flow, no GitHub fetch.
 
 ## Getting Started
 
