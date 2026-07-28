@@ -308,34 +308,7 @@ func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel
 		return false, diags
 	}
 
-	// Fetch index metadata (entries, data_size, created_at, updated_at) from ListIndices.
-	listResp, err := r.client.ListIndices(r.client.NewApiListIndicesRequest(), search.WithContext(ctx))
-	if err != nil {
-		// Non-fatal: metadata is optional, log and continue.
-		tflog.Warn(ctx, "Could not list indices for metadata", map[string]interface{}{"error": err.Error()})
-		model.Entries = types.Int64Value(0)
-		model.DataSize = types.Int64Value(0)
-		model.CreatedAt = types.StringValue("")
-		model.UpdatedAt = types.StringValue("")
-		return true, diags
-	}
-
-	for _, idx := range listResp.Items {
-		if idx.Name == indexName {
-			model.Entries = types.Int64Value(int64(idx.Entries))
-			model.DataSize = types.Int64Value(idx.DataSize)
-			model.CreatedAt = types.StringValue(idx.CreatedAt)
-			model.UpdatedAt = types.StringValue(idx.UpdatedAt)
-			return true, diags
-		}
-	}
-
-	// Index not found in list (possibly just created, not yet visible). GetSettings
-	// already succeeded, so the index does exist; only the metadata is missing.
-	model.Entries = types.Int64Value(0)
-	model.DataSize = types.Int64Value(0)
-	model.CreatedAt = types.StringValue("")
-	model.UpdatedAt = types.StringValue("")
+	applyIndexMetadata(ctx, r.client, model)
 
 	return true, diags
 }

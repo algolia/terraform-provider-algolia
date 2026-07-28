@@ -76,7 +76,7 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings))
+	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating virtual index", "Could not configure virtual index "+indexName+": "+err.Error())
 		return
@@ -158,7 +158,7 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings))
+	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating virtual index", "Could not update virtual index "+indexName+": "+err.Error())
 		return
@@ -213,7 +213,7 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 		}
 	}
 
-	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName))
+	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
 	if err != nil {
 		if algoliaerr.IsNotFound(err) {
 			return
@@ -268,7 +268,7 @@ func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *Virt
 func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexResourceModel) (bool, diag.Diagnostics) {
 	indexName := model.Name.ValueString()
 
-	settingsResp, err := r.client.GetSettings(r.client.NewApiGetSettingsRequest(indexName))
+	settingsResp, err := r.client.GetSettings(r.client.NewApiGetSettingsRequest(indexName), search.WithContext(ctx))
 	if err != nil {
 		var diags diag.Diagnostics
 		if algoliaerr.IsNotFound(err) {
@@ -283,35 +283,13 @@ func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexR
 		return false, diags
 	}
 
-	listResp, err := r.client.ListIndices(r.client.NewApiListIndicesRequest())
-	if err != nil {
-		tflog.Warn(ctx, "Could not list indices for metadata", map[string]any{"error": err.Error()})
-		model.Entries = types.Int64Value(0)
-		model.DataSize = types.Int64Value(0)
-		model.CreatedAt = types.StringValue("")
-		model.UpdatedAt = types.StringValue("")
-		return true, diags
-	}
+	applyIndexMetadata(ctx, r.client, model)
 
-	for _, idx := range listResp.Items {
-		if idx.Name == indexName {
-			model.Entries = types.Int64Value(int64(idx.Entries))
-			model.DataSize = types.Int64Value(idx.DataSize)
-			model.CreatedAt = types.StringValue(idx.CreatedAt)
-			model.UpdatedAt = types.StringValue(idx.UpdatedAt)
-			return true, diags
-		}
-	}
-
-	model.Entries = types.Int64Value(0)
-	model.DataSize = types.Int64Value(0)
-	model.CreatedAt = types.StringValue("")
-	model.UpdatedAt = types.StringValue("")
 	return true, diags
 }
 
 func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
-	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName))
+	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
 	if err != nil {
 		return err
 	}
@@ -327,7 +305,7 @@ func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, p
 	replicas = append(replicas, virtualName)
 	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(replicas),
-	)))
+	)), search.WithContext(ctx))
 	if err != nil {
 		return err
 	}
@@ -336,7 +314,7 @@ func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, p
 }
 
 func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
-	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName))
+	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
 	if err != nil {
 		if algoliaerr.IsNotFound(err) {
 			return nil
@@ -361,7 +339,7 @@ func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, pri
 
 	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(filtered),
-	)))
+	)), search.WithContext(ctx))
 	if err != nil {
 		return err
 	}

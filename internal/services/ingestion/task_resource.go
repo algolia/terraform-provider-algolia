@@ -2,9 +2,9 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -168,8 +168,7 @@ func (r *taskResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	taskID := state.TaskID.ValueString()
 	apiResp, err := client.GetTask(client.NewApiGetTaskRequest(taskID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Ingestion task not found; removing from state", map[string]any{"task_id": taskID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -214,7 +213,7 @@ func (r *taskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	taskID := plan.TaskID.ValueString()
 	tflog.Debug(ctx, "Updating Ingestion task", map[string]any{"task_id": taskID})
 
-	if _, err := client.UpdateTask(client.NewApiUpdateTaskRequest(taskID, update)); err != nil {
+	if _, err := client.UpdateTask(client.NewApiUpdateTaskRequest(taskID, update), ingestionapi.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Ingestion task", "Could not update task "+taskID+": "+err.Error())
 		return
 	}
@@ -249,9 +248,8 @@ func (r *taskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	taskID := state.TaskID.ValueString()
 	tflog.Debug(ctx, "Deleting Ingestion task", map[string]any{"task_id": taskID})
 
-	if _, err := client.DeleteTask(client.NewApiDeleteTaskRequest(taskID)); err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteTask(client.NewApiDeleteTaskRequest(taskID), ingestionapi.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

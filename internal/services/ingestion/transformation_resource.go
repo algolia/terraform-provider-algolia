@@ -2,9 +2,9 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -149,8 +149,7 @@ func (r *transformationResource) Read(ctx context.Context, req resource.ReadRequ
 	transformationID := state.TransformationID.ValueString()
 	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Ingestion transformation not found; removing from state", map[string]any{"transformation_id": transformationID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -197,7 +196,7 @@ func (r *transformationResource) Update(ctx context.Context, req resource.Update
 	transformationID := plan.TransformationID.ValueString()
 	tflog.Debug(ctx, "Updating Ingestion transformation", map[string]any{"transformation_id": transformationID})
 
-	if _, err := client.UpdateTransformation(client.NewApiUpdateTransformationRequest(transformationID, update)); err != nil {
+	if _, err := client.UpdateTransformation(client.NewApiUpdateTransformationRequest(transformationID, update), ingestionapi.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Ingestion transformation", "Could not update transformation "+transformationID+": "+err.Error())
 		return
 	}
@@ -232,9 +231,8 @@ func (r *transformationResource) Delete(ctx context.Context, req resource.Delete
 	transformationID := state.TransformationID.ValueString()
 	tflog.Debug(ctx, "Deleting Ingestion transformation", map[string]any{"transformation_id": transformationID})
 
-	if _, err := client.DeleteTransformation(client.NewApiDeleteTransformationRequest(transformationID)); err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteTransformation(client.NewApiDeleteTransformationRequest(transformationID), ingestionapi.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

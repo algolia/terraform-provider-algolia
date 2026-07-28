@@ -2,9 +2,9 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -145,8 +145,7 @@ func (r *destinationResource) Read(ctx context.Context, req resource.ReadRequest
 	destinationID := state.DestinationID.ValueString()
 	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Ingestion destination not found; removing from state", map[string]any{"destination_id": destinationID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -190,7 +189,7 @@ func (r *destinationResource) Update(ctx context.Context, req resource.UpdateReq
 	destinationID := plan.DestinationID.ValueString()
 	tflog.Debug(ctx, "Updating Ingestion destination", map[string]any{"destination_id": destinationID})
 
-	if _, err := client.UpdateDestination(client.NewApiUpdateDestinationRequest(destinationID, update)); err != nil {
+	if _, err := client.UpdateDestination(client.NewApiUpdateDestinationRequest(destinationID, update), ingestionapi.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Ingestion destination", "Could not update destination "+destinationID+": "+err.Error())
 		return
 	}
@@ -225,9 +224,8 @@ func (r *destinationResource) Delete(ctx context.Context, req resource.DeleteReq
 	destinationID := state.DestinationID.ValueString()
 	tflog.Debug(ctx, "Deleting Ingestion destination", map[string]any{"destination_id": destinationID})
 
-	if _, err := client.DeleteDestination(client.NewApiDeleteDestinationRequest(destinationID)); err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteDestination(client.NewApiDeleteDestinationRequest(destinationID), ingestionapi.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

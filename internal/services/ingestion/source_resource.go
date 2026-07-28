@@ -2,9 +2,9 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -141,8 +141,7 @@ func (r *sourceResource) Read(ctx context.Context, req resource.ReadRequest, res
 	sourceID := state.SourceID.ValueString()
 	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Ingestion source not found; removing from state", map[string]any{"source_id": sourceID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -192,7 +191,7 @@ func (r *sourceResource) Update(ctx context.Context, req resource.UpdateRequest,
 	sourceID := plan.SourceID.ValueString()
 	tflog.Debug(ctx, "Updating Ingestion source", map[string]any{"source_id": sourceID})
 
-	if _, err := client.UpdateSource(client.NewApiUpdateSourceRequest(sourceID, update)); err != nil {
+	if _, err := client.UpdateSource(client.NewApiUpdateSourceRequest(sourceID, update), ingestionapi.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Ingestion source", "Could not update source "+sourceID+": "+err.Error())
 		return
 	}
@@ -227,9 +226,8 @@ func (r *sourceResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	sourceID := state.SourceID.ValueString()
 	tflog.Debug(ctx, "Deleting Ingestion source", map[string]any{"source_id": sourceID})
 
-	if _, err := client.DeleteSource(client.NewApiDeleteSourceRequest(sourceID)); err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteSource(client.NewApiDeleteSourceRequest(sourceID), ingestionapi.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

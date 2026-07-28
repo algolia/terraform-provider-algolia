@@ -2,9 +2,9 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -141,8 +141,7 @@ func (r *authenticationResource) Read(ctx context.Context, req resource.ReadRequ
 	authenticationID := state.AuthenticationID.ValueString()
 	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Ingestion authentication not found; removing from state", map[string]any{"authentication_id": authenticationID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -186,7 +185,7 @@ func (r *authenticationResource) Update(ctx context.Context, req resource.Update
 	authenticationID := plan.AuthenticationID.ValueString()
 	tflog.Debug(ctx, "Updating Ingestion authentication", map[string]any{"authentication_id": authenticationID})
 
-	if _, err := client.UpdateAuthentication(client.NewApiUpdateAuthenticationRequest(authenticationID, update)); err != nil {
+	if _, err := client.UpdateAuthentication(client.NewApiUpdateAuthenticationRequest(authenticationID, update), ingestionapi.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Ingestion authentication", "Could not update authentication "+authenticationID+": "+err.Error())
 		return
 	}
@@ -221,9 +220,8 @@ func (r *authenticationResource) Delete(ctx context.Context, req resource.Delete
 	authenticationID := state.AuthenticationID.ValueString()
 	tflog.Debug(ctx, "Deleting Ingestion authentication", map[string]any{"authentication_id": authenticationID})
 
-	if _, err := client.DeleteAuthentication(client.NewApiDeleteAuthenticationRequest(authenticationID)); err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteAuthentication(client.NewApiDeleteAuthenticationRequest(authenticationID), ingestionapi.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
