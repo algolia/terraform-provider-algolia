@@ -24,6 +24,7 @@ MODE="mirror"
 CONFIG_FILE="${TF_CLI_CONFIG_FILE:-$HOME/.terraformrc}"
 MIRROR_DIR="$HOME/.terraform.d/plugins"
 BIN_DIR="$HOME/.terraform.d/algolia-dev"
+TMP=""  # scratch dir for --dev-overrides; created on demand, removed on exit
 
 err()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 info() { printf '==> %s\n' "$*"; }
@@ -65,7 +66,11 @@ done
 
 # --- prerequisite checks ---
 command -v gh >/dev/null 2>&1 || err "the GitHub CLI (gh) is required: https://cli.github.com"
-gh auth status >/dev/null 2>&1 || err "gh is not authenticated - run: gh auth login"
+# A token in the environment (e.g. GH_TOKEN in CI) counts as authenticated;
+# otherwise fall back to gh's stored credentials.
+if [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ] && ! gh auth status >/dev/null 2>&1; then
+  err "gh is not authenticated - run: gh auth login (or set GH_TOKEN)"
+fi
 
 # --- detect platform ---
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -171,15 +176,15 @@ install_mirror() {
 
 install_dev() {
   command -v unzip >/dev/null 2>&1 || err "unzip is required for --dev-overrides"
-  local tmp; tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' EXIT
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
   info "Downloading $ZIP..."
-  gh release download "$TAG" --repo "$REPO" --pattern "$ZIP" --dir "$tmp" --clobber \
+  gh release download "$TAG" --repo "$REPO" --pattern "$ZIP" --dir "$TMP" --clobber \
     || err "download failed (is $ZIP an asset of $TAG?)"
   info "Installing binary to $BIN_DIR"
-  mkdir -p "$BIN_DIR" "$tmp/unz"
-  unzip -o -q "$tmp/$ZIP" -d "$tmp/unz"
-  local bin; bin=$(find "$tmp/unz" -type f -name 'terraform-provider-algolia*' | head -1)
+  mkdir -p "$BIN_DIR" "$TMP/unz"
+  unzip -o -q "$TMP/$ZIP" -d "$TMP/unz"
+  local bin; bin=$(find "$TMP/unz" -type f -name 'terraform-provider-algolia*' | head -1)
   [ -n "$bin" ] || err "provider binary not found inside $ZIP"
   install -m 0755 "$bin" "$BIN_DIR/terraform-provider-algolia"
   write_config_block "$(dev_block)"
