@@ -269,6 +269,7 @@ func hydrateRuleModel(indexName string, ruleResp *search.Rule, rawParams json.Ra
 	var diags diag.Diagnostics
 
 	priorConsequence := model.Consequence
+	priorValidity := model.Validity
 
 	model.ID = types.StringValue(ruleResourceID(indexName, ruleResp.GetObjectID()))
 	model.IndexName = types.StringValue(indexName)
@@ -303,7 +304,7 @@ func hydrateRuleModel(indexName string, ruleResp *search.Rule, rawParams json.Ra
 	}
 	model.Consequence = consequence
 
-	validity, validityDiags := flattenValidity(ruleResp.GetValidity())
+	validity, validityDiags := flattenValidity(ruleResp.GetValidity(), priorValidity)
 	diags.Append(validityDiags...)
 	if diags.HasError() {
 		return diags
@@ -485,11 +486,12 @@ func expandConsequence(list types.List) (*search.Consequence, json.RawMessage, d
 // consequence block list. rawParams is the untouched `consequence.params`
 // document from the API response, used instead of the typed params so
 // unmodelled search parameters survive. prior is the model's existing
-// consequence list; it is needed because `params_json` and `hide` are Optional
-// and not Computed, so their planned values are the configuration verbatim and
-// have to be carried over rather than replaced with a re-encoded equivalent.
+// consequence list; it is needed because `params_json`, `hide` and `user_data`
+// are Optional and not Computed, so their planned values are the configuration
+// verbatim and have to be carried over rather than replaced with a re-encoded
+// equivalent.
 func flattenConsequence(consequence search.Consequence, rawParams json.RawMessage, prior types.List) (types.List, diag.Diagnostics) {
-	paramsValue := flattenConsequenceParams(rawParams, priorConsequenceString(prior, "params_json"))
+	paramsValue := flattenConsequenceParams(rawParams, priorBlockString(prior, 0, "params_json"))
 
 	promoteValues := make([]attr.Value, 0, len(consequence.GetPromote()))
 	for _, promote := range consequence.GetPromote() {
@@ -527,15 +529,9 @@ func flattenConsequence(consequence search.Consequence, rawParams json.RawMessag
 	}
 	hideSet := nullableStringSet(priorConsequenceSet(prior, "hide"), hidden)
 
-	userDataValue := types.StringNull()
-	if consequence.UserData != nil {
-		raw, err := json.Marshal(consequence.UserData)
-		if err != nil {
-			var diags diag.Diagnostics
-			diags.AddError("Error encoding consequence user_data", err.Error())
-			return types.ListNull(consequenceModelType), diags
-		}
-		userDataValue = types.StringValue(string(raw))
+	userDataValue, userDataDiags := flattenConsequenceUserData(consequence.UserData, priorBlockString(prior, 0, "user_data"))
+	if userDataDiags.HasError() {
+		return types.ListNull(consequenceModelType), userDataDiags
 	}
 
 	redirectValue := types.StringNull()
@@ -600,12 +596,15 @@ func expandValidity(list types.List) ([]search.TimeRange, diag.Diagnostics) {
 	return validity, diags
 }
 
-func flattenValidity(validity []search.TimeRange) (types.List, diag.Diagnostics) {
+// flattenValidity converts the API time ranges into the validity block list.
+// prior is the model's existing validity list, matched element by element: the
+// block is a list, so the API's Nth window is the configuration's Nth window.
+func flattenValidity(validity []search.TimeRange, prior types.List) (types.List, diag.Diagnostics) {
 	values := make([]attr.Value, 0, len(validity))
-	for _, rng := range validity {
+	for i, rng := range validity {
 		value, diags := types.ObjectValue(validityModelAttrTypes, map[string]attr.Value{
-			"from":  nullableUnixTimestamp(rng.From),
-			"until": nullableUnixTimestamp(rng.Until),
+			"from":  flattenTimestamp(rng.From, priorBlockString(prior, i, "from")),
+			"until": flattenTimestamp(rng.Until, priorBlockString(prior, i, "until")),
 		})
 		if diags.HasError() {
 			return types.ListNull(validityModelType), diags
@@ -637,10 +636,23 @@ func nullableBool(value *bool) types.Bool {
 	return types.BoolValue(*value)
 }
 
-func nullableUnixTimestamp(value *int64) types.String {
+// flattenTimestamp renders an API Unix second as an RFC3339 timestamp. `from`
+// and `until` are Optional and not Computed, so the applied value has to equal
+// the configured string, and rendering the second as UTC rewrites a configured
+// zone offset and drops configured sub-second digits - Terraform rejects both as
+// an inconsistent result even though the instant is unchanged. The configured
+// string is therefore kept whenever it denotes the second the API returned.
+func flattenTimestamp(value *int64, prior types.String) types.String {
 	if value == nil {
 		return types.StringNull()
 	}
+
+	if !prior.IsNull() && !prior.IsUnknown() {
+		if parsed, err := time.Parse(time.RFC3339, prior.ValueString()); err == nil && parsed.Unix() == *value {
+			return prior
+		}
+	}
+
 	return types.StringValue(time.Unix(*value, 0).UTC().Format(time.RFC3339))
 }
 
@@ -694,14 +706,16 @@ func priorConsequenceSet(prior types.List, name string) types.Set {
 	return setValue
 }
 
-// priorConsequenceString reads a string attribute out of the model's existing
-// single-element consequence block.
-func priorConsequenceString(prior types.List, name string) types.String {
-	if prior.IsNull() || prior.IsUnknown() || len(prior.Elements()) == 0 {
+// priorBlockString reads a string attribute out of the model's existing value
+// for a nested block, at the given element index. It falls back to null when
+// there is no such element: data source reads and imports start from an empty
+// model, and the API can return more blocks than the configuration has.
+func priorBlockString(prior types.List, index int, name string) types.String {
+	if prior.IsNull() || prior.IsUnknown() || index >= len(prior.Elements()) {
 		return types.StringNull()
 	}
 
-	objValue, ok := prior.Elements()[0].(types.Object)
+	objValue, ok := prior.Elements()[index].(types.Object)
 	if !ok {
 		return types.StringNull()
 	}
@@ -731,8 +745,44 @@ func flattenConsequenceParams(rawParams json.RawMessage, prior types.String) typ
 	return types.StringValue(string(rawParams))
 }
 
+// flattenConsequenceUserData renders the API's userData document into user_data.
+// The attribute is Optional and not Computed just like params_json, so the
+// applied value has to equal the configured string, and re-encoding the decoded
+// document does not reproduce it: keys come back in sorted order, the configured
+// whitespace is gone, and - because decoding into search.Consequence turns every
+// JSON number into a float64 - an integer above 2^53 comes back with different
+// digits. Whenever the configured document and the stored one carry the same
+// data, the configured string is therefore kept verbatim.
+//
+// The digit case depends on how jsonEqual compares: it decodes both sides into
+// `any`, so the configured integer and the re-encoded one lose precision to the
+// same float64 and compare equal, which is what lets the configured string win.
+// Teaching jsonEqual to decode numbers as json.Number would make the two sides
+// unequal here, and this function would go back to storing the re-encoded digits.
+func flattenConsequenceUserData(userData map[string]any, prior types.String) (types.String, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if userData == nil {
+		return types.StringNull(), diags
+	}
+
+	encoded, err := json.Marshal(userData)
+	if err != nil {
+		diags.AddError("Error encoding consequence user_data", err.Error())
+		return types.StringNull(), diags
+	}
+
+	if !prior.IsNull() && !prior.IsUnknown() && jsonEqual([]byte(prior.ValueString()), encoded) {
+		return prior, diags
+	}
+
+	return types.StringValue(string(encoded)), diags
+}
+
 // jsonEqual reports whether two JSON documents carry the same data, ignoring
-// key order and whitespace.
+// key order and whitespace. Numbers are compared as float64, which
+// flattenConsequenceUserData relies on; read its comment before making this
+// stricter.
 func jsonEqual(left, right []byte) bool {
 	var leftDecoded, rightDecoded any
 	if err := json.Unmarshal(left, &leftDecoded); err != nil {

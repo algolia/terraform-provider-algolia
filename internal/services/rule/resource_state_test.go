@@ -323,6 +323,230 @@ func TestHydrateRuleModelParamsIgnoresFormatting(t *testing.T) {
 	}
 }
 
+// decodeRule builds a rule the way getRuleRaw does, by decoding a response
+// payload into the typed model. Tests that care about what the typed decode does
+// to a value have to go through it rather than through search.NewRule.
+func decodeRule(t *testing.T, payload string) *search.Rule {
+	t.Helper()
+
+	var rule search.Rule
+	if err := json.Unmarshal([]byte(payload), &rule); err != nil {
+		t.Fatalf("decode rule payload: %v", err)
+	}
+
+	return &rule
+}
+
+func TestHydrateRuleModelUserDataPreservesConfiguredDigits(t *testing.T) {
+	// A campaign ID beyond 2^53: the typed decode turns it into a float64, so
+	// re-encoding the decoded document rewrites its digits.
+	configured := `{"campaignID":12345678901234567890}`
+
+	ruleResp := decodeRule(t, `{"objectID":"rule-1","consequence":{"userData":`+configured+`}}`)
+
+	reEncoded, err := json.Marshal(ruleResp.GetConsequence().UserData)
+	if err != nil {
+		t.Fatalf("encode user data: %v", err)
+	}
+	if string(reEncoded) == configured {
+		t.Fatalf("re-encoding is lossless for %s, so this test proves nothing", configured)
+	}
+
+	model := RuleResourceModel{
+		Consequence: consequenceValue(map[string]attr.Value{
+			"user_data": types.StringValue(configured),
+		}),
+	}
+
+	if diags := hydrateRuleModel("products", ruleResp, nil, &model); diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	got := consequenceAttr(t, model.Consequence, "user_data")
+	if !got.Equal(types.StringValue(configured)) {
+		t.Errorf("user_data = %s, want the configured digits verbatim %s (re-encoded as %s)", got, configured, reEncoded)
+	}
+}
+
+func TestHydrateRuleModelUserData(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		prior   types.String
+		want    types.String
+	}{
+		{
+			name:    "key order is not imposed on the configured document",
+			payload: `{"banner":"promo","alt":"x"}`,
+			prior:   types.StringValue(`{"banner":"promo","alt":"x"}`),
+			want:    types.StringValue(`{"banner":"promo","alt":"x"}`),
+		},
+		{
+			name:    "configured whitespace survives",
+			payload: `{"banner":"promo"}`,
+			prior:   types.StringValue("{\n  \"banner\": \"promo\"\n}"),
+			want:    types.StringValue("{\n  \"banner\": \"promo\"\n}"),
+		},
+		{
+			name:    "drift replaces the configured document",
+			payload: `{"banner":"sale"}`,
+			prior:   types.StringValue(`{"banner":"promo"}`),
+			want:    types.StringValue(`{"banner":"sale"}`),
+		},
+		{
+			name:    "without a prior the API document is stored",
+			payload: `{"banner":"promo"}`,
+			prior:   types.StringNull(),
+			want:    types.StringValue(`{"banner":"promo"}`),
+		},
+		{
+			name:    "absent user data stays null",
+			payload: "",
+			prior:   types.StringValue(`{"banner":"promo"}`),
+			want:    types.StringNull(),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			consequence := `{}`
+			if test.payload != "" {
+				consequence = `{"userData":` + test.payload + `}`
+			}
+			ruleResp := decodeRule(t, `{"objectID":"rule-1","consequence":`+consequence+`}`)
+
+			model := RuleResourceModel{
+				Consequence: consequenceValue(map[string]attr.Value{"user_data": test.prior}),
+			}
+
+			if diags := hydrateRuleModel("products", ruleResp, nil, &model); diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+
+			if got := consequenceAttr(t, model.Consequence, "user_data"); !got.Equal(test.want) {
+				t.Errorf("user_data = %s, want %s", got, test.want)
+			}
+		})
+	}
+}
+
+func validityValue(entries ...[2]attr.Value) types.List {
+	values := make([]attr.Value, 0, len(entries))
+	for _, entry := range entries {
+		values = append(values, types.ObjectValueMust(validityModelAttrTypes, map[string]attr.Value{
+			"from":  entry[0],
+			"until": entry[1],
+		}))
+	}
+
+	return types.ListValueMust(validityModelType, values)
+}
+
+func TestValidityRoundTripPreservesConfiguredTimestamps(t *testing.T) {
+	// Every case is a valid RFC3339 window, which is all the schema asks for.
+	// Expanding then flattening has to give the configured strings back: `from`
+	// and `until` are Optional and not Computed, so anything else is an apply
+	// Terraform rejects as an inconsistent result.
+	tests := []struct {
+		name       string
+		configured types.List
+	}{
+		{
+			name:       "zone offset is not rewritten to UTC",
+			configured: validityValue([2]attr.Value{types.StringValue("2030-01-01T00:00:00+02:00"), types.StringValue("2030-01-02T00:00:00+02:00")}),
+		},
+		{
+			name:       "sub-second precision is not dropped",
+			configured: validityValue([2]attr.Value{types.StringValue("2030-01-01T00:00:00.500Z"), types.StringValue("2030-01-02T00:00:00.250Z")}),
+		},
+		{
+			name:       "UTC timestamps round trip unchanged",
+			configured: validityValue([2]attr.Value{types.StringValue("2030-01-01T00:00:00Z"), types.StringValue("2030-01-02T00:00:00Z")}),
+		},
+		{
+			name:       "a window with only one bound round trips",
+			configured: validityValue([2]attr.Value{types.StringValue("2030-01-01T00:00:00-05:00"), types.StringNull()}),
+		},
+		{
+			name: "each window keeps its own timestamps",
+			configured: validityValue(
+				[2]attr.Value{types.StringValue("2030-01-01T00:00:00+02:00"), types.StringValue("2030-01-02T00:00:00Z")},
+				[2]attr.Value{types.StringValue("2031-06-01T12:30:00.750-07:00"), types.StringValue("2031-06-02T12:30:00+09:00")},
+			),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ranges, diags := expandValidity(test.configured)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics expanding: %v", diags)
+			}
+
+			flattened, diags := flattenValidity(ranges, test.configured)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics flattening: %v", diags)
+			}
+
+			if !flattened.Equal(test.configured) {
+				t.Errorf("validity = %s, want the configured timestamps verbatim %s", flattened, test.configured)
+			}
+		})
+	}
+}
+
+func TestFlattenValidityWithoutMatchingPrior(t *testing.T) {
+	from := int64(1893456000)  // 2030-01-01T00:00:00Z
+	until := int64(1893542400) // 2030-01-02T00:00:00Z
+	ranges := []search.TimeRange{*search.NewTimeRange(search.WithTimeRangeFrom(from), search.WithTimeRangeUntil(until))}
+
+	tests := []struct {
+		name  string
+		prior types.List
+	}{
+		{
+			name:  "no prior at all, as on import",
+			prior: types.ListNull(validityModelType),
+		},
+		{
+			name:  "prior window points at another instant, so it is drift",
+			prior: validityValue([2]attr.Value{types.StringValue("2029-01-01T00:00:00Z"), types.StringValue("2029-01-02T00:00:00Z")}),
+		},
+		{
+			name:  "prior window is null on both bounds",
+			prior: validityValue([2]attr.Value{types.StringNull(), types.StringNull()}),
+		},
+	}
+
+	want := validityValue([2]attr.Value{types.StringValue("2030-01-01T00:00:00Z"), types.StringValue("2030-01-02T00:00:00Z")})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			flattened, diags := flattenValidity(ranges, test.prior)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+
+			if !flattened.Equal(want) {
+				t.Errorf("validity = %s, want %s", flattened, want)
+			}
+		})
+	}
+}
+
+func TestExpandValidityRejectsInvalidTimestamp(t *testing.T) {
+	// A lowercase zone designator is not RFC3339; it has to fail at expand with a
+	// clear diagnostic rather than be silently reinterpreted.
+	configured := validityValue([2]attr.Value{types.StringValue("2030-01-01T00:00:00z"), types.StringNull()})
+
+	_, diags := expandValidity(configured)
+	if !diags.HasError() {
+		t.Fatal("expected a diagnostic for a non-RFC3339 validity.from")
+	}
+	if got := diags.Errors()[0].Summary(); got != "Invalid validity.from" {
+		t.Errorf("summary = %q, want %q", got, "Invalid validity.from")
+	}
+}
+
 func TestHydrateRuleModel(t *testing.T) {
 	ruleResp := search.NewRule(
 		"rule-1",

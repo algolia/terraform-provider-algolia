@@ -148,6 +148,40 @@ func TestAccRuleResource_unmodelledFields(t *testing.T) {
 	})
 }
 
+// TestAccRuleResource_nonCanonicalFormats covers the two configured formats
+// Algolia does not store as written: a validity window in local time (the API
+// keeps a Unix second) and a user_data document whose keys are not in sorted
+// order (the API's response decodes into a map). Both are valid configuration for
+// Optional, non-Computed attributes, so re-rendering either from the response
+// fails the apply with "Provider produced inconsistent result after apply".
+//
+// There is deliberately no import step. `terraform import` has no configuration
+// to preserve, so it stores Algolia's own representation - a UTC timestamp, and
+// sorted keys - and ImportStateVerify would report that as a mismatch. For
+// validity that is irreducible: a zone offset is not recoverable from a Unix
+// second.
+func TestAccRuleResource_nonCanonicalFormats(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-test-rule-formats-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	objectID := "brand-rule"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRuleDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRuleNonCanonicalFormatsConfig(indexName, objectID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_rule.test", "consequence.0.user_data", `{"banner":"promo","alt":"x"}`),
+					resource.TestCheckResourceAttr("algolia_rule.test", "validity.0.from", "2030-01-01T00:00:00+02:00"),
+					resource.TestCheckResourceAttr("algolia_rule.test", "validity.0.until", "2030-01-02T00:00:00.500+02:00"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccRuleResource_drift(t *testing.T) {
 	testAccRequireCredentials(t)
 
@@ -346,6 +380,38 @@ resource "algolia_rule" "test" {
   }
 }
 `, indexName, objectID, description, paramsJSON)
+}
+
+// testAccRuleNonCanonicalFormatsConfig writes user_data with its keys in an
+// order a re-encode would not produce ("alt" sorts before "banner"), and a
+// validity window in a +02:00 offset with sub-second precision.
+func testAccRuleNonCanonicalFormatsConfig(indexName, objectID string) string {
+	return fmt.Sprintf(`
+resource "algolia_index" "test" {
+  name                = %[1]q
+  deletion_protection = false
+}
+
+resource "algolia_rule" "test" {
+  index_name = algolia_index.test.name
+  object_id  = %[2]q
+
+  conditions {
+    pattern   = "shoes"
+    anchoring = "contains"
+  }
+
+  consequence {
+    params_json = "{\"query\":\"sneakers\"}"
+    user_data   = "{\"banner\":\"promo\",\"alt\":\"x\"}"
+  }
+
+  validity {
+    from  = "2030-01-01T00:00:00+02:00"
+    until = "2030-01-02T00:00:00.500+02:00"
+  }
+}
+`, indexName, objectID)
 }
 
 func testAccRuleUnmodelledFieldsConfig(indexName, objectID string) string {

@@ -2,11 +2,11 @@ package rule
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -106,8 +106,7 @@ func (r *ruleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Rule not found; removing from state", map[string]any{"index_name": indexName, "object_id": objectID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -179,8 +178,7 @@ func (r *ruleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	deleteResp, err := r.client.DeleteRule(r.client.NewApiDeleteRuleRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -189,8 +187,7 @@ func (r *ruleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 
 	if err := waitForRuleTask(ctx, r.client, indexName, deleteResp.TaskID); err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 

@@ -2,10 +2,10 @@ package allowedsources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -79,17 +79,18 @@ func (r *allowedSourcesResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	current, err := r.client.GetSources(search.WithContext(ctx))
-	if err != nil {
-		resp.Diagnostics.AddError("Error reading allowed sources", "Could not read back allowed sources after creation: "+err.Error())
-		return
-	}
-
+	// No read-back here, deliberately. `source` is Required, so the set Terraform
+	// applies has to equal the set it planned, and ReplaceSources has already
+	// accepted exactly that set. Refreshing from GetSources could therefore only
+	// agree with the plan, in which case it changes nothing, or disagree with it -
+	// a normalised address, an entry added out of band between the two calls, or
+	// eventual consistency returning a short list - in which case it writes a
+	// value Terraform rejects outright with "Provider produced inconsistent result
+	// after apply". Genuine divergence is surfaced by the next Read as ordinary
+	// drift instead, which is a diff the operator can act on rather than a failed
+	// apply. Same reasoning as abtest.flattenABTestComputed, which refreshes only
+	// computed attributes and leaves the Required ones as planned.
 	plan.ID = types.StringValue(r.appID)
-	resp.Diagnostics.Append(flattenSources(ctx, current, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -140,17 +141,8 @@ func (r *allowedSourcesResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	current, err := r.client.GetSources(search.WithContext(ctx))
-	if err != nil {
-		resp.Diagnostics.AddError("Error reading allowed sources", "Could not read back allowed sources after update: "+err.Error())
-		return
-	}
-
+	// See Create for why the applied state is the plan rather than a read-back.
 	plan.ID = types.StringValue(r.appID)
-	resp.Diagnostics.Append(flattenSources(ctx, current, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -226,16 +218,10 @@ func (r *allowedSourcesResource) replaceSources(ctx context.Context, sources []s
 // of band or by an earlier destroy that failed part-way through this loop.
 func deleteSources(values []string, deleteSource func(value string) error) error {
 	for _, value := range values {
-		if err := deleteSource(value); err != nil && !isSourceNotFound(err) {
+		if err := deleteSource(value); err != nil && !algoliaerr.IsNotFound(err) {
 			return fmt.Errorf("could not delete source %q: %w", value, err)
 		}
 	}
 
 	return nil
-}
-
-func isSourceNotFound(err error) bool {
-	var apiErr *search.APIError
-
-	return errors.As(err, &apiErr) && apiErr.Status == 404
 }
