@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	recommendapi "github.com/algolia/algoliasearch-client-go/v4/algolia/recommend"
 )
@@ -107,8 +109,10 @@ func apiErrorMessage(body []byte, status int) string {
 	var payload struct {
 		Message *string `json:"message"`
 	}
+	// A structured `message` is no more trustworthy than the raw body: it is the
+	// shape an intermediary's error page uses too, and it is just as unbounded.
 	if err := json.Unmarshal(body, &payload); err == nil && payload.Message != nil {
-		return *payload.Message
+		return summarizeErrorBody([]byte(*payload.Message))
 	}
 	if len(body) > 0 {
 		return summarizeErrorBody(body)
@@ -124,13 +128,16 @@ func apiErrorMessage(body []byte, status int) string {
 const maxErrorBodyLen = 2048
 
 // summarizeErrorBody makes an arbitrary response body safe to put in a
-// diagnostic: newlines collapse to spaces so it cannot forge extra log lines,
-// invalid UTF-8 is dropped, and the result is truncated.
+// diagnostic: control characters collapse to spaces so it cannot forge extra log
+// lines or emit terminal escapes, invalid UTF-8 is dropped, and truncation lands on
+// a rune boundary.
 func summarizeErrorBody(body []byte) string {
 	// Drop invalid sequences first: strings.Map turns an invalid byte into
 	// U+FFFD, which is itself valid UTF-8 and would then survive the cleanup.
 	flattened := strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' {
+		// Covers \n, \r, \t, \v, \f and ANSI escapes, all of which end up in CI
+		// logs where they can forge lines or move the cursor.
+		if unicode.IsControl(r) {
 			return ' '
 		}
 
@@ -138,9 +145,16 @@ func summarizeErrorBody(body []byte) string {
 	}, strings.ToValidUTF8(string(body), ""))
 
 	msg := strings.TrimSpace(flattened)
-	if len(msg) > maxErrorBodyLen {
-		return msg[:maxErrorBodyLen] + "... (truncated)"
+	if len(msg) <= maxErrorBodyLen {
+		return msg
 	}
 
-	return msg
+	// Truncate on a rune boundary; slicing raw bytes could split a multi-byte
+	// rune and reintroduce the invalid UTF-8 removed just above.
+	cut := maxErrorBodyLen
+	for cut > 0 && !utf8.RuneStart(msg[cut]) {
+		cut--
+	}
+
+	return msg[:cut] + "... (truncated)"
 }

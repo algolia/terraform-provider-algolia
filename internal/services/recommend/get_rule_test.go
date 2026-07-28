@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/call"
 	recommendapi "github.com/algolia/algoliasearch-client-go/v4/algolia/recommend"
@@ -218,6 +219,31 @@ func TestSummarizeErrorBody(t *testing.T) {
 	t.Run("a structured message is preferred over the raw body", func(t *testing.T) {
 		if got := apiErrorMessage([]byte(`{"message":"Rule not found","status":404}`), 404); got != "Rule not found" {
 			t.Errorf("apiErrorMessage = %q, want the structured message", got)
+		}
+	})
+
+	// The structured `message` path used to return the value unbounded, which is
+	// the shape most intermediaries emit, so the bound was bypassed in practice.
+	t.Run("a structured message is bounded too", func(t *testing.T) {
+		body, err := json.Marshal(map[string]string{"message": strings.Repeat("B", maxErrorBodyLen*2) + "\ninjected"})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		got := apiErrorMessage(body, 500)
+		if len(got) > maxErrorBodyLen+len("... (truncated)") {
+			t.Errorf("apiErrorMessage returned %d bytes, want it bounded near %d", len(got), maxErrorBodyLen)
+		}
+		if strings.ContainsAny(got, "\n\r") {
+			t.Error("apiErrorMessage kept a newline from the structured message")
+		}
+	})
+
+	t.Run("truncation lands on a rune boundary", func(t *testing.T) {
+		// Multi-byte runes so a byte-wise cut would split one and reintroduce
+		// invalid UTF-8 -- exactly what ToValidUTF8 above removed.
+		got := summarizeErrorBody([]byte(strings.Repeat("é", maxErrorBodyLen)))
+		if !utf8.ValidString(got) {
+			t.Errorf("summarizeErrorBody produced invalid UTF-8: %q", got)
 		}
 	})
 }

@@ -203,6 +203,9 @@ func TestAccIndexResource_importAppliesDeletionProtectionDefault(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		// This test is about delete semantics, so assert the index really is gone
+		// at the end rather than trusting the framework's own teardown.
+		CheckDestroy: testAccCheckIndexDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccIndexResourceConfig_basic(indexName),

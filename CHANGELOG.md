@@ -1,5 +1,10 @@
 ## 0.1.0 (Unreleased)
 
+FEATURES:
+
+- **New Resource:** `algolia_index` - Manage Algolia index settings
+- **New Data Source:** `algolia_index` - Read Algolia index settings
+
 BREAKING CHANGES:
 
 - `algolia_index`, `algolia_virtual_index`: `terraform destroy` is now refused when
@@ -14,21 +19,24 @@ BREAKING CHANGES:
   behaviour was already sending incomplete credentials to Algolia, so this surfaces a pre-existing
   fault rather than introducing one.
 
+- `algolia_ingestion_source`: `input` is now marked sensitive, on both the resource and the data
+  source, because several source types carry credentials in it - a `docker` source's `configuration`
+  is an arbitrary map holding the connector's own secrets, and `csv`/`json` take a `url` that is
+  commonly presigned - and the Ingestion API returns `input` unredacted. A configuration that passes
+  the value onward, for example `output "x" { value = algolia_ingestion_source.s.input }`, now fails
+  until the consumer is also marked `sensitive`. The value is still stored in plaintext in state;
+  marking it sensitive only stops it rendering in plan output and logs.
+
 BUG FIXES:
 
-- `algolia_ingestion_source`: `input` is now marked sensitive, on both the resource and the data
-  source. Several source types carry credentials in it - a `docker` source's `configuration` is an
-  arbitrary map holding the connector's own secrets, and `csv`/`json` take a `url` that is commonly
-  presigned - and the Ingestion API returns `input` unredacted. Before the union fix above, a
-  `docker` or `shopify` source's `input` was corrupted to `{"url":""}` on the way out, which
-  incidentally kept the credentials out of state; now that it round-trips faithfully, the value
-  reaches state and plan output and must be redacted. It is still stored in plaintext in state.
 - `algolia_recommend_rule`: an unrecognised error response body is now flattened, truncated and
   UTF-8 sanitised before it reaches a diagnostic, instead of being interpolated whole. A `200 null`
   response is now an error rather than a rule with an empty `object_id`.
 - `algolia_ingestion_source`: `input` is omitted from an update request when it has not changed,
   so a source whose type has no update variant in the Algolia client (`bigcommerce`) can still have
-  its other fields changed. Only an actual attempt to change such a source's `input` is refused.
+  its other fields changed. Only an actual attempt to change such a source's `input` is refused. The
+  comparison is semantic and treats an array of scalars as unordered, so a change that only reorders
+  such an array is not sent to the API.
 - `algolia_index`: **fixed silent deletion of protected indexes.** `terraform import` left
   `deletion_protection` unset, and the delete guard read that absent value as `false`, so an
   `import` followed by `destroy` permanently deleted the index and its records even with
@@ -36,8 +44,10 @@ BUG FIXES:
   (`true`), and both `algolia_index` and `algolia_virtual_index` refuse to delete on an absent value.
 - `algolia_index`: **`terraform import` now imports index settings.** Import previously produced a
   state containing only the index name and timestamps: all ten settings blocks were read from the
-  API and then discarded, so the plan immediately after an import was never clean and existing
-  indexes could not be adopted. `ranking.relevancy_strictness` and
+  API and then discarded, so existing indexes could not be adopted. Imported state populates every
+  settings block while an applied state leaves blocks absent from the configuration null, so the
+  first plan after importing an index whose configuration omits blocks proposes removing them; it
+  converges on one apply. `ranking.relevancy_strictness` and
   `performance.allow_compression_of_integer_array` remain unimportable because Algolia accepts both
   on write but omits them from `GetSettings`.
 - `algolia_api_key`: fixed `Provider produced inconsistent result after apply` on `referers` and
@@ -55,7 +65,7 @@ BUG FIXES:
   unrecognised type is a loud error rather than a silent substitution.
 - `algolia_agent_provider`: fixed `azure_openai` being unusable. `azure_endpoint`,
   `azure_deployment` and `api_version` were dropped by the same union defect, so every apply failed
-  and orphaned a provider. `openai_compatible` no longer loses `default_model`.
+  and orphaned a provider.
 - `algolia_recommend_rule`: **fixed the resource being entirely non-functional.** Every non-delete
   code path called `GetRecommendRule`, which cannot decode the API's numeric `_metadata.lastUpdate`
   into the client's `*string` field, so create, read, update, plan and import all failed, while
