@@ -1,7 +1,9 @@
 package querysuggestions
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -30,9 +32,21 @@ func querySuggestionsResourceSchema() schema.Schema {
 				},
 			},
 			"languages": schema.SetAttribute{
-				Description: "Languages used to deduplicate singular and plural suggestions.",
+				Description: "Languages used to deduplicate singular and plural suggestions. Mutually " +
+					"exclusive with `all_languages`, which covers every supported language instead of an " +
+					"explicit list.",
 				Optional:    true,
 				ElementType: types.StringType,
+			},
+			"all_languages": schema.BoolAttribute{
+				Description: "Whether to deduplicate singular and plural suggestions in every language the " +
+					"Query Suggestions API supports. The API models `languages` as either a list of languages " +
+					"or the boolean `true`, so this attribute is the boolean form of `languages` and the two " +
+					"are mutually exclusive.",
+				Optional: true,
+				Validators: []validator.Bool{
+					boolvalidator.ConflictsWith(path.MatchRoot("languages")),
+				},
 			},
 			"exclude": schema.SetAttribute{
 				Description: "Words and patterns to exclude from the Query Suggestions index.",

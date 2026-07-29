@@ -18,9 +18,16 @@ func querySuggestionsDataSourceSchema() datasourceschema.Schema {
 				Required:    true,
 			},
 			"languages": datasourceschema.SetAttribute{
-				Description: "Languages used to deduplicate singular and plural suggestions.",
+				Description: "Languages used to deduplicate singular and plural suggestions. Null when the " +
+					"configuration deduplicates in every supported language, which `all_languages` reports.",
 				Computed:    true,
 				ElementType: types.StringType,
+			},
+			"all_languages": datasourceschema.BoolAttribute{
+				Description: "Whether singular and plural suggestions are deduplicated in every supported " +
+					"language. Set instead of `languages` when the configuration uses the boolean form of the " +
+					"API's `languages` field.",
+				Computed: true,
 			},
 			"exclude": datasourceschema.SetAttribute{
 				Description: "Words and patterns to exclude from the Query Suggestions index.",

@@ -27,6 +27,13 @@ func buildConfigurationWithIndex(model *QuerySuggestionsResourceModel) (*suggest
 
 	config := suggestions.NewConfigurationWithIndex(sourceIndices, model.IndexName.ValueString())
 
+	// `languages` is a union in the API: either a list of languages or the
+	// boolean `true` for all of them. The two arms are mutually exclusive at plan
+	// time (see the schema's ConflictsWith), so at most one of them is set here.
+	if !model.AllLanguages.IsNull() && !model.AllLanguages.IsUnknown() {
+		config.Languages = suggestions.BoolAsLanguages(model.AllLanguages.ValueBool())
+	}
+
 	if !model.Languages.IsNull() && !model.Languages.IsUnknown() {
 		values := setStrings(model.Languages)
 		sort.Strings(values)
@@ -79,7 +86,7 @@ func hydrateQuerySuggestionsModel(resp *suggestions.ConfigurationResponse, model
 	model.ID = types.StringValue(querySuggestionsResourceID(resp.GetIndexName()))
 	model.IndexName = types.StringValue(resp.GetIndexName())
 	model.SourceIndices = sourceIndices
-	model.Languages = nullableStringSet(model.Languages, languagesFromAPI(resp.GetLanguages()))
+	model.Languages, model.AllLanguages = flattenLanguages(resp.GetLanguages(), model.Languages, model.AllLanguages)
 	model.Exclude = nullableStringSet(model.Exclude, resp.GetExclude())
 	model.EnablePersonalization = types.BoolValue(resp.GetEnablePersonalization())
 	model.AllowSpecialCharacters = types.BoolValue(resp.GetAllowSpecialCharacters())
@@ -441,6 +448,21 @@ func computedInt64(value *int32, prior types.Int64) types.Int64 {
 	return prior
 }
 
+// flattenLanguages splits the API's `languages` union across the two attributes
+// that model it: the list arm feeds `languages`, the boolean arm feeds
+// `all_languages`. Both are Optional and not Computed, so they follow the same
+// prior-decides contract as nullableStringSet: `all_languages = false` and an
+// omitted `all_languages` mean the same thing to the API, and the API reports
+// neither back, so an absent boolean arm keeps the prior value instead of being
+// normalized to false.
+func flattenLanguages(value suggestions.Languages, priorLanguages types.Set, priorAll types.Bool) (types.Set, types.Bool) {
+	if all, ok := value.GetActualInstance().(bool); ok && all {
+		return nullableStringSet(priorLanguages, nil), types.BoolValue(true)
+	}
+
+	return nullableStringSet(priorLanguages, languagesFromAPI(value)), nullableBool(priorAll)
+}
+
 func languagesFromAPI(value suggestions.Languages) []string {
 	actual := value.GetActualInstance()
 	if actual == nil {
@@ -451,4 +473,16 @@ func languagesFromAPI(value suggestions.Languages) []string {
 		return nil
 	}
 	return languages
+}
+
+// nullableBool keeps an Optional, non-Computed bool the API did not report at
+// its prior value, so an omitted attribute stays null and an explicit `false`
+// stays false. An unknown prior - a resource Terraform has not applied yet -
+// resolves to null, since unknown values cannot be written to state.
+func nullableBool(prior types.Bool) types.Bool {
+	if prior.IsUnknown() {
+		return types.BoolNull()
+	}
+
+	return prior
 }
