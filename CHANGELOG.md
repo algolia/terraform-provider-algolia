@@ -182,11 +182,17 @@ NOTES:
   history repeatedly did not. `algolia_api_key` is deliberately excluded: its object ID is a secret
   and its diagnostics route through dedicated redaction.
 - **Known issue, found while testing the above and not yet fixed:** `terraform destroy` can report
-  success while an index survives. Deleting an index that an A/B test still references is accepted by
-  Algolia with a task ID, but the queued deletion never applies and `algolia_index`'s wait does not
-  notice, so Terraform reports the destroy as done and the index is still there. Deleting the index
-  afterwards works once nothing references it. This is why an opt-in "stop instead of delete" option
-  for `algolia_ab_test` was prepared and then withheld: it makes this path reachable in ordinary use.
+  success while an index survives. Deleting an index that is or recently was part of an A/B test is
+  accepted by Algolia, the deletion task reaches `published`, and the index is still there.
+  `algolia_index` waits for that task and the wait behaves correctly, so nothing anywhere reports a
+  problem. Deleting the index again later succeeds once nothing references it.
+  This is reachable on an ordinary `terraform destroy` of an A/B test declared alongside its indexes,
+  not only in some edge case: it was observed on repeated acceptance runs, each leaving its indexes
+  behind while reporting success. Before the task-wait fix above, the same situation surfaced loudly
+  as `403 cannot delete with an index under AB testing index as destination` and failed the destroy;
+  now the destroy succeeds and the index quietly remains, which is a better outcome for the A/B test
+  and a worse one for the index. It is also why an opt-in "stop instead of delete" option for
+  `algolia_ab_test` was prepared and then withheld, since that option would make the window wider.
 - The provider's `crawler_user_id` and `crawler_api_key` arguments are deprecated. No crawler
   resource or data source exists and none is planned (descoped 2026-07-18), so both configure
   nothing. They are deprecated rather than removed so that a configuration already setting them keeps

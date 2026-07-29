@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -49,9 +50,6 @@ func TestAccABTestResource_basic(t *testing.T) {
 				),
 			},
 			{
-				// variants/metrics can't be perfectly reconstructed from
-				// GetABTest's enriched response (see flattenABTestImport),
-				// so they're excluded from the byte-for-byte comparison.
 				ResourceName:      "algolia_ab_test.test",
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -67,8 +65,65 @@ func TestAccABTestResource_basic(t *testing.T) {
 				// that has been running does recover it, which is the case that matters.
 				ImportStateVerifyIgnore: []string{"metrics"},
 			},
+			{
+				// A real change must still replace. suppressEquivalentJSON runs ahead of
+				// RequiresReplace and aligns the planned value with state when the two
+				// documents carry the same data, so the failure mode to guard against is
+				// it swallowing an edit the operator meant. Changing a metric name is a
+				// genuine difference, and the plan has to say so.
+				Config: testAccABTestResourceConfigMetrics(name, endAt, `[{ name = "conversionRate" }]`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_ab_test.test", plancheck.ResourceActionReplace),
+					},
+				},
+				Check: resource.TestCheckResourceAttr("algolia_ab_test.test", "metrics", `[{"name":"conversionRate"}]`),
+			},
+			{
+				// ...and reformatting the same document must not. Same data, different
+				// whitespace and key order: the plan has to be empty.
+				Config: testAccABTestResourceConfigMetrics(name, endAt, "[{\n    name = \"conversionRate\"\n  }]"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
 		},
 	})
+}
+
+// testAccABTestResourceConfigMetrics is testAccABTestResourceConfig with the
+// metrics document under the caller's control, so a step can change it and assert
+// on the resulting plan.
+func testAccABTestResourceConfigMetrics(name, endAt, metrics string) string {
+	return fmt.Sprintf(`
+resource "algolia_index" "control" {
+  name                = %[1]q
+  deletion_protection = false
+}
+
+resource "algolia_index" "variant" {
+  name                = "%[1]s-variant"
+  deletion_protection = false
+}
+
+resource "algolia_ab_test" "test" {
+  name   = %[1]q
+  end_at = %[2]q
+
+  variants = jsonencode([
+    {
+      index             = algolia_index.control.name
+      trafficPercentage = 50
+    },
+    {
+      index             = algolia_index.variant.name
+      trafficPercentage = 50
+    },
+  ])
+
+  metrics = jsonencode(%[3]s)
+}
+`, name, endAt, metrics)
 }
 
 func TestAccABTestDataSource_basic(t *testing.T) {
