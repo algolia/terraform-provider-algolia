@@ -183,7 +183,12 @@ func createShapedVariants(variants []abtestingapi.Variant) []map[string]any {
 		if variant.Description != "" {
 			entry["description"] = variant.Description
 		}
-		if len(variant.CustomSearchParameters) > 0 {
+		// Present-but-empty is distinct from absent here, so this tests for nil
+		// rather than length. AddABTestsVariant is a union and its UnmarshalJSON
+		// picks the arm by whether `customSearchParameters` is present at all, so
+		// dropping an empty map would reconstruct a search-parameter variant as a
+		// plain one and stop matching a configuration that still declares it.
+		if variant.CustomSearchParameters != nil {
 			entry["customSearchParameters"] = variant.CustomSearchParameters
 		}
 

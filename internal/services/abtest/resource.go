@@ -12,6 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+const abTestKind = "A/B test"
+
 var (
 	_ resource.Resource                = &abTestResource{}
 	_ resource.ResourceWithConfigure   = &abTestResource{}
@@ -82,7 +84,7 @@ func createABTest(ctx context.Context, client *abtestingapi.APIClient, searchCli
 
 	createResp, err := client.AddABTests(client.NewApiAddABTestsRequest(addRequest), abtestingapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating A/B test", "Could not create A/B test "+plan.Name.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(abTestKind, plan.Name.ValueString()).Message(algoliaerr.Create, err))
 		return
 	}
 
@@ -166,7 +168,7 @@ func (r *abTestResource) Read(ctx context.Context, req resource.ReadRequest, res
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading A/B test", "Could not read A/B test "+strconv.Itoa(int(abTestID))+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(abTestKind, strconv.Itoa(int(abTestID))).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -204,7 +206,7 @@ func (r *abTestResource) Update(ctx context.Context, req resource.UpdateRequest,
 	abTestID := int32(plan.ABTestID.ValueInt64())
 	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID), abtestingapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading A/B test", "Could not read A/B test "+strconv.Itoa(int(abTestID))+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(abTestKind, strconv.Itoa(int(abTestID))).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -239,7 +241,7 @@ func (r *abTestResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting A/B test", "Could not delete A/B test "+strconv.Itoa(int(abTestID))+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(abTestKind, strconv.Itoa(int(abTestID))).Message(algoliaerr.Delete, err))
 		return
 	}
 
@@ -267,7 +269,7 @@ func (r *abTestResource) ImportState(ctx context.Context, req resource.ImportSta
 
 	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(int32(abTestID)), abtestingapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing A/B test", "Could not import A/B test "+req.ID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(abTestKind, req.ID).Message(algoliaerr.Import, err))
 		return
 	}
 

@@ -7,6 +7,7 @@ import (
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliawait"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // waitForABTestTask blocks until the search task an A/B test write queued has
@@ -32,8 +33,26 @@ import (
 // credentials, which cannot happen for a configured provider; it is tolerated
 // here rather than panicking, since skipping the wait only restores the previous
 // behaviour.
+//
+// A response carrying an index but no task ID is a different matter. TaskID is a
+// plain int64 in the generated client, so a zero is indistinguishable from a
+// field that failed to decode, and skipping the wait in that case would quietly
+// reintroduce the race this function exists to close. There is nothing useful to
+// fail on - the write itself already succeeded - so it is logged loudly instead of
+// passing silently.
 func waitForABTestTask(ctx context.Context, searchClient *search.APIClient, resp *abtestingapi.ABTestResponse) error {
-	if searchClient == nil || resp == nil || resp.TaskID == 0 || resp.Index == "" {
+	if searchClient == nil || resp == nil {
+		return nil
+	}
+
+	if resp.TaskID == 0 || resp.Index == "" {
+		if resp.Index != "" || resp.TaskID != 0 {
+			tflog.Warn(ctx, "A/B test response carried no task to wait for; skipping the wait", map[string]any{
+				"index":   resp.Index,
+				"task_id": resp.TaskID,
+			})
+		}
+
 		return nil
 	}
 

@@ -126,6 +126,34 @@ func TestFlattenABTestImport_ReducesVariantsToTheCreateShape(t *testing.T) {
 	}
 }
 
+// A variant created with an explicitly empty customSearchParameters is still a
+// search-parameter variant: AddABTestsVariant is a union whose UnmarshalJSON picks
+// the arm by whether the key is present at all. Dropping an empty map would
+// reconstruct it as a plain variant and stop matching a configuration that still
+// declares `customSearchParameters = {}`.
+func TestFlattenABTestImport_KeepsAnExplicitlyEmptyCustomSearchParameters(t *testing.T) {
+	abTest := enrichedABTest()
+	abTest.Variants[0].CustomSearchParameters = map[string]any{}
+
+	var model ABTestResourceModel
+	if diags := flattenABTestImport(abTest, &model); diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(model.Variants.ValueString()), &got); err != nil {
+		t.Fatalf("variants is not valid JSON: %v", err)
+	}
+
+	params, present := got[0]["customSearchParameters"]
+	if !present {
+		t.Fatalf("an explicitly empty customSearchParameters was dropped: %s", model.Variants.ValueString())
+	}
+	if decoded, ok := params.(map[string]any); !ok || len(decoded) != 0 {
+		t.Errorf("customSearchParameters = %v, want an empty object", params)
+	}
+}
+
 func TestFlattenABTestImport_PopulatesTimestamps(t *testing.T) {
 	var model ABTestResourceModel
 	if diags := flattenABTestImport(enrichedABTest(), &model); diags.HasError() {
