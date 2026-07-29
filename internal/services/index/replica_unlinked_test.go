@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
@@ -119,36 +118,6 @@ func TestVirtualIndexResourceImportState_failsOnUnlinkedIndex(t *testing.T) {
 	}
 	if got, want := resp.Diagnostics.Errors()[0].Summary(), "Index is not a virtual replica"; got != want {
 		t.Errorf("error summary = %q, want %q", got, want)
-	}
-}
-
-// TestReadVirtualIndexClassifiesUnlinked pins the tri-state contract the four
-// callers branch on.
-func TestReadVirtualIndexClassifiesUnlinked(t *testing.T) {
-	cases := []struct {
-		name string
-		body string
-		want virtualIndexState
-	}{
-		{name: "no primary reported", body: `{"replicas":[]}`, want: virtualIndexUnlinked},
-		{name: "empty primary reported", body: `{"primary":""}`, want: virtualIndexUnlinked},
-		{name: "primary reported", body: `{"primary":"tf-test-primary"}`, want: virtualIndexFound},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			r := &virtualIndexResource{client: newSettingsSearchClient(t, tc.body)}
-			model := VirtualIndexResourceModel{Name: types.StringValue("tf-test-replica")}
-
-			got, diags := r.readVirtualIndex(context.Background(), &model)
-
-			if diags.HasError() {
-				t.Fatalf("readVirtualIndex() diagnostics = %v, want none", diags)
-			}
-			if got != tc.want {
-				t.Errorf("readVirtualIndex() = %v, want %v", got, tc.want)
-			}
-		})
 	}
 }
 

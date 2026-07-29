@@ -17,7 +17,12 @@ func virtualIndexResourceSchema() schema.Schema {
 			"That is the same setting `algolia_index`'s `advanced.replicas` writes, and `algolia_index` " +
 			"writes it as a whole list: if you set `advanced.replicas` on the primary, include " +
 			"`virtual(<name>)` in it for every virtual replica you declare, or whichever resource " +
-			"applies last will unlink the ones its list omits. Unlinking a virtual replica empties it.",
+			"applies last will unlink the ones its list omits. Unlinking a virtual replica empties it.\n\n" +
+			"The `virtual(...)` form is also what distinguishes a virtual replica from a standard one: " +
+			"listing a replica under its plain name makes Algolia keep it as a standard replica and " +
+			"copy the primary index's records into it. This resource manages virtual replicas only, so " +
+			"it reports an error for an index Algolia holds as a standard replica - manage that with " +
+			"`algolia_index` instead.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "The name of the virtual replica index, without the virtual() wrapper.",

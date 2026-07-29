@@ -107,6 +107,9 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 		// ordinary drift: something else unlinked the replica during this apply.
 		resp.Diagnostics.AddError("Index is not a virtual replica", unlinkedVirtualIndexDetail(indexName, primaryIndexName))
 		return
+	case virtualIndexStandardReplica:
+		resp.Diagnostics.AddError("Index is a standard replica", standardReplicaDetail(indexName, primaryIndexName))
+		return
 	}
 
 	indexState := virtualToIndexModel(plan)
@@ -164,6 +167,23 @@ func (r *virtualIndexResource) Read(ctx context.Context, req resource.ReadReques
 		)
 		resp.State.RemoveResource(ctx)
 		return
+	case virtualIndexStandardReplica:
+		// Deliberately not an error and not a state removal. An error would fail
+		// every refresh, and so plan, apply and destroy with it - the same wedge the
+		// unlinked case above exists to avoid, and worse here because refresh runs
+		// before configuration is considered, so no edit to the primary's replicas
+		// could be applied past it. Removing it from state would make Terraform
+		// forget an index that now holds a full copy of the primary's records.
+		//
+		// Keeping it in state leaves Delete reachable, so deletion_protection still
+		// guards those records, and the warning repeats on every refresh until the
+		// primary's replicas list is corrected.
+		// The primary read back from the API, not the prior state's: reaching this
+		// case means Algolia reported one, and that is the index to name.
+		resp.Diagnostics.AddWarning(
+			"Virtual index is a standard replica",
+			standardReplicaDetail(state.Name.ValueString(), state.PrimaryIndexName.ValueString()),
+		)
 	}
 
 	indexRead := virtualToIndexModel(state)
@@ -218,6 +238,9 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	case virtualIndexUnlinked:
 		resp.Diagnostics.AddError("Index is not a virtual replica", unlinkedVirtualIndexDetail(indexName, primaryIndexName))
+		return
+	case virtualIndexStandardReplica:
+		resp.Diagnostics.AddError("Index is a standard replica", standardReplicaDetail(indexName, primaryIndexName))
 		return
 	}
 
@@ -292,6 +315,14 @@ func (r *virtualIndexResource) ImportState(ctx context.Context, req resource.Imp
 				"algolia_virtual_index. Import it as algolia_index instead.",
 		)
 		return
+	case virtualIndexStandardReplica:
+		// Also loud: adopting a standard replica as a virtual one would put a
+		// record-bearing index under a resource that promises a view.
+		resp.Diagnostics.AddError(
+			"Index is a standard replica",
+			standardReplicaDetail(req.ID, state.PrimaryIndexName.ValueString()),
+		)
+		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -306,11 +337,13 @@ type virtualIndexState int
 const (
 	// virtualIndexAbsent: no index by that name exists.
 	virtualIndexAbsent virtualIndexState = iota
-	// virtualIndexFound: the index exists and reports a primary index.
+	// virtualIndexFound: the index exists and the primary lists it as virtual.
 	virtualIndexFound
-	// virtualIndexUnlinked: the index exists but reports no primary index, so
-	// Algolia no longer considers it a replica of anything.
+	// virtualIndexUnlinked: the index exists but is a replica of nothing.
 	virtualIndexUnlinked
+	// virtualIndexStandardReplica: the index exists and is a replica, but a
+	// standard one, so Algolia has copied the primary's records into it.
+	virtualIndexStandardReplica
 )
 
 // readVirtualIndex populates model from the Algolia API, reporting what it
@@ -326,11 +359,44 @@ func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *Virt
 	}
 
 	virtualFromIndexModel(indexModel, model)
-	if model.PrimaryIndexName.IsNull() || model.PrimaryIndexName.ValueString() == "" {
+
+	indexName := model.Name.ValueString()
+	primaryIndexName := model.PrimaryIndexName.ValueString()
+	if model.PrimaryIndexName.IsNull() || primaryIndexName == "" {
 		return virtualIndexUnlinked, diags
 	}
 
-	return virtualIndexFound, diags
+	// A reported primary only proves this index is a replica of something. Whether
+	// it is a *virtual* replica is recorded in the primary's replicas list, so that
+	// has to be read too - see classifyReplicaLinkage.
+	linkage, err := classifyReplicaLinkage(ctx, r.client, primaryIndexName, indexName)
+	if err != nil {
+		diags.AddError(algoliaerr.Object(indexKind, primaryIndexName).Message(algoliaerr.Read, err))
+		return virtualIndexAbsent, diags
+	}
+
+	switch linkage {
+	case replicaLinkageVirtual:
+		return virtualIndexFound, diags
+	case replicaLinkageStandard:
+		return virtualIndexStandardReplica, diags
+	default:
+		// The primary is gone, or exists and no longer lists this index at all.
+		// Either way the replica link is not there.
+		return virtualIndexUnlinked, diags
+	}
+}
+
+// standardReplicaDetail explains an index that Algolia keeps as a standard
+// replica while Terraform manages it as a virtual one.
+func standardReplicaDetail(indexName, primaryIndexName string) string {
+	return "Index " + indexName + " is a standard replica of primary index " + primaryIndexName +
+		", not a virtual one: the primary lists it as " + indexName + " rather than " +
+		virtualReplicaName(indexName) + ". Algolia copies a primary index's records into a standard " +
+		"replica, so this index now holds its own copy of them instead of being a view over them.\n\n" +
+		"To restore it as a virtual replica, list it as " + virtualReplicaName(indexName) +
+		" in the primary index's replicas. To keep it as a standard replica, manage it with " +
+		"algolia_index rather than algolia_virtual_index."
 }
 
 // unlinkedVirtualIndexDetail explains an index that exists but has stopped

@@ -7,6 +7,20 @@ FEATURES:
 
 BREAKING CHANGES:
 
+- `algolia_virtual_index`: an index that Algolia keeps as a *standard* replica is no longer accepted
+  as a virtual one. A replica's own settings report a primary index whichever kind it is, so the
+  provider used to treat any replica as virtual; only the primary's `replicas` list distinguishes
+  them, via the `virtual(...)` form. `terraform import` and any apply now fail for such an index,
+  where they previously produced or refreshed state as though it were virtual, and `terraform plan`
+  warns on every refresh until the primary's list is corrected. This matters because Algolia copies
+  the primary's records into a standard replica: the previous behaviour silently placed a
+  record-bearing index under a resource documented as managing a view, with `deletion_protection`
+  guarding what its owner had every reason to believe was empty. Classifying a replica costs one
+  extra read of the primary index per refresh.
+- `algolia_virtual_index`: linking a replica whose plain name already appears in the primary's
+  `replicas` list now replaces that entry with the `virtual(...)` form instead of adding the virtual
+  form alongside it. A primary listing one index as a replica twice, once in each mode, is not a
+  state Algolia can honour.
 - `algolia_index`, `algolia_virtual_index`: `terraform destroy` is now refused when
   `deletion_protection` is absent from state, instead of proceeding as if it were `false`. State
   written by an earlier version's `terraform import` has no value for it, so destroying such a

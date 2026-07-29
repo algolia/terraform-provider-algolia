@@ -32,6 +32,52 @@ func isVirtualReplicaName(entry string) bool {
 	return strings.HasPrefix(entry, "virtual(") && strings.HasSuffix(entry, ")")
 }
 
+// replicaLinkage describes how a primary index lists one of its replicas.
+//
+// It exists because a replica's own settings cannot answer the question: Algolia
+// reports a primary index for standard and virtual replicas alike, so `primary`
+// being set proves only that the index is a replica of something. The
+// virtual(...) marker lives solely in the primary's replicas list, which is why
+// classifying a replica costs a second read.
+type replicaLinkage int
+
+const (
+	// replicaLinkagePrimaryAbsent: the primary index does not exist.
+	replicaLinkagePrimaryAbsent replicaLinkage = iota
+	// replicaLinkageUnlisted: the primary exists but does not list the replica.
+	replicaLinkageUnlisted
+	// replicaLinkageStandard: listed under its plain name, so Algolia keeps it as
+	// a standard replica and copies the primary's records into it.
+	replicaLinkageStandard
+	// replicaLinkageVirtual: listed as virtual(name), so it is a view over the
+	// primary's records.
+	replicaLinkageVirtual
+)
+
+// classifyReplicaLinkage reports how primaryIndexName lists replicaName.
+func classifyReplicaLinkage(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) (replicaLinkage, error) {
+	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
+	if err != nil {
+		if algoliaerr.IsNotFound(err) {
+			return replicaLinkagePrimaryAbsent, nil
+		}
+
+		return replicaLinkagePrimaryAbsent, err
+	}
+
+	virtualName := virtualReplicaName(replicaName)
+	for _, entry := range settings.Replicas {
+		switch entry {
+		case virtualName:
+			return replicaLinkageVirtual, nil
+		case replicaName:
+			return replicaLinkageStandard, nil
+		}
+	}
+
+	return replicaLinkageUnlisted, nil
+}
+
 // primaryReplicaLocks serialises the read-modify-write of one primary index's
 // replicas list.
 //
@@ -69,14 +115,33 @@ func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, p
 	}
 
 	virtualName := virtualReplicaName(replicaName)
-	replicas := append([]string(nil), settings.Replicas...)
-	for _, existing := range replicas {
-		if existing == virtualName {
-			return nil
+	replicas := make([]string, 0, len(settings.Replicas)+1)
+	alreadyVirtual := false
+	wasStandard := false
+
+	for _, existing := range settings.Replicas {
+		switch existing {
+		case virtualName:
+			alreadyVirtual = true
+			replicas = append(replicas, existing)
+		case replicaName:
+			// Listed under its plain name, which makes it a standard replica holding
+			// its own copy of the records. Drop that entry rather than adding the
+			// virtual form beside it: a primary listing the same index twice, once in
+			// each mode, is not a state Algolia can honour.
+			wasStandard = true
+		default:
+			replicas = append(replicas, existing)
 		}
 	}
 
-	replicas = append(replicas, virtualName)
+	if alreadyVirtual && !wasStandard {
+		return nil
+	}
+	if !alreadyVirtual {
+		replicas = append(replicas, virtualName)
+	}
+
 	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(replicas),
 	)), search.WithContext(ctx))
@@ -89,6 +154,13 @@ func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, p
 
 // removeVirtualReplicaLink drops replicaName from primaryIndexName's replicas
 // list, tolerating a primary that no longer exists.
+//
+// Both forms of the entry are removed, not just virtual(...). Algolia refuses
+// `deleteIndex` on an index that is still a replica, so leaving a plain-name entry
+// behind - which is how the primary lists this index once Algolia has converted it
+// to a standard replica - makes the delete that follows fail with a bare
+// "cannot apply the deleteIndex operation on a replica index". The index is going
+// away, so the primary must stop listing it in any form.
 func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
 	defer lockPrimaryReplicas(primaryIndexName)()
 
@@ -105,7 +177,7 @@ func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, pri
 	filtered := replicas[:0]
 	changed := false
 	for _, existing := range replicas {
-		if existing == virtualName {
+		if existing == virtualName || existing == replicaName {
 			changed = true
 			continue
 		}
