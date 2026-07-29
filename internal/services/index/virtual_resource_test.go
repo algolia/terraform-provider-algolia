@@ -3,6 +3,7 @@ package index_test
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -244,6 +245,121 @@ func TestAccVirtualIndexResource_undeclaredReplicasNotWritten(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccVirtualIndexResource_standardReplicaConversion covers a virtual replica
+// that Algolia has converted into a standard one, which happens when the primary
+// lists it under its plain name instead of the virtual(...) form. A standard
+// replica holds its own copy of the primary's records, so this is the case where
+// algolia_virtual_index would otherwise be quietly managing - and able to delete -
+// a record-bearing index while reporting no drift at all.
+func TestAccVirtualIndexResource_standardReplicaConversion(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	suffix := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	primaryIndexName := fmt.Sprintf("tf-virtual-standard-primary-%s", suffix)
+	replicaName := fmt.Sprintf("tf-virtual-standard-replica-%s", suffix)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccVirtualIndexProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVirtualIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 80),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, replicaName),
+				),
+			},
+			{
+				// Convert it to a standard replica behind Terraform's back. Refreshing
+				// must not fail: an error here would break plan, apply and destroy
+				// together, and unlike the unlinked case no configuration edit could be
+				// applied past it, because refresh runs first.
+				PreConfig: testAccConvertToStandardReplica(t, primaryIndexName, replicaName),
+				Config:    testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 80),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Still tracked, so Delete stays reachable and deletion_protection
+					// still guards the records now sitting in it.
+					resource.TestCheckResourceAttr("algolia_virtual_index.test", "name", replicaName),
+				),
+			},
+			{
+				// Adopting it must fail while it is a standard replica. This is the step
+				// that actually asserts the classification live: the refresh above stays
+				// silent apart from a warning, which the test framework cannot assert on,
+				// so without this step the whole test would still pass if the provider
+				// went back to treating every replica as virtual.
+				ResourceName:                         "algolia_virtual_index.test",
+				ImportState:                          true,
+				ImportStateId:                        replicaName,
+				ImportStateVerifyIdentifierAttribute: "name",
+				ExpectError:                          regexp.MustCompile(`standard replica`),
+			},
+			// The test ends with the index still a standard replica, so the
+			// framework's own destroy exercises deleting one: Algolia refuses
+			// deleteIndex while an index is still listed as a replica, and the
+			// primary lists this one under its plain name. CheckDestroy confirms it
+			// actually went away.
+		},
+	})
+}
+
+// TestAccVirtualIndexResource_standardReplicaRepair covers recovering from the
+// conversion: declaring the virtual(...) form on the primary must put the replica
+// back to being a view over its records.
+func TestAccVirtualIndexResource_standardReplicaRepair(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	suffix := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	primaryIndexName := fmt.Sprintf("tf-virtual-repair-primary-%s", suffix)
+	replicaName := fmt.Sprintf("tf-virtual-repair-replica-%s", suffix)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccVirtualIndexProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVirtualIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 80),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, replicaName),
+				),
+			},
+			{
+				PreConfig: testAccConvertToStandardReplica(t, primaryIndexName, replicaName),
+				Config:    testAccVirtualIndexDeclaredByPrimaryConfig(primaryIndexName, replicaName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, replicaName),
+				),
+			},
+		},
+	})
+}
+
+// testAccConvertToStandardReplica rewrites the primary's replicas list to name the
+// replica without the virtual() wrapper, which is what makes Algolia turn it into
+// a standard replica and copy the primary's records into it.
+func testAccConvertToStandardReplica(t *testing.T, primaryIndexName, replicaName string) func() {
+	t.Helper()
+
+	return func() {
+		t.Helper()
+
+		client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			t.Fatalf("create Algolia client: %v", err)
+		}
+
+		setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
+			search.WithIndexSettingsReplicas([]string{replicaName}),
+		)))
+		if err != nil {
+			t.Fatalf("convert replica %s to standard: %v", replicaName, err)
+		}
+
+		if _, err := client.WaitForTask(primaryIndexName, setResp.TaskID); err != nil {
+			t.Fatalf("wait for conversion of %s: %v", replicaName, err)
+		}
+	}
 }
 
 // testAccUnlinkVirtualReplica clears the primary index's replicas list, which is
