@@ -48,11 +48,12 @@ data "algolia_query_suggestions" "example" {
 
 ### Read-Only
 
+- `all_languages` (Boolean) Whether singular and plural suggestions are deduplicated in every supported language. Set instead of `languages` when the configuration uses the boolean form of the API's `languages` field.
 - `allow_special_characters` (Boolean) Whether suggestions containing special characters are included.
 - `enable_personalization` (Boolean) Whether personalized query suggestions are turned on.
 - `exclude` (Set of String) Words and patterns to exclude from the Query Suggestions index.
 - `id` (String) Terraform identifier in the form <index_name>.
-- `languages` (Set of String) Languages used to deduplicate singular and plural suggestions.
+- `languages` (Set of String) Languages used to deduplicate singular and plural suggestions. Null when the configuration deduplicates in every supported language, which `all_languages` reports.
 - `source_indices` (Block List) Source indices used to generate the Query Suggestions index. (see [below for nested schema](#nestedblock--source_indices))
 
 <a id="nestedblock--source_indices"></a>
