@@ -79,6 +79,24 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	declaredReplicas := replicasDeclared(ctx, req.Config, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !declaredReplicas {
+		settings.Replicas = nil
+	}
+
+	// Hold the primary's replica lock for any write that carries a replicas list,
+	// so it cannot interleave with algolia_virtual_index's read-modify-write of
+	// the same field: without this the check below could pass, a virtual replica
+	// link land, and this write then drop it unreported.
+	if settings.Replicas != nil {
+		defer lockPrimaryReplicas(indexName)()
+	}
+
+	warnDroppedVirtualReplicas(ctx, r.client, indexName, settings.Replicas, &resp.Diagnostics)
+
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Create, err))
@@ -126,6 +144,9 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	resp.Diagnostics.Append(preservePlannedValues(ctx, &planSnapshot, &plan)...)
+	if !declaredReplicas {
+		resp.Diagnostics.Append(preserveUndeclaredReplicas(planSnapshot.Advanced, &plan.Advanced)...)
+	}
 	restoreNullBlocks(&plan, nullBlocks)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -181,6 +202,22 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	declaredReplicas := replicasDeclared(ctx, req.Config, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !declaredReplicas {
+		settings.Replicas = nil
+	}
+
+	// See Create: a replicas-carrying write must not interleave with virtual
+	// replica linking.
+	if settings.Replicas != nil {
+		defer lockPrimaryReplicas(indexName)()
+	}
+
+	warnDroppedVirtualReplicas(ctx, r.client, indexName, settings.Replicas, &resp.Diagnostics)
+
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Update, err))
@@ -211,6 +248,9 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	resp.Diagnostics.Append(preservePlannedValues(ctx, &planSnapshot, &plan)...)
+	if !declaredReplicas {
+		resp.Diagnostics.Append(preserveUndeclaredReplicas(planSnapshot.Advanced, &plan.Advanced)...)
+	}
 	restoreNullBlocks(&plan, nullBlocks)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }

@@ -10,7 +10,14 @@ import (
 
 func virtualIndexResourceSchema() schema.Schema {
 	return schema.Schema{
-		Description: "Manages an Algolia virtual replica index and its settings.",
+		Description: "Manages an Algolia virtual replica index and its settings. A virtual replica shares " +
+			"the primary index's records and applies its own custom ranking, so it is a view over the " +
+			"primary rather than a copy of it.\n\n" +
+			"This resource adds a `virtual(<name>)` entry to the primary index's `replicas` setting. " +
+			"That is the same setting `algolia_index`'s `advanced.replicas` writes, and `algolia_index` " +
+			"writes it as a whole list: if you set `advanced.replicas` on the primary, include " +
+			"`virtual(<name>)` in it for every virtual replica you declare, or whichever resource " +
+			"applies last will unlink the ones its list omits. Unlinking a virtual replica empties it.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "The name of the virtual replica index, without the virtual() wrapper.",
@@ -20,8 +27,9 @@ func virtualIndexResourceSchema() schema.Schema {
 				},
 			},
 			"primary_index_name": schema.StringAttribute{
-				Description: "The primary index linked to this virtual replica.",
-				Required:    true,
+				Description: "The primary index linked to this virtual replica. Changing it forces " +
+					"replacement: Algolia has no way to move a replica between primaries.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
