@@ -52,10 +52,20 @@ func TestAccABTestResource_basic(t *testing.T) {
 				// variants/metrics can't be perfectly reconstructed from
 				// GetABTest's enriched response (see flattenABTestImport),
 				// so they're excluded from the byte-for-byte comparison.
-				ResourceName:            "algolia_ab_test.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"variants", "metrics"},
+				ResourceName:      "algolia_ab_test.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// `variants` is deliberately no longer ignored: import used to echo the
+				// enriched read shape and could not match a configuration, and verifying
+				// it is what proves it now emits the create shape.
+				//
+				// `metrics` still is, for a reason verified against the API rather than
+				// assumed. It is rebuilt from the per-variant metric *results*, and those
+				// only exist once a test has gathered data: a test created seconds ago
+				// reports `"metrics": null` on every variant. This test necessarily
+				// creates one, so there is nothing here to rebuild from. Importing a test
+				// that has been running does recover it, which is the case that matters.
+				ImportStateVerifyIgnore: []string{"metrics"},
 			},
 		},
 	})

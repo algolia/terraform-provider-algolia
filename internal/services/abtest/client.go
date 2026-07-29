@@ -13,6 +13,7 @@ import (
 	"fmt"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -25,6 +26,11 @@ type base struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+
+	// searchClient is the shared search client, needed because an A/B test write
+	// queues an ordinary search *index* task that has to be waited on before the
+	// indexes involved can be touched again. See waitForABTestTask.
+	searchClient *search.APIClient
 }
 
 // configure extracts appID/apiKey/analyticsRegion from a Configure request's
@@ -49,6 +55,7 @@ func (b *base) configure(providerData any) diag.Diagnostics {
 	b.appID = data.AppID
 	b.apiKey = data.APIKey
 	b.analyticsRegion = data.AnalyticsRegion
+	b.searchClient = data.Client
 
 	return diags
 }

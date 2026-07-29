@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -63,14 +64,14 @@ func (r *abTestResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	createABTest(ctx, client, &plan, resp)
+	createABTest(ctx, client, r.searchClient, &plan, resp)
 }
 
 // createABTest is the Create body, split out so that a unit test can drive it
 // against an httptest-backed client (see resource_create_test.go) - the client
 // base.client() builds always talks to the real, region-routed A/B Testing
 // API. Create itself only resolves the plan and the client.
-func createABTest(ctx context.Context, client *abtestingapi.APIClient, plan *ABTestResourceModel, resp *resource.CreateResponse) {
+func createABTest(ctx context.Context, client *abtestingapi.APIClient, searchClient *search.APIClient, plan *ABTestResourceModel, resp *resource.CreateResponse) {
 	addRequest, expandDiags := expandAddABTestsRequest(plan)
 	resp.Diagnostics.Append(expandDiags...)
 	if resp.Diagnostics.HasError() {
@@ -101,8 +102,26 @@ func createABTest(ctx context.Context, client *abtestingapi.APIClient, plan *ABT
 	plan.ID = types.StringValue(strconv.FormatInt(int64(createResp.AbTestID), 10))
 	plan.ABTestID = types.Int64Value(int64(createResp.AbTestID))
 	plan.Status = types.StringNull()
+	plan.CreatedAt = types.StringNull()
+	plan.UpdatedAt = types.StringNull()
+	plan.StoppedAt = types.StringNull()
+	// configuration is Computed, so it is unknown here whenever the configuration
+	// omitted it. Terraform rejects an applied state containing unknowns, and this
+	// state has to survive a failure of the wait or read-back below, so resolve it
+	// to null now; flattenABTestComputed fills in whatever Algolia chose.
+	if plan.Configuration.IsUnknown() {
+		plan.Configuration = types.StringNull()
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// AddABTests only queued the work. Wait for it before reading back, so the
+	// response describes a test that actually exists, and so a caller that goes on
+	// to touch the indexes involved is not blocked by a lock that has not lifted.
+	if err := waitForABTestTask(ctx, searchClient, createResp); err != nil {
+		resp.Diagnostics.AddError("Error creating A/B test", "Could not wait for A/B test creation to complete: "+err.Error())
 		return
 	}
 
@@ -211,14 +230,25 @@ func (r *abTestResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	abTestID := int32(state.ABTestID.ValueInt64())
+
 	tflog.Debug(ctx, "Deleting A/B test", map[string]any{"ab_test_id": abTestID})
 
-	if _, err := client.DeleteABTest(client.NewApiDeleteABTestRequest(abTestID), abtestingapi.WithContext(ctx)); err != nil {
+	deleteResp, err := client.DeleteABTest(client.NewApiDeleteABTestRequest(abTestID), abtestingapi.WithContext(ctx))
+	if err != nil {
 		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
 		resp.Diagnostics.AddError("Error deleting A/B test", "Could not delete A/B test "+strconv.Itoa(int(abTestID))+": "+err.Error())
+		return
+	}
+
+	// Wait for the queued deletion before returning. Without this, Terraform moves
+	// straight on to destroying the indexes this test referenced and Algolia
+	// rejects them with "cannot delete with an index under AB testing index as
+	// destination", failing the destroy and leaving the indexes behind.
+	if err := waitForABTestTask(ctx, r.searchClient, deleteResp); err != nil {
+		resp.Diagnostics.AddError("Error deleting A/B test", "Could not wait for A/B test deletion to complete: "+err.Error())
 	}
 }
 

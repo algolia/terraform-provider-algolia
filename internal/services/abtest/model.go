@@ -22,6 +22,9 @@ type ABTestResourceModel struct {
 	Metrics       types.String `tfsdk:"metrics"`
 	Configuration types.String `tfsdk:"configuration"`
 	Status        types.String `tfsdk:"status"`
+	CreatedAt     types.String `tfsdk:"created_at"`
+	UpdatedAt     types.String `tfsdk:"updated_at"`
+	StoppedAt     types.String `tfsdk:"stopped_at"`
 }
 
 // ABTestDataSourceModel describes the algolia_ab_test data source. Unlike
