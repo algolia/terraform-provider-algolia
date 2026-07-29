@@ -93,13 +93,19 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	planSnapshot := indexPlan
-	found, diags := r.readVirtualIndex(ctx, &plan)
+	readState, diags := r.readVirtualIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !found {
+	switch readState {
+	case virtualIndexAbsent:
 		resp.Diagnostics.AddError("Error reading index", "Virtual index "+indexName+" could not be found immediately after it was created.")
+		return
+	case virtualIndexUnlinked:
+		// The link was just written and confirmed, so losing it here is not
+		// ordinary drift: something else unlinked the replica during this apply.
+		resp.Diagnostics.AddError("Index is not a virtual replica", unlinkedVirtualIndexDetail(indexName, primaryIndexName))
 		return
 	}
 
@@ -120,16 +126,42 @@ func (r *virtualIndexResource) Read(ctx context.Context, req resource.ReadReques
 	indexState := virtualToIndexModel(state)
 	nullBlocks := captureNullBlocks(&indexState)
 	stateSnapshot := indexState
+	priorPrimaryIndexName := state.PrimaryIndexName.ValueString()
 
-	found, diags := r.readVirtualIndex(ctx, &state)
+	readState, diags := r.readVirtualIndex(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !found {
+	switch readState {
+	case virtualIndexAbsent:
 		// Deleted outside Terraform: drop it from state so the next plan recreates
 		// it, rather than wedging plan, apply and destroy behind a read error.
 		tflog.Warn(ctx, "Virtual index not found; removing from state", map[string]any{"name": state.Name.ValueString()})
+		resp.State.RemoveResource(ctx)
+		return
+	case virtualIndexUnlinked:
+		// The index is still there but is no longer a replica of anything, so it
+		// cannot be described by this resource's state. Drop it for the same
+		// reason as absence: raising an error here wedges plan, apply and destroy
+		// alike, leaving `state rm` as the only way out.
+		//
+		// The alternatives are worse. Nulling primary_index_name keeps the resource
+		// in state but forces replacement, which deletion_protection - on by
+		// default - then refuses, wedging apply again. Leaving state untouched
+		// produces no diff at all, so the link would never be repaired. Dropping it
+		// makes the next apply call Create, which re-links the replica in place.
+		//
+		// The cost is that Terraform no longer tracks an index that still exists,
+		// so a destroy run now would leave it behind. The warning says so, because
+		// the index holding no records of its own makes that easy to overlook.
+		resp.Diagnostics.AddWarning(
+			"Virtual index is no longer a virtual replica",
+			unlinkedVirtualIndexDetail(state.Name.ValueString(), priorPrimaryIndexName)+
+				"\n\nIt has been removed from Terraform state, so the next apply will re-link it. "+
+				"Note that the index itself still exists: because Terraform no longer tracks it, "+
+				"a destroy run before that apply will leave it in place.",
+		)
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -175,13 +207,17 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	planSnapshot := indexPlan
-	found, diags := r.readVirtualIndex(ctx, &plan)
+	readState, diags := r.readVirtualIndex(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !found {
+	switch readState {
+	case virtualIndexAbsent:
 		resp.Diagnostics.AddError("Error reading index", "Virtual index "+indexName+" could not be found immediately after it was updated.")
+		return
+	case virtualIndexUnlinked:
+		resp.Diagnostics.AddError("Index is not a virtual replica", unlinkedVirtualIndexDetail(indexName, primaryIndexName))
 		return
 	}
 
@@ -237,34 +273,78 @@ func (r *virtualIndexResource) ImportState(ctx context.Context, req resource.Imp
 	state.Name = types.StringValue(req.ID)
 	state.DeletionProtection = types.BoolValue(true)
 
-	found, diags := r.readVirtualIndex(ctx, &state)
+	readState, diags := r.readVirtualIndex(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !found {
+	switch readState {
+	case virtualIndexAbsent:
 		// Unlike Read, an import of an absent index must fail loudly.
 		resp.Diagnostics.AddError("Error reading index", "Could not read index "+req.ID+": the index does not exist.")
+		return
+	case virtualIndexUnlinked:
+		// Also loud: importing an index that is not a virtual replica is a
+		// mistake in the import command, not drift to be reconciled.
+		resp.Diagnostics.AddError(
+			"Index is not a virtual replica",
+			"Index "+req.ID+" exists but reports no primary index, so it cannot be managed as "+
+				"algolia_virtual_index. Import it as algolia_index instead.",
+		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// readVirtualIndex populates model from the Algolia API, reporting whether the
-// index exists. See readIndex for why absence is returned rather than raised.
-func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *VirtualIndexResourceModel) (bool, diag.Diagnostics) {
+// virtualIndexState describes what readVirtualIndex found. "Exists but is no
+// longer a virtual replica" is a state of its own because the right response to
+// it differs per caller: recoverable drift during Read, an outright failure
+// anywhere else.
+type virtualIndexState int
+
+const (
+	// virtualIndexAbsent: no index by that name exists.
+	virtualIndexAbsent virtualIndexState = iota
+	// virtualIndexFound: the index exists and reports a primary index.
+	virtualIndexFound
+	// virtualIndexUnlinked: the index exists but reports no primary index, so
+	// Algolia no longer considers it a replica of anything.
+	virtualIndexUnlinked
+)
+
+// readVirtualIndex populates model from the Algolia API, reporting what it
+// found. See readIndex for why absence is returned rather than raised.
+func (r *virtualIndexResource) readVirtualIndex(ctx context.Context, model *VirtualIndexResourceModel) (virtualIndexState, diag.Diagnostics) {
 	indexModel := virtualToIndexModel(*model)
 	found, diags := r.readIndexModel(ctx, &indexModel)
-	if diags.HasError() || !found {
-		return found, diags
+	if diags.HasError() {
+		return virtualIndexAbsent, diags
+	}
+	if !found {
+		return virtualIndexAbsent, diags
 	}
 
 	virtualFromIndexModel(indexModel, model)
 	if model.PrimaryIndexName.IsNull() || model.PrimaryIndexName.ValueString() == "" {
-		diags.AddError("Index is not a virtual replica", "The requested index does not report a primary index and cannot be managed as algolia_virtual_index.")
+		return virtualIndexUnlinked, diags
 	}
-	return true, diags
+
+	return virtualIndexFound, diags
+}
+
+// unlinkedVirtualIndexDetail explains an index that exists but has stopped
+// being a virtual replica, in terms of the thing that usually causes it.
+func unlinkedVirtualIndexDetail(indexName, primaryIndexName string) string {
+	detail := "Index " + indexName + " exists but reports no primary index, so Algolia no longer " +
+		"treats it as a virtual replica."
+	if primaryIndexName != "" {
+		detail += " Its replica link on primary index " + primaryIndexName + " appears to have been removed."
+	}
+
+	return detail + " The usual cause is a wholesale write of the primary index's replicas list - " +
+		"from algolia_index's advanced.replicas, or from outside Terraform - that omitted " +
+		virtualReplicaName(indexName) + "."
 }
 
 // readIndexModel populates model from the Algolia API, reporting whether the
@@ -291,65 +371,6 @@ func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexR
 	applyIndexMetadata(ctx, r.client, model)
 
 	return true, diags
-}
-
-func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
-	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
-	if err != nil {
-		return err
-	}
-
-	virtualName := "virtual(" + replicaName + ")"
-	replicas := append([]string(nil), settings.Replicas...)
-	for _, existing := range replicas {
-		if existing == virtualName {
-			return nil
-		}
-	}
-
-	replicas = append(replicas, virtualName)
-	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
-		search.WithIndexSettingsReplicas(replicas),
-	)), search.WithContext(ctx))
-	if err != nil {
-		return err
-	}
-
-	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
-}
-
-func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
-	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
-	if err != nil {
-		if algoliaerr.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-
-	virtualName := "virtual(" + replicaName + ")"
-	replicas := append([]string(nil), settings.Replicas...)
-	filtered := replicas[:0]
-	changed := false
-	for _, existing := range replicas {
-		if existing == virtualName {
-			changed = true
-			continue
-		}
-		filtered = append(filtered, existing)
-	}
-	if !changed {
-		return nil
-	}
-
-	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
-		search.WithIndexSettingsReplicas(filtered),
-	)), search.WithContext(ctx))
-	if err != nil {
-		return err
-	}
-
-	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
 }
 
 func restoreVirtualNullBlocks(model *VirtualIndexResourceModel, blocks nullBlocks) {

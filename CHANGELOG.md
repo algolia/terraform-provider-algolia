@@ -34,6 +34,35 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_virtual_index`: **an unlinked virtual replica no longer wedges Terraform.** When an index
+  still existed but had stopped being a virtual replica - which is what a wholesale write of the
+  primary's `replicas` list causes - `Read` raised an error. That error surfaced on every operation
+  that refreshes, so plan, apply and `terraform destroy` all failed together and `terraform state rm`
+  was the only way out. The resource is now dropped from state with a warning naming the likely
+  cause, so the next apply re-links the replica in place. Import still fails loudly on an index that
+  is not a virtual replica, since that is a mistaken import command rather than drift.
+- `algolia_virtual_index`: **several virtual replicas on one primary no longer lose each other's
+  links within one apply.** Each of them adds its own `virtual(...)` entry to the primary's single
+  `replicas` setting, and Terraform applies resources concurrently, so the writes interleaved and the
+  later ones dropped the earlier ones' entries. These read-modify-write cycles are now serialised per
+  primary index, within one provider process - which covers a single `terraform apply`. Concurrent
+  applies against the same primary from separate processes remain racy, as does the residual window
+  left by Algolia's writes being asynchronous and its reads eventually consistent.
+- `algolia_index`: **an `advanced.replicas` list that configuration never declared is no longer written
+  back.** The attribute is Optional+Computed, so when configuration omits it Terraform fills the plan
+  value from the last refresh - and expanding that plan sent the remembered list to Algolia on every
+  update. Any virtual replica linked since that refresh was silently unlinked, and unlinking empties
+  it. The list is now written only when configuration declares one, which is what Optional+Computed is
+  meant to express; otherwise the field is omitted and Algolia keeps what the index already has.
+- `algolia_index`: **a write to `advanced.replicas` no longer races virtual replica linking.** The
+  write is now taken under the same per-primary lock that serialises `algolia_virtual_index`, so a
+  replica link cannot land between the check below and the write that would drop it.
+- `algolia_index`: **a write to `advanced.replicas` that unlinks a virtual replica now warns.**
+  `advanced.replicas` and `algolia_virtual_index` write the same Algolia setting, so a list omitting
+  a `virtual(...)` entry silently unlinked it - which empties that replica, since it is a view over
+  the primary's records rather than a copy. The removal is still honoured, because an explicit list
+  is a complete declaration and merging omitted entries back in would make removal impossible to
+  express; it is no longer silent. Both schemas document the ownership rule.
 - `algolia_ab_test`: **fixed `terraform destroy` failing and leaving indexes behind.** Every write on
   the A/B Testing API returns a task ID and only queues the work, which the client's own model spells
   out: "A successful API response means that a task was added to a queue. It might not run

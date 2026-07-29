@@ -633,7 +633,14 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			},
 		},
 		"replicas": schema.ListAttribute{
-			Description: "List of replica index names.",
+			Description: "List of replica index names. Setting this declares the index's complete replica " +
+				"list: any replica Algolia currently reports but this list omits is unlinked. Virtual " +
+				"replicas appear here in their `virtual(<name>)` form, so if you also manage them with " +
+				"`algolia_virtual_index` resources - which add themselves to this same setting - list " +
+				"them here too. Applying a list that omits one unlinks it, and an unlinked virtual " +
+				"replica is empty, since it is a view over this index's records rather than a copy; the " +
+				"provider warns when a write would do that. Leave this unset to keep whatever replicas " +
+				"the index already has.",
 			Optional:    true,
 			Computed:    true,
 			ElementType: types.StringType,
