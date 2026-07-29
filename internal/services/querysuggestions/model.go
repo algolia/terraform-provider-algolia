@@ -10,6 +10,7 @@ type QuerySuggestionsResourceModel struct {
 	IndexName              types.String `tfsdk:"index_name"`
 	SourceIndices          types.List   `tfsdk:"source_indices"`
 	Languages              types.Set    `tfsdk:"languages"`
+	AllLanguages           types.Bool   `tfsdk:"all_languages"`
 	Exclude                types.Set    `tfsdk:"exclude"`
 	EnablePersonalization  types.Bool   `tfsdk:"enable_personalization"`
 	AllowSpecialCharacters types.Bool   `tfsdk:"allow_special_characters"`

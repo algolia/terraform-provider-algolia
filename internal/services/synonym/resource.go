@@ -21,6 +21,15 @@ type synonymResource struct {
 	client *search.APIClient
 }
 
+// synonymKind names this resource inside a diagnostic sentence.
+const synonymKind = "synonym"
+
+// synonymSubject identifies the synonym a diagnostic is about. Synonyms are
+// scoped to an index, so both parts are needed to name one unambiguously.
+func synonymSubject(indexName, objectID string) algoliaerr.Subject {
+	return algoliaerr.Object(synonymKind, objectID).In("index", indexName)
+}
+
 func NewResource() resource.Resource {
 	return &synonymResource{}
 }
@@ -69,18 +78,18 @@ func (r *synonymResource) Create(ctx context.Context, req resource.CreateRequest
 
 	saveResp, err := r.client.SaveSynonym(r.client.NewApiSaveSynonymRequest(indexName, objectID, hit), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating synonym", "Could not create synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Create, err))
 		return
 	}
 
 	if err := waitForSynonymTask(ctx, r.client, indexName, saveResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for synonym creation", "Could not confirm synonym creation: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(synonymKind, algoliaerr.Create, err))
 		return
 	}
 
 	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -110,7 +119,7 @@ func (r *synonymResource) Read(ctx context.Context, req resource.ReadRequest, re
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -140,18 +149,18 @@ func (r *synonymResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	saveResp, err := r.client.SaveSynonym(r.client.NewApiSaveSynonymRequest(indexName, objectID, hit), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating synonym", "Could not update synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Update, err))
 		return
 	}
 
 	if err := waitForSynonymTask(ctx, r.client, indexName, saveResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for synonym update", "Could not confirm synonym update: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(synonymKind, algoliaerr.Update, err))
 		return
 	}
 
 	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -179,7 +188,7 @@ func (r *synonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting synonym", "Could not delete synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Delete, err))
 		return
 	}
 
@@ -188,7 +197,7 @@ func (r *synonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 			return
 		}
 
-		resp.Diagnostics.AddError("Error waiting for synonym deletion", "Could not confirm synonym deletion: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(synonymKind, algoliaerr.Delete, err))
 	}
 }
 
@@ -201,7 +210,7 @@ func (r *synonymResource) ImportState(ctx context.Context, req resource.ImportSt
 
 	apiResp, err := r.client.GetSynonym(r.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing synonym", "Could not import synonym "+req.ID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(synonymKind, req.ID).Message(algoliaerr.Import, err))
 		return
 	}
 

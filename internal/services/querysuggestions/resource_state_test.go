@@ -1,11 +1,19 @@
 package querysuggestions
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 // sourceIndexObject builds a source_indices element, defaulting every attribute
@@ -310,6 +318,236 @@ func TestHydrateQuerySuggestionsModel_TopLevelSetsPriorDecidesEmptyResult(t *tes
 			t.Fatalf("exclude = %#v, want 1 element", model.Exclude.Elements())
 		}
 	})
+}
+
+// languagesModel returns a model whose `languages` union arms are set as given.
+// Every other attribute is explicitly typed, so the model can also be written
+// into a tfsdk.Config.
+func languagesModel(t *testing.T, languages types.Set, allLanguages types.Bool) QuerySuggestionsResourceModel {
+	t.Helper()
+
+	return QuerySuggestionsResourceModel{
+		ID:                     types.StringNull(),
+		IndexName:              types.StringValue("qs_products"),
+		SourceIndices:          types.ListValueMust(sourceIndexModelType, []attr.Value{sourceIndexObject(t, nil)}),
+		Languages:              languages,
+		AllLanguages:           allLanguages,
+		Exclude:                types.SetNull(types.StringType),
+		EnablePersonalization:  types.BoolNull(),
+		AllowSpecialCharacters: types.BoolNull(),
+	}
+}
+
+// TestBuildConfigurationWithIndex_LanguagesUnionArms checks that both arms of
+// the API's `languages` union reach the wire in their own shape: a JSON array
+// for `languages`, a JSON boolean for `all_languages`.
+func TestBuildConfigurationWithIndex_LanguagesUnionArms(t *testing.T) {
+	t.Run("list arm marshals as an array", func(t *testing.T) {
+		model := languagesModel(t, types.SetValueMust(types.StringType, []attr.Value{types.StringValue("en")}), types.BoolNull())
+
+		config, diags := buildConfigurationWithIndex(&model)
+		if diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if got := marshalLanguages(t, config.Languages); got != `["en"]` {
+			t.Fatalf("languages = %s, want [\"en\"]", got)
+		}
+	})
+
+	t.Run("boolean arm marshals as true", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolValue(true))
+
+		config, diags := buildConfigurationWithIndex(&model)
+		if diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if got := marshalLanguages(t, config.Languages); got != "true" {
+			t.Fatalf("languages = %s, want true", got)
+		}
+	})
+
+	t.Run("both arms unset omits languages", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolNull())
+
+		config, diags := buildConfigurationWithIndex(&model)
+		if diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if config.HasLanguages() {
+			t.Fatalf("languages = %#v, want omitted", config.Languages)
+		}
+	})
+}
+
+func marshalLanguages(t *testing.T, value *suggestions.Languages) string {
+	t.Helper()
+
+	if value == nil {
+		t.Fatal("languages = nil, want a value")
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshalling languages: %v", err)
+	}
+
+	return string(data)
+}
+
+// TestHydrateQuerySuggestionsModel_LanguagesUnion covers the flatten direction
+// of the union: whichever arm the API reports has to land in its own attribute
+// and leave the other one alone, since both are Optional and not Computed.
+func TestHydrateQuerySuggestionsModel_LanguagesUnion(t *testing.T) {
+	response := func(languages suggestions.Languages) *suggestions.ConfigurationResponse {
+		return suggestions.NewConfigurationResponse(
+			"app",
+			"qs_products",
+			[]suggestions.SourceIndex{*suggestions.NewSourceIndex("products")},
+			languages,
+			nil,
+			false,
+			false,
+		)
+	}
+
+	t.Run("list arm round-trips unchanged", func(t *testing.T) {
+		model := languagesModel(t, types.SetValueMust(types.StringType, []attr.Value{types.StringValue("en")}), types.BoolNull())
+
+		if diags := hydrateQuerySuggestionsModel(response(*suggestions.ArrayOfStringAsLanguages([]string{"en"})), &model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if elements := model.Languages.Elements(); len(elements) != 1 || elements[0].(types.String).ValueString() != "en" {
+			t.Fatalf("languages = %#v, want [en]", model.Languages)
+		}
+		if !model.AllLanguages.IsNull() {
+			t.Fatalf("all_languages = %#v, want null", model.AllLanguages)
+		}
+	})
+
+	t.Run("boolean arm round-trips unchanged", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolValue(true))
+
+		if diags := hydrateQuerySuggestionsModel(response(*suggestions.BoolAsLanguages(true)), &model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if model.AllLanguages.IsNull() || !model.AllLanguages.ValueBool() {
+			t.Fatalf("all_languages = %#v, want true", model.AllLanguages)
+		}
+		if !model.Languages.IsNull() {
+			t.Fatalf("languages = %#v, want null", model.Languages)
+		}
+	})
+
+	t.Run("both arms absent stay null", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolNull())
+
+		if diags := hydrateQuerySuggestionsModel(response(suggestions.Languages{}), &model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if !model.Languages.IsNull() {
+			t.Fatalf("languages = %#v, want null", model.Languages)
+		}
+		if !model.AllLanguages.IsNull() {
+			t.Fatalf("all_languages = %#v, want null", model.AllLanguages)
+		}
+	})
+
+	// `all_languages = false` and an omitted `all_languages` are the same thing
+	// to the API, which reports neither back: the configured false has to
+	// survive anyway, or Terraform rejects the apply.
+	t.Run("explicit false survives an unreported union", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolValue(false))
+
+		if diags := hydrateQuerySuggestionsModel(response(suggestions.Languages{}), &model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if model.AllLanguages.IsNull() || model.AllLanguages.ValueBool() {
+			t.Fatalf("all_languages = %#v, want false", model.AllLanguages)
+		}
+	})
+
+	t.Run("unknown prior resolves to null", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolUnknown())
+
+		if diags := hydrateQuerySuggestionsModel(response(suggestions.Languages{}), &model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		if !model.AllLanguages.IsNull() {
+			t.Fatalf("all_languages = %#v, want null", model.AllLanguages)
+		}
+	})
+}
+
+// TestQuerySuggestionsResourceSchema_AllLanguagesConflictsWithLanguages checks
+// that the two arms of the union are mutually exclusive at plan time rather than
+// failing against the API, since the union can only carry one of them.
+func TestQuerySuggestionsResourceSchema_AllLanguagesConflictsWithLanguages(t *testing.T) {
+	ctx := context.Background()
+
+	attribute, ok := querySuggestionsResourceSchema().Attributes["all_languages"].(schema.BoolAttribute)
+	if !ok {
+		t.Fatalf("all_languages = %#v, want a bool attribute", querySuggestionsResourceSchema().Attributes["all_languages"])
+	}
+	if !attribute.Optional || attribute.Computed {
+		t.Fatal("expected all_languages to be optional and not computed: the API reports nothing back for it")
+	}
+
+	validate := func(t *testing.T, model QuerySuggestionsResourceModel) diag.Diagnostics {
+		t.Helper()
+
+		var diags diag.Diagnostics
+		for _, v := range attribute.Validators {
+			response := &validator.BoolResponse{}
+			v.ValidateBool(ctx, validator.BoolRequest{
+				Path:           path.Root("all_languages"),
+				PathExpression: path.MatchRoot("all_languages"),
+				Config:         querySuggestionsConfig(ctx, t, model),
+				ConfigValue:    model.AllLanguages,
+			}, response)
+			diags.Append(response.Diagnostics...)
+		}
+
+		return diags
+	}
+
+	t.Run("both arms set is rejected", func(t *testing.T) {
+		model := languagesModel(t, types.SetValueMust(types.StringType, []attr.Value{types.StringValue("en")}), types.BoolValue(true))
+		if diags := validate(t, model); !diags.HasError() {
+			t.Fatal("expected setting both languages and all_languages to be rejected, got no error")
+		}
+	})
+
+	t.Run("all_languages alone is accepted", func(t *testing.T) {
+		model := languagesModel(t, types.SetNull(types.StringType), types.BoolValue(true))
+		if diags := validate(t, model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+	})
+
+	t.Run("languages alone is accepted", func(t *testing.T) {
+		model := languagesModel(t, types.SetValueMust(types.StringType, []attr.Value{types.StringValue("en")}), types.BoolNull())
+		if diags := validate(t, model); diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+	})
+}
+
+// querySuggestionsConfig binds model to the resource schema as a Terraform
+// configuration, which is what a ConflictsWith validator inspects.
+func querySuggestionsConfig(ctx context.Context, t *testing.T, model QuerySuggestionsResourceModel) tfsdk.Config {
+	t.Helper()
+
+	resourceSchema := querySuggestionsResourceSchema()
+	empty := tftypes.NewValue(resourceSchema.Type().TerraformType(ctx), nil)
+
+	// tfsdk.Config cannot be written through a model, so shape the raw value with
+	// a State first and hand its Raw to the Config.
+	seed := tfsdk.State{Schema: resourceSchema, Raw: empty}
+	if diags := seed.Set(ctx, &model); diags.HasError() {
+		t.Fatalf("seeding config: %v", diags)
+	}
+
+	return tfsdk.Config{Schema: resourceSchema, Raw: seed.Raw}
 }
 
 // TestBuildConfigurationWithIndex_ExplicitlyEmptySetsAreSent checks that an

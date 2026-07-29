@@ -34,6 +34,37 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_ab_test`: **fixed `terraform destroy` failing and leaving indexes behind.** Every write on
+  the A/B Testing API returns a task ID and only queues the work, which the client's own model spells
+  out: "A successful API response means that a task was added to a queue. It might not run
+  immediately." The provider ignored that task entirely, so destroying a test together with the
+  indexes it referenced raced: the test was already gone from the API while Algolia still rejected
+  deleting its indexes with `403 cannot delete with an index under AB testing index as destination`,
+  failing the destroy and leaving the indexes for the operator to clean up. Reproduced, then
+  confirmed by hand: the very same deletes succeeded once the queued task had run. Create and delete
+  now wait for it.
+- `algolia_ab_test`: **`terraform import` no longer proposes destroying a running experiment.**
+  Import used to store the enriched read response, which matches no reasonable configuration, and
+  left `metrics` null - and since `variants`, `metrics` and `configuration` are all Required or
+  `RequiresReplace`, the first plan after importing proposed a replace, discarding the statistics the
+  test had gathered. Import now reconstructs all three in the shape the create endpoint accepts:
+  `variants` keeps only the keys that endpoint reads and drops the runtime enrichment, and `metrics`
+  is rebuilt from the per-variant results, which carry each metric's `name` and `dimension`. A
+  difference in formatting or key order alone no longer forces a replace either.
+  One limit, verified against the API rather than assumed: metric results only exist once a test has
+  gathered data, so importing a test created moments ago still cannot recover `metrics`. Importing one
+  that has been running does.
+- `algolia_ab_test`: `configuration` is now `Optional+Computed`, because Algolia substitutes its own
+  when a test is created without one. State previously claimed a test had no configuration while the
+  API had applied an `errorCorrection` and an `isOutlier` filter, so an imported test could never
+  match one created from a configuration that omitted the attribute. A configured document is still
+  kept verbatim; only an absent one is filled from the response.
+- `algolia_ab_test`: `created_at`, `updated_at` and `stopped_at` are now exposed on the resource, not
+  just the data source.
+- `algolia_query_suggestions`: added `all_languages`, so the boolean arm of the API's `languages`
+  union is expressible. `languages` accepts either a list of language codes or `true` meaning every
+  supported language, and only the list was reachable. The two arms are mutually exclusive and
+  validated at plan time.
 - `algolia_api_key`: **fixed a `terraform apply` silently removing a key's tenant restriction.**
   `queryParameters` - the field that scopes a search key to specific filters or sources - had no
   attribute, and because `UpdateApiKey` resets what it is not sent, changing any unrelated field
@@ -140,6 +171,28 @@ BUG FIXES:
 
 NOTES:
 
+- Waiting for an Algolia operation to be applied now goes through one shared loop,
+  `internal/algoliawait`. The bounded deadline, backoff and interruptible sleep had been hand-copied
+  into six resources, which is how one of them ended up with a bare `time.Sleep` that made a
+  30-minute wait uncancellable. Seven call sites share it now. Three waiters that poll for a *state*
+  rather than a task keep their own shorter budgets, since they are a different shape.
+- The diagnostics a resource raises when an Algolia call fails are now built by
+  `internal/algoliaerr` rather than re-templated in each resource. The wording is unchanged; the
+  point is that a fix to one resource's error handling reaches its siblings, which this repository's
+  history repeatedly did not. `algolia_api_key` is deliberately excluded: its object ID is a secret
+  and its diagnostics route through dedicated redaction.
+- **Known issue, found while testing the above and not yet fixed:** `terraform destroy` can report
+  success while an index survives. Deleting an index that is or recently was part of an A/B test is
+  accepted by Algolia, the deletion task reaches `published`, and the index is still there.
+  `algolia_index` waits for that task and the wait behaves correctly, so nothing anywhere reports a
+  problem. Deleting the index again later succeeds once nothing references it.
+  This is reachable on an ordinary `terraform destroy` of an A/B test declared alongside its indexes,
+  not only in some edge case: it was observed on repeated acceptance runs, each leaving its indexes
+  behind while reporting success. Before the task-wait fix above, the same situation surfaced loudly
+  as `403 cannot delete with an index under AB testing index as destination` and failed the destroy;
+  now the destroy succeeds and the index quietly remains, which is a better outcome for the A/B test
+  and a worse one for the index. It is also why an opt-in "stop instead of delete" option for
+  `algolia_ab_test` was prepared and then withheld, since that option would make the window wider.
 - The provider's `crawler_user_id` and `crawler_api_key` arguments are deprecated. No crawler
   resource or data source exists and none is planned (descoped 2026-07-18), so both configure
   nothing. They are deprecated rather than removed so that a configuration already setting them keeps

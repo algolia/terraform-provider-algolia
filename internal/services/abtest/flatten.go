@@ -16,12 +16,16 @@ import (
 // API echoes back. Read uses flattenABTestRead instead, which also refreshes
 // the two attributes GetABTest returns in the shape they were submitted.
 //
-// It deliberately does NOT touch Variants/Metrics/Configuration: GetABTest's
-// response is enriched with runtime results (per-variant conversion/click
-// counts, significance, etc.) and its shape diverges from what was submitted
-// to AddABTests, so overwriting those fields would corrupt state with runtime
-// data and cause a perpetual diff against the user's configuration - see the
-// resource schema's description.
+// It deliberately does NOT touch Variants or Metrics: GetABTest's response is
+// enriched with runtime results (per-variant conversion/click counts,
+// significance, etc.) and its shape diverges from what was submitted to
+// AddABTests, so overwriting those fields would corrupt state with runtime data
+// and cause a perpetual diff against the user's configuration - see the resource
+// schema's description.
+//
+// Configuration is the exception, and only when the model has none: Algolia
+// substitutes its own when a test is created without one, so an absent value is
+// filled from the response while a configured one is left untouched.
 func flattenABTestComputed(abTest *abtestingapi.ABTest, model *ABTestResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -29,8 +33,52 @@ func flattenABTestComputed(abTest *abtestingapi.ABTest, model *ABTestResourceMod
 	model.ID = types.StringValue(id)
 	model.ABTestID = types.Int64Value(int64(abTest.AbTestID))
 	model.Status = types.StringValue(string(abTest.Status))
+	model.CreatedAt = types.StringValue(abTest.CreatedAt)
+	model.UpdatedAt = types.StringValue(abTest.UpdatedAt)
+
+	// stoppedAt is nullable and stays null while the test runs, so it is the one
+	// timestamp that legitimately has no value most of the time.
+	if stoppedAt := abTest.StoppedAt.Get(); stoppedAt != nil {
+		model.StoppedAt = types.StringValue(*stoppedAt)
+	} else {
+		model.StoppedAt = types.StringNull()
+	}
+
+	// configuration is Optional+Computed because Algolia substitutes its own when
+	// none is given. A configured document is kept verbatim, since the attribute is
+	// still the user's to own and re-encoding it would fail the apply; only an
+	// absent one is filled from the response. Doing that here rather than on the
+	// import path alone is what makes an imported test comparable with one created
+	// from a configuration that omitted the attribute: both then hold what the
+	// server chose.
+	if model.Configuration.IsNull() || model.Configuration.IsUnknown() {
+		configuration, configDiags := encodeConfiguration(abTest.Configuration)
+		diags.Append(configDiags...)
+		if diags.HasError() {
+			return diags
+		}
+		model.Configuration = configuration
+	}
 
 	return diags
+}
+
+// encodeConfiguration renders an A/B test configuration into the JSON-encoded
+// string the schema holds, or null when the API reported none.
+func encodeConfiguration(configuration *abtestingapi.ABTestConfiguration) (types.String, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if configuration == nil {
+		return types.StringNull(), diags
+	}
+
+	encoded, err := json.Marshal(configuration)
+	if err != nil {
+		diags.AddError("Error encoding configuration", "Could not JSON-encode A/B test configuration: "+err.Error())
+		return types.StringNull(), diags
+	}
+
+	return types.StringValue(string(encoded)), diags
 }
 
 // flattenABTestRead is the Read-path refresh. On top of the computed
@@ -41,10 +89,10 @@ func flattenABTestComputed(abTest *abtestingapi.ABTest, model *ABTestResourceMod
 // property, and the import step of TestAccABTestResource_basic verifies it
 // byte-for-byte), so adopting them cannot corrupt state.
 //
-// `variants`, `metrics` and `configuration` stay excluded: unlike name/end_at,
-// GetABTest's shape for those diverges from the create shape (see
-// flattenABTestComputed), so refreshing them would corrupt state rather than
-// reveal drift.
+// `variants` and `metrics` stay excluded: unlike name/end_at, GetABTest's shape
+// for those diverges from the create shape (see flattenABTestComputed), so
+// refreshing them would corrupt state rather than reveal drift. `configuration`
+// is only ever filled when state holds none.
 func flattenABTestRead(abTest *abtestingapi.ABTest, model *ABTestResourceModel) diag.Diagnostics {
 	diags := flattenABTestComputed(abTest, model)
 	if diags.HasError() {
@@ -57,25 +105,33 @@ func flattenABTestRead(abTest *abtestingapi.ABTest, model *ABTestResourceModel) 
 	return diags
 }
 
-// flattenABTestImport populates state for `terraform import`. There is no
-// prior configuration to preserve, so on top of what Read refreshes
-// (name/end_at) it also seeds variants/configuration from the enriched
-// GetABTest response - but that part is a best-effort reconstruction, not a
-// faithful replay of what was originally submitted to AddABTests:
+// flattenABTestImport populates state for `terraform import`. There is no prior
+// configuration to preserve, so on top of what Read refreshes (name/end_at) it
+// reconstructs variants, metrics and configuration in the shape the create
+// endpoint accepts, rather than the enriched shape GetABTest answers with.
 //
-//   - variants is the enriched Variant shape (adds metrics/metadata/
-//     estimatedSampleSize not present in AddABTestsVariant); it round-trips
-//     through the "index"/"trafficPercentage"/"description"/
-//     "customSearchParameters" keys AddABTestsVariant reads, so a
-//     subsequent apply that matches those values won't force a replace,
-//     but the extra keys mean a byte-for-byte config match is unlikely.
-//   - metrics cannot be reconstructed at all: GetABTest does not return the
-//     metrics list submitted at creation, only per-metric *results* nested
-//     under each variant. Left null - the user must set `metrics`
-//     explicitly in configuration after import, which - since it is
-//     RequiresReplace - will plan a replace on the next apply.
-//   - configuration round-trips cleanly: ABTestConfiguration is the same
-//     shape on create and read.
+// Reconstructing rather than echoing matters because all three attributes are
+// RequiresReplace. State holding the enriched response would differ from any
+// reasonable configuration, and the first plan after importing would propose
+// destroying a running experiment and discarding its statistics. Emitting the
+// create shape means a configuration describing the same test matches, and
+// `suppressEquivalentJSON` absorbs any remaining difference in formatting or key
+// order.
+//
+//   - variants keeps only the keys AddABTestsVariant accepts (index,
+//     trafficPercentage, description, customSearchParameters) and drops the
+//     runtime enrichment (metrics, metadata, estimatedSampleSize).
+//   - metrics is rebuilt from the per-variant results where there are any.
+//     GetABTest does not return the submitted metrics list, but a variant's
+//     results carry each metric's `name` and `dimension`, which is exactly what
+//     CreateMetric holds. The catch, verified against the API: results only exist
+//     once the test has gathered data. A test created moments ago reports
+//     `"metrics": null` on every variant, so nothing can be rebuilt and the
+//     attribute stays null. That is the uninteresting case in practice, since a
+//     test worth importing has been running, but it does mean import cannot
+//     promise metrics.
+//   - configuration round-trips as-is: ABTestConfiguration is the same shape on
+//     create and read.
 func flattenABTestImport(abTest *abtestingapi.ABTest, model *ABTestResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -84,27 +140,98 @@ func flattenABTestImport(abTest *abtestingapi.ABTest, model *ABTestResourceModel
 		return diags
 	}
 
-	model.Metrics = types.StringNull()
-
-	variantsJSON, err := json.Marshal(abTest.Variants)
+	variantsJSON, err := json.Marshal(createShapedVariants(abTest.Variants))
 	if err != nil {
 		diags.AddError("Error encoding variants", "Could not JSON-encode A/B test variants during import: "+err.Error())
 		return diags
 	}
 	model.Variants = types.StringValue(string(variantsJSON))
 
-	if abTest.Configuration != nil {
-		configJSON, err := json.Marshal(abTest.Configuration)
+	metrics := createShapedMetrics(abTest.Variants)
+	if len(metrics) == 0 {
+		// Nothing to rebuild from. metrics is Required, so leaving it null makes the
+		// next plan ask for it rather than silently inventing an empty list.
+		model.Metrics = types.StringNull()
+	} else {
+		metricsJSON, err := json.Marshal(metrics)
 		if err != nil {
-			diags.AddError("Error encoding configuration", "Could not JSON-encode A/B test configuration during import: "+err.Error())
+			diags.AddError("Error encoding metrics", "Could not JSON-encode A/B test metrics during import: "+err.Error())
 			return diags
 		}
-		model.Configuration = types.StringValue(string(configJSON))
-	} else {
-		model.Configuration = types.StringNull()
+		model.Metrics = types.StringValue(string(metricsJSON))
 	}
 
+	// configuration needs nothing here: the model starts empty on import, so
+	// flattenABTestComputed has already filled it from the response.
+
 	return diags
+}
+
+// createShapedVariants reduces the enriched variants GetABTest returns to the
+// keys the create endpoint accepts. The JSON tags come from the client's own
+// AbTestsVariantSearchParams, so the reconstruction stays correct if the create
+// shape gains a field, and `customSearchParameters` is omitted entirely for a
+// plain index-to-index test rather than emitted as null.
+func createShapedVariants(variants []abtestingapi.Variant) []map[string]any {
+	shaped := make([]map[string]any, 0, len(variants))
+
+	for _, variant := range variants {
+		entry := map[string]any{
+			"index":             variant.Index,
+			"trafficPercentage": variant.TrafficPercentage,
+		}
+		if variant.Description != "" {
+			entry["description"] = variant.Description
+		}
+		// Present-but-empty is distinct from absent here, so this tests for nil
+		// rather than length. AddABTestsVariant is a union and its UnmarshalJSON
+		// picks the arm by whether `customSearchParameters` is present at all, so
+		// dropping an empty map would reconstruct a search-parameter variant as a
+		// plain one and stop matching a configuration that still declares it.
+		if variant.CustomSearchParameters != nil {
+			entry["customSearchParameters"] = variant.CustomSearchParameters
+		}
+
+		shaped = append(shaped, entry)
+	}
+
+	return shaped
+}
+
+// createShapedMetrics rebuilds the submitted metrics list from the per-variant
+// results.
+//
+// The metrics are a property of the test, reported once per variant, so every
+// variant carries the same set. Results are deduplicated by name and dimension so
+// that walking all the variants cannot produce a list with repeats that the create
+// endpoint would reject.
+//
+// Returns an empty slice when no variant reports any results, which is what a test
+// that has not gathered data yet looks like: every variant has `"metrics": null`
+// until traffic arrives.
+func createShapedMetrics(variants []abtestingapi.Variant) []abtestingapi.CreateMetric {
+	metrics := make([]abtestingapi.CreateMetric, 0)
+	seen := make(map[string]bool)
+
+	for _, variant := range variants {
+		for _, result := range variant.Metrics {
+			key := result.Name
+			if result.Dimension != nil {
+				key += "\x00" + *result.Dimension
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			metrics = append(metrics, abtestingapi.CreateMetric{
+				Name:      result.Name,
+				Dimension: result.Dimension,
+			})
+		}
+	}
+
+	return metrics
 }
 
 // flattenABTestDataSource maps a GetABTest response onto the

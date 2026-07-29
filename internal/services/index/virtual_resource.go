@@ -23,6 +23,11 @@ type virtualIndexResource struct {
 	client *search.APIClient
 }
 
+// virtualIndexKind names this resource inside a diagnostic sentence. Diagnostics
+// about the underlying index rather than the virtual-replica resource use
+// indexKind, so that they read identically to algolia_index's own.
+const virtualIndexKind = "virtual index"
+
 func NewVirtualResource() resource.Resource {
 	return &virtualIndexResource{}
 }
@@ -160,7 +165,7 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating virtual index", "Could not update virtual index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(virtualIndexKind, indexName).Message(algoliaerr.Update, err))
 		return
 	}
 
@@ -218,7 +223,7 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 		if algoliaerr.IsNotFound(err) {
 			return
 		}
-		resp.Diagnostics.AddError("Error deleting virtual index", "Could not delete virtual index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(virtualIndexKind, indexName).Message(algoliaerr.Delete, err))
 		return
 	}
 
@@ -274,7 +279,7 @@ func (r *virtualIndexResource) readIndexModel(ctx context.Context, model *IndexR
 		if algoliaerr.IsNotFound(err) {
 			return false, diags
 		}
-		diags.AddError("Error reading index", "Could not read index "+indexName+": "+err.Error())
+		diags.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Read, err))
 		return false, diags
 	}
 

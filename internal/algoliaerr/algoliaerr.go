@@ -7,6 +7,11 @@
 // resource be dropped from state?", "is this worth retrying?" -- and without a
 // shared helper each one hand-rolls its own errors.As over whichever type its
 // own client happens to return. This package holds that knowledge in one place.
+//
+// For the same reason it also owns the wording of the diagnostics a resource
+// raises when an operation fails (see Subject): the sentence was hand-copied
+// across sibling resources, which is how a fix to one of them stops short of the
+// rest.
 package algoliaerr
 
 import (

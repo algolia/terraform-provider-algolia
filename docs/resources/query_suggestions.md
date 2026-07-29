@@ -48,10 +48,11 @@ resource "algolia_query_suggestions" "example" {
 
 ### Optional
 
+- `all_languages` (Boolean) Whether to deduplicate singular and plural suggestions in every language the Query Suggestions API supports. The API models `languages` as either a list of languages or the boolean `true`, so this attribute is the boolean form of `languages` and the two are mutually exclusive.
 - `allow_special_characters` (Boolean) Whether to include suggestions containing special characters. Optional and computed: when omitted the value currently configured for the index (for example through the Algolia dashboard) is kept, because updating a Query Suggestions configuration replaces it in full.
 - `enable_personalization` (Boolean) Whether to turn on personalized query suggestions. Optional and computed: when omitted the value currently configured for the index (for example through the Algolia dashboard) is kept, because updating a Query Suggestions configuration replaces it in full.
 - `exclude` (Set of String) Words and patterns to exclude from the Query Suggestions index.
-- `languages` (Set of String) Languages used to deduplicate singular and plural suggestions.
+- `languages` (Set of String) Languages used to deduplicate singular and plural suggestions. Mutually exclusive with `all_languages`, which covers every supported language instead of an explicit list.
 - `source_indices` (Block List) Source indices used to generate the Query Suggestions index. (see [below for nested schema](#nestedblock--source_indices))
 
 ### Read-Only

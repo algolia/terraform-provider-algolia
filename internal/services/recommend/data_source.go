@@ -4,6 +4,7 @@ import (
 	"context"
 
 	recommendapi "github.com/algolia/algoliasearch-client-go/v4/algolia/recommend"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -61,7 +62,7 @@ func (d *recommendRuleDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(recommendRuleSubject(indexName, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 

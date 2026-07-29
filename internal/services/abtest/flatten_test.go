@@ -181,10 +181,15 @@ func TestFlattenABTestImport(t *testing.T) {
 		t.Fatalf("end_at = %v, want 2026-08-01T00:00:00Z", model.EndAt.ValueString())
 	}
 
-	// metrics cannot be reconstructed from GetABTest - always null on
-	// import.
-	if !model.Metrics.IsNull() {
-		t.Fatalf("metrics = %v, want null (unrecoverable on import)", model.Metrics.ValueString())
+	// This previously asserted that metrics is always null on import, on the
+	// understanding that GetABTest does not return the submitted metrics list. It
+	// does not return it directly, but each variant's results carry the metric
+	// `name` and `dimension`, which is exactly what CreateMetric holds, so the list
+	// is recoverable. Leaving it null was the defect: metrics is Required and
+	// RequiresReplace, so a null import made the first plan propose destroying a
+	// running experiment. See flattenABTestImport.
+	if model.Metrics.IsNull() {
+		t.Fatal("metrics is null: it must be rebuilt from the per-variant results")
 	}
 
 	// variants round-trips through JSON; assert on decoded fields rather

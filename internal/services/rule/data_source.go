@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -61,7 +62,7 @@ func (d *ruleDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 
 	apiResp, rawParams, err := getRuleRaw(ctx, d.client, indexName, objectID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(ruleSubject(indexName, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 

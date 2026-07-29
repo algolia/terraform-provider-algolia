@@ -7,6 +7,7 @@ import (
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliawait"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -338,33 +339,16 @@ func waitForDictionaryEntry(ctx context.Context, client *search.APIClient, dicti
 }
 
 // waitForDictionaryTask polls GetAppTask until the task reaches "published"
-// status or 30 minutes elapse, increasing the poll interval linearly (by 1s
-// each attempt) up to a 10-second cap. This mirrors index.waitForIndexTask, which replaces the SDK's
-// built-in WaitForTask/WaitForAppTask whose retry-count options were not
-// being applied. Dictionary batch tasks are application-level, so this uses
-// GetAppTask rather than the per-index GetTask.
+// status. This replaces the SDK's built-in WaitForAppTask whose retry-count
+// options were not being applied. Dictionary batch tasks are
+// application-level, so this uses GetAppTask rather than the per-index GetTask.
 func waitForDictionaryTask(ctx context.Context, client *search.APIClient, taskID int64) error {
-	deadline := time.Now().Add(30 * time.Minute)
-	interval := 2 * time.Second
-	for time.Now().Before(deadline) {
+	return algoliawait.Until(ctx, fmt.Sprintf("app task %d", taskID), func(ctx context.Context) (bool, error) {
 		resp, err := client.GetAppTask(client.NewApiGetAppTaskRequest(taskID), search.WithContext(ctx))
 		if err != nil {
-			return err
+			return false, err
 		}
-		if resp.Status == search.TASK_STATUS_PUBLISHED {
-			return nil
-		}
-		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
-		// uncancellable, so Ctrl-C could not stop a plan that was polling.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-		if interval < 10*time.Second {
-			interval += time.Second
-		}
-	}
 
-	return fmt.Errorf("app task %d did not complete within 30 minutes", taskID)
+		return resp.Status == search.TASK_STATUS_PUBLISHED, nil
+	})
 }

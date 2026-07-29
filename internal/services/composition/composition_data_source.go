@@ -4,6 +4,7 @@ import (
 	"context"
 
 	compositionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/composition"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -54,7 +55,7 @@ func (d *compositionDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading composition", "Could not read composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 

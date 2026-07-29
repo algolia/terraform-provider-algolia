@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -61,7 +62,7 @@ func (d *synonymDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	apiResp, err := d.client.GetSynonym(d.client.NewApiGetSynonymRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading synonym", "Could not read synonym "+objectID+" on index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(synonymSubject(indexName, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
