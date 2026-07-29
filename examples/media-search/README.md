@@ -8,7 +8,7 @@ catalog just as they power a storefront.
 
 | Resource | Role |
 |---|---|
-| `algolia_index.titles` | The catalog index: searchable attributes, custom ranking, facets, pagination. `attribute_for_distinct` collapses a series' episodes into one hit. |
+| `algolia_index.titles` | The catalog index: searchable attributes, custom ranking, facets, pagination. `attribute_for_distinct` plus `advanced.distinct = 1` collapses a series' episodes into one hit. |
 | `algolia_rule.boost_originals` | Merchandising rule that boosts platform originals for browse/trending queries. |
 | `algolia_synonym.scifi` | A two-way synonym so "scifi", "sci-fi", and "science fiction" all match. |
 | `algolia_api_key.app_search` | A search-only key, scoped to the index, safe to ship in web/TV app clients. |
