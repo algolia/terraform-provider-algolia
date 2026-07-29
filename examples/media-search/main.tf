@@ -17,6 +17,10 @@ resource "algolia_index" "titles" {
     attribute_for_distinct = "series_id"
   }
 
+  advanced {
+    distinct = 1
+  }
+
   ranking {
     ranking        = ["typo", "geo", "words", "filters", "proximity", "attribute", "exact", "custom"]
     custom_ranking = ["desc(popularity)", "desc(release_year)"]
