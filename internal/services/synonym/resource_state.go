@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliawait"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -135,28 +135,14 @@ func apiSynonymType(value string) search.SynonymType {
 }
 
 func waitForSynonymTask(ctx context.Context, client *search.APIClient, indexName string, taskID int64) error {
-	deadline := time.Now().Add(30 * time.Minute)
-	interval := 2 * time.Second
-	for time.Now().Before(deadline) {
+	return algoliawait.Until(ctx, fmt.Sprintf("task %d on index %q", taskID, indexName), func(ctx context.Context) (bool, error) {
 		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID), search.WithContext(ctx))
 		if err != nil {
-			return err
+			return false, err
 		}
-		if resp.Status == search.TASK_STATUS_PUBLISHED {
-			return nil
-		}
-		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
-		// uncancellable, so Ctrl-C could not stop a plan that was polling.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-		if interval < 10*time.Second {
-			interval += time.Second
-		}
-	}
-	return fmt.Errorf("task %d on index %q did not complete within 30 minutes", taskID, indexName)
+
+		return resp.Status == search.TASK_STATUS_PUBLISHED, nil
+	})
 }
 
 // nullableStringSet converts an API string slice into a Terraform set. For an

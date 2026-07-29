@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliawait"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -26,6 +26,10 @@ var (
 type indexResource struct {
 	client *search.APIClient
 }
+
+// indexKind names this resource inside a diagnostic sentence. An index is
+// addressed by name alone, so it needs no parent qualifier.
+const indexKind = "index"
 
 func NewResource() resource.Resource {
 	return &indexResource{}
@@ -77,7 +81,7 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating index", "Could not create index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Create, err))
 		return
 	}
 
@@ -179,7 +183,7 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating index", "Could not update index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Update, err))
 		return
 	}
 
@@ -237,7 +241,7 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error deleting index", "Could not delete index "+indexName+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Delete, err))
 		return
 	}
 
@@ -299,7 +303,7 @@ func (r *indexResource) readIndex(ctx context.Context, model *IndexResourceModel
 		if algoliaerr.IsNotFound(err) {
 			return false, diags
 		}
-		diags.AddError("Error reading index", "Could not read index "+indexName+": "+err.Error())
+		diags.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Read, err))
 		return false, diags
 	}
 
@@ -442,34 +446,18 @@ func restoreNullBlocks(m *IndexResourceModel, nb nullBlocks) {
 	}
 }
 
-// waitForIndexTask polls GetTask until the task reaches "published" status or
-// 30 minutes elapse, using exponential backoff capped at 10 seconds. This
-// replaces the SDK's built-in WaitForTask whose retry-count options were not
-// being applied, causing it to time out on large indexes.
+// waitForIndexTask polls GetTask until the task reaches "published" status.
+// This replaces the SDK's built-in WaitForTask whose retry-count options were
+// not being applied, causing it to time out on large indexes.
 func waitForIndexTask(ctx context.Context, client *search.APIClient, indexName string, taskID int64) error {
-	deadline := time.Now().Add(30 * time.Minute)
-	interval := 2 * time.Second
-	for time.Now().Before(deadline) {
+	return algoliawait.Until(ctx, fmt.Sprintf("task %d on index %q", taskID, indexName), func(ctx context.Context) (bool, error) {
 		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID), search.WithContext(ctx))
 		if err != nil {
-			return err
+			return false, err
 		}
-		if resp.Status == search.TASK_STATUS_PUBLISHED {
-			return nil
-		}
-		// Sleep interruptibly: a bare time.Sleep here made the 30-minute budget
-		// uncancellable, so Ctrl-C could not stop a plan that was polling.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-		if interval < 10*time.Second {
-			interval += time.Second
-		}
-	}
 
-	return fmt.Errorf("task %d on index %q did not complete within 30 minutes", taskID, indexName)
+		return resp.Status == search.TASK_STATUS_PUBLISHED, nil
+	})
 }
 
 // newIndexIdentityState returns the minimal state to persist immediately after a

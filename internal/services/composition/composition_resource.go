@@ -3,10 +3,10 @@ package composition
 import (
 	"context"
 	"fmt"
-	"time"
 
 	compositionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/composition"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliawait"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -24,6 +24,11 @@ var (
 type compositionResource struct {
 	base
 }
+
+// compositionKind names this resource inside a diagnostic sentence. A composition
+// is addressed by its own objectID alone, so unlike a composition rule it needs
+// no parent qualifier.
+const compositionKind = "composition"
 
 // NewResource returns the algolia_composition resource.
 func NewResource() resource.Resource {
@@ -66,18 +71,18 @@ func (r *compositionResource) Create(ctx context.Context, req resource.CreateReq
 
 	putResp, err := client.PutComposition(client.NewApiPutCompositionRequest(objectID, comp), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating composition", "Could not create composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Create, err))
 		return
 	}
 
 	if err := waitForCompositionTask(ctx, client, objectID, putResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for composition creation", "Could not confirm composition creation: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(compositionKind, algoliaerr.Create, err))
 		return
 	}
 
 	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading composition", "Could not read composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -112,7 +117,7 @@ func (r *compositionResource) Read(ctx context.Context, req resource.ReadRequest
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading composition", "Could not read composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -148,18 +153,18 @@ func (r *compositionResource) Update(ctx context.Context, req resource.UpdateReq
 
 	putResp, err := client.PutComposition(client.NewApiPutCompositionRequest(objectID, comp), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating composition", "Could not update composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Update, err))
 		return
 	}
 
 	if err := waitForCompositionTask(ctx, client, objectID, putResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for composition update", "Could not confirm composition update: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(compositionKind, algoliaerr.Update, err))
 		return
 	}
 
 	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading composition", "Could not read composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -193,7 +198,7 @@ func (r *compositionResource) Delete(ctx context.Context, req resource.DeleteReq
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting composition", "Could not delete composition "+objectID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, objectID).Message(algoliaerr.Delete, err))
 		return
 	}
 
@@ -202,7 +207,7 @@ func (r *compositionResource) Delete(ctx context.Context, req resource.DeleteReq
 			return
 		}
 
-		resp.Diagnostics.AddError("Error waiting for composition deletion", "Could not confirm composition deletion: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(compositionKind, algoliaerr.Delete, err))
 	}
 }
 
@@ -215,7 +220,7 @@ func (r *compositionResource) ImportState(ctx context.Context, req resource.Impo
 
 	apiResp, err := client.GetComposition(client.NewApiGetCompositionRequest(req.ID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing composition", "Could not import composition "+req.ID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionKind, req.ID).Message(algoliaerr.Import, err))
 		return
 	}
 
@@ -234,26 +239,12 @@ func (r *compositionResource) ImportState(ctx context.Context, req resource.Impo
 // its own, scoped by compositionID, shared by both algolia_composition and
 // algolia_composition_rule).
 func waitForCompositionTask(ctx context.Context, client *compositionapi.APIClient, compositionID string, taskID int64) error {
-	deadline := time.Now().Add(30 * time.Minute)
-	interval := 2 * time.Second
-	for time.Now().Before(deadline) {
+	return algoliawait.Until(ctx, fmt.Sprintf("task %d on composition %q", taskID, compositionID), func(ctx context.Context) (bool, error) {
 		resp, err := client.GetTask(client.NewApiGetTaskRequest(compositionID, taskID), compositionapi.WithContext(ctx))
 		if err != nil {
-			return err
+			return false, err
 		}
-		if resp.Status == compositionapi.TASK_STATUS_PUBLISHED {
-			return nil
-		}
-		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
-		// uncancellable, so Ctrl-C could not stop a plan that was polling.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-		if interval < 10*time.Second {
-			interval += time.Second
-		}
-	}
-	return fmt.Errorf("task %d on composition %q did not complete within 30 minutes", taskID, compositionID)
+
+		return resp.Status == compositionapi.TASK_STATUS_PUBLISHED, nil
+	})
 }

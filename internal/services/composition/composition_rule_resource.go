@@ -24,6 +24,16 @@ type compositionRuleResource struct {
 	base
 }
 
+// compositionRuleKind names this resource inside a diagnostic sentence.
+const compositionRuleKind = "composition rule"
+
+// compositionRuleSubject identifies the composition rule a diagnostic is about.
+// Composition rules are scoped to a composition rather than to an index, so both
+// parts are needed to name one unambiguously.
+func compositionRuleSubject(compositionID, objectID string) algoliaerr.Subject {
+	return algoliaerr.Object(compositionRuleKind, objectID).In("composition", compositionID)
+}
+
 // NewRuleResource returns the algolia_composition_rule resource.
 func NewRuleResource() resource.Resource {
 	return &compositionRuleResource{}
@@ -77,18 +87,18 @@ func (r *compositionRuleResource) Create(ctx context.Context, req resource.Creat
 
 	putResp, err := client.PutCompositionRule(client.NewApiPutCompositionRuleRequest(compositionID, objectID, rule), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating composition rule", "Could not create composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
+		resp.Diagnostics.AddError(compositionRuleSubject(compositionID, objectID).Message(algoliaerr.Create, err))
 		return
 	}
 
 	if err := waitForCompositionTask(ctx, client, compositionID, putResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for composition rule creation", "Could not confirm composition rule creation: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(compositionRuleKind, algoliaerr.Create, err))
 		return
 	}
 
 	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading composition rule", "Could not read composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
+		resp.Diagnostics.AddError(compositionRuleSubject(compositionID, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -124,7 +134,7 @@ func (r *compositionRuleResource) Read(ctx context.Context, req resource.ReadReq
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading composition rule", "Could not read composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
+		resp.Diagnostics.AddError(compositionRuleSubject(compositionID, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -162,18 +172,18 @@ func (r *compositionRuleResource) Update(ctx context.Context, req resource.Updat
 
 	putResp, err := client.PutCompositionRule(client.NewApiPutCompositionRuleRequest(compositionID, objectID, rule), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating composition rule", "Could not update composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
+		resp.Diagnostics.AddError(compositionRuleSubject(compositionID, objectID).Message(algoliaerr.Update, err))
 		return
 	}
 
 	if err := waitForCompositionTask(ctx, client, compositionID, putResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for composition rule update", "Could not confirm composition rule update: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(compositionRuleKind, algoliaerr.Update, err))
 		return
 	}
 
 	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading composition rule", "Could not read composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
+		resp.Diagnostics.AddError(compositionRuleSubject(compositionID, objectID).Message(algoliaerr.Read, err))
 		return
 	}
 
@@ -209,7 +219,7 @@ func (r *compositionRuleResource) Delete(ctx context.Context, req resource.Delet
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting composition rule", "Could not delete composition rule "+objectID+" on composition "+compositionID+": "+err.Error())
+		resp.Diagnostics.AddError(compositionRuleSubject(compositionID, objectID).Message(algoliaerr.Delete, err))
 		return
 	}
 
@@ -218,7 +228,7 @@ func (r *compositionRuleResource) Delete(ctx context.Context, req resource.Delet
 			return
 		}
 
-		resp.Diagnostics.AddError("Error waiting for composition rule deletion", "Could not confirm composition rule deletion: "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.WaitMessage(compositionRuleKind, algoliaerr.Delete, err))
 	}
 }
 
@@ -237,7 +247,7 @@ func (r *compositionRuleResource) ImportState(ctx context.Context, req resource.
 
 	apiResp, err := client.GetRule(client.NewApiGetRuleRequest(compositionID, objectID), compositionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing composition rule", "Could not import composition rule "+req.ID+": "+err.Error())
+		resp.Diagnostics.AddError(algoliaerr.Object(compositionRuleKind, req.ID).Message(algoliaerr.Import, err))
 		return
 	}
 
