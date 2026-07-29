@@ -55,13 +55,13 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	agentID := model.ID.ValueString()
 	tflog.Debug(ctx, "Reading agent data source", map[string]interface{}{"id": agentID})
 
-	apiResp, err := d.client.GetAgent(d.client.NewApiGetAgentRequest(agentID), agentStudio.WithContext(ctx))
+	doc, err := getAgent(ctx, d.client, agentID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading agent", "Could not read agent "+agentID+": "+err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateAgentDataSourceState(ctx, apiResp, &model)...)
+	resp.Diagnostics.Append(hydrateAgentDataSourceState(ctx, doc, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -5,7 +5,7 @@ subcategory: ""
 description: |-
   Manages an Algolia A/B test. The A/B Testing API is region-routed, so the provider's analytics_region (or the ALGOLIA_ANALYTICS_REGION environment variable) must be configured.
   The A/B Testing API has no update endpoint, so name, end_at, variants, metrics, and configuration are all write-once: changing any of them forces the A/B test to be replaced (stopped test data is not preserved by the API across a replace).
-  Read limitation: GetABTest returns a response enriched with runtime results (per-variant conversion/click counts, significance, status) whose shape diverges from what was submitted to create the test. To avoid corrupting state with that runtime data and causing a perpetual diff, variants, metrics, and configuration are never refreshed from the API - the value you configure is the value that stays in state. Only status (and the identifiers) are refreshed on read. Use the algolia_ab_test data source to inspect the enriched, read-only view of a test (including per-variant results).
+  Read limitation: GetABTest returns a response enriched with runtime results (per-variant conversion/click counts, significance, status) whose shape diverges from what was submitted to create the test. To avoid corrupting state with that runtime data and causing a perpetual diff, variants, metrics, and configuration are never refreshed from the API - the value you configure is the value that stays in state. name and end_at are refreshed on read - the API returns them in the same shape they were submitted - so changing either outside Terraform shows up as drift and, since both force replacement, plans a replace. Use the algolia_ab_test data source to inspect the enriched, read-only view of a test (including per-variant results).
   Import limitation: variants and metrics cannot be perfectly reconstructed from the enriched read response on terraform import (metrics in particular: GetABTest only returns per-metric results nested under each variant, not the original metrics list). See each attribute's description.
 ---
 
@@ -15,7 +15,7 @@ Manages an Algolia A/B test. The A/B Testing API is region-routed, so the provid
 
 The A/B Testing API has no update endpoint, so `name`, `end_at`, `variants`, `metrics`, and `configuration` are all write-once: changing any of them forces the A/B test to be replaced (stopped test data is not preserved by the API across a replace).
 
-Read limitation: `GetABTest` returns a response enriched with runtime results (per-variant conversion/click counts, significance, status) whose shape diverges from what was submitted to create the test. To avoid corrupting state with that runtime data and causing a perpetual diff, `variants`, `metrics`, and `configuration` are never refreshed from the API - the value you configure is the value that stays in state. Only `status` (and the identifiers) are refreshed on read. Use the `algolia_ab_test` data source to inspect the enriched, read-only view of a test (including per-variant results).
+Read limitation: `GetABTest` returns a response enriched with runtime results (per-variant conversion/click counts, significance, status) whose shape diverges from what was submitted to create the test. To avoid corrupting state with that runtime data and causing a perpetual diff, `variants`, `metrics`, and `configuration` are never refreshed from the API - the value you configure is the value that stays in state. `name` and `end_at` *are* refreshed on read - the API returns them in the same shape they were submitted - so changing either outside Terraform shows up as drift and, since both force replacement, plans a replace. Use the `algolia_ab_test` data source to inspect the enriched, read-only view of a test (including per-variant results).
 
 Import limitation: `variants` and `metrics` cannot be perfectly reconstructed from the enriched read response on `terraform import` (metrics in particular: `GetABTest` only returns per-metric *results* nested under each variant, not the original metrics list). See each attribute's description.
 
@@ -108,9 +108,9 @@ resource "algolia_ab_test" "search_params_experiment" {
 
 ### Required
 
-- `end_at` (String) End date and time of the A/B test, in RFC 3339 format. Changing this forces replacement: the A/B Testing API has no update endpoint.
+- `end_at` (String) End date and time of the A/B test, in RFC 3339 format. Changing this forces replacement: the A/B Testing API has no update endpoint. Refreshed from `GetABTest` on every read, so a reschedule outside Terraform is detected as drift.
 - `metrics` (String) JSON-encoded array of metrics to track for this A/B test, e.g. `jsonencode([{ name = "addToCartRate" }, { name = "revenue", dimension = "USD" }])`. Only these metrics are considered when calculating results. Changing this forces replacement: the A/B Testing API has no update endpoint. Write-once: never refreshed from `GetABTest`, which does not return the metrics list that was submitted at creation - only per-metric *results* nested under each variant. Not recoverable on `terraform import`; left null after import (see the resource description).
-- `name` (String) Name of the A/B test. Changing this forces replacement: the A/B Testing API has no update endpoint.
+- `name` (String) Name of the A/B test. Changing this forces replacement: the A/B Testing API has no update endpoint. Refreshed from `GetABTest` on every read, so a rename outside Terraform is detected as drift.
 - `variants` (String) JSON-encoded array of A/B test variants, e.g. `jsonencode([{ index = "prod", trafficPercentage = 50 }, { index = "prod_variant", trafficPercentage = 50 }])`. The first variant is conventionally the control (typically the production index); the rest are indexes with changed settings to test against it. Each variant needs `index` and `trafficPercentage`, and may set `description` and, for search-parameter A/B tests, `customSearchParameters`. Changing this forces replacement: the A/B Testing API has no update endpoint. Write-once: never refreshed from `GetABTest`, whose response nests per-variant runtime results (metrics, metadata) that don't match this shape - use the `algolia_ab_test` data source to read those. Not perfectly recoverable on `terraform import`: the imported value is derived from the enriched response and may need to be reconciled with configuration by hand.
 
 ### Optional
@@ -126,6 +126,8 @@ resource "algolia_ab_test" "search_params_experiment" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import an A/B test by its numeric ID. Metrics are not recoverable and

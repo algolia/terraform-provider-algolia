@@ -27,6 +27,14 @@ func querySuggestionsDataSourceSchema() datasourceschema.Schema {
 				Computed:    true,
 				ElementType: types.StringType,
 			},
+			"enable_personalization": datasourceschema.BoolAttribute{
+				Description: "Whether personalized query suggestions are turned on.",
+				Computed:    true,
+			},
+			"allow_special_characters": datasourceschema.BoolAttribute{
+				Description: "Whether suggestions containing special characters are included.",
+				Computed:    true,
+			},
 		},
 		Blocks: map[string]datasourceschema.Block{
 			"source_indices": datasourceschema.ListNestedBlock{
@@ -34,6 +42,7 @@ func querySuggestionsDataSourceSchema() datasourceschema.Schema {
 				NestedObject: datasourceschema.NestedBlockObject{
 					Attributes: map[string]datasourceschema.Attribute{
 						"index_name":     datasourceschema.StringAttribute{Computed: true},
+						"replicas":       datasourceschema.BoolAttribute{Computed: true},
 						"analytics_tags": datasourceschema.SetAttribute{Computed: true, ElementType: types.StringType},
 						"min_hits":       datasourceschema.Int64Attribute{Computed: true},
 						"min_letters":    datasourceschema.Int64Attribute{Computed: true},

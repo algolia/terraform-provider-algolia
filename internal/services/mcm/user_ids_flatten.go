@@ -49,9 +49,9 @@ func collectAllUserIds(fetchPage userIdsPageFetcher, hitsPerPage int32) ([]searc
 
 // fetchAllUserIds pages through ListUserIds, aggregating every user ID
 // mapping in the application.
-func fetchAllUserIds(client *search.APIClient) ([]search.UserId, error) {
+func fetchAllUserIds(ctx context.Context, client *search.APIClient) ([]search.UserId, error) {
 	return collectAllUserIds(func(page int32) ([]search.UserId, error) {
-		resp, err := client.ListUserIds(client.NewApiListUserIdsRequest().WithPage(page).WithHitsPerPage(userIdsHitsPerPage))
+		resp, err := client.ListUserIds(client.NewApiListUserIdsRequest().WithPage(page).WithHitsPerPage(userIdsHitsPerPage), search.WithContext(ctx))
 		if err != nil {
 			return nil, err
 		}

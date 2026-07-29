@@ -3,6 +3,8 @@ package querysuggestions
 import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -37,6 +39,28 @@ func querySuggestionsResourceSchema() schema.Schema {
 				Optional:    true,
 				ElementType: types.StringType,
 			},
+			"enable_personalization": schema.BoolAttribute{
+				Description: "Whether to turn on personalized query suggestions. Optional and computed: " +
+					"when omitted the value currently configured for the index (for example through the " +
+					"Algolia dashboard) is kept, because updating a Query Suggestions configuration replaces " +
+					"it in full.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"allow_special_characters": schema.BoolAttribute{
+				Description: "Whether to include suggestions containing special characters. Optional and " +
+					"computed: when omitted the value currently configured for the index (for example " +
+					"through the Algolia dashboard) is kept, because updating a Query Suggestions " +
+					"configuration replaces it in full.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 		Blocks: map[string]schema.Block{
 			"source_indices": schema.ListNestedBlock{
@@ -50,18 +74,41 @@ func querySuggestionsResourceSchema() schema.Schema {
 							Description: "Source Algolia index name.",
 							Required:    true,
 						},
+						"replicas": schema.BoolAttribute{
+							Description: "Whether Query Suggestions uses all replica indices of this source " +
+								"index to find popular searches. Optional and computed: when omitted the " +
+								"value currently configured for the source index is kept, because updating a " +
+								"Query Suggestions configuration replaces it in full.",
+							Optional: true,
+							Computed: true,
+							PlanModifiers: []planmodifier.Bool{
+								boolplanmodifier.UseStateForUnknown(),
+							},
+						},
 						"analytics_tags": schema.SetAttribute{
 							Description: "Analytics tags used to filter popular searches.",
 							Optional:    true,
 							ElementType: types.StringType,
 						},
 						"min_hits": schema.Int64Attribute{
-							Description: "Minimum hits required for a query to become a suggestion.",
-							Optional:    true,
+							Description: "Minimum hits required for a query to become a suggestion. Optional " +
+								"and computed: the Query Suggestions API applies its own default when this is " +
+								"omitted, and reports that default back.",
+							Optional: true,
+							Computed: true,
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
 						},
 						"min_letters": schema.Int64Attribute{
-							Description: "Minimum letters required for a query to become a suggestion.",
-							Optional:    true,
+							Description: "Minimum letters required for a query to become a suggestion. Optional " +
+								"and computed: the Query Suggestions API applies its own default when this is " +
+								"omitted, and reports that default back.",
+							Optional: true,
+							Computed: true,
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+							},
 						},
 						"generate": schema.ListAttribute{
 							Description: "Facet combinations used to generate suggestions.",

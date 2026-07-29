@@ -54,7 +54,7 @@ func (d *indicesDataSource) Configure(_ context.Context, req datasource.Configur
 func (d *indicesDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
 	tflog.Debug(ctx, "Reading indices data source", map[string]any{"app_id": d.appID})
 
-	items, err := fetchAllIndices(d.client)
+	items, err := fetchAllIndices(ctx, d.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Error listing indices", "Could not list indices: "+err.Error())
 		return

@@ -53,7 +53,7 @@ output "source_input" {
 - `authentication_id` (String) Universally unique identifier (UUID) of the authentication resource this source uses to connect to its underlying platform, if any.
 - `created_at` (String) Date and time when the resource was created, in RFC 3339 format.
 - `id` (String) Terraform identifier for the resource. Equal to `source_id`.
-- `input` (String) JSON-encoded configuration matching `type`. Null if the source type requires no configuration (e.g. "push").
+- `input` (String, Sensitive) JSON-encoded configuration matching `type`. Null if the source type requires no configuration (e.g. "push"). Treated as sensitive: the API returns `input` unredacted, and several source types carry credentials in it (a `docker` source's `configuration`, or a presigned `url` for `csv`/`json`).
 - `name` (String) Descriptive name for the source.
 - `type` (String) Type of source.
 - `updated_at` (String) Date and time when the resource was last updated, in RFC 3339 format.

@@ -14,16 +14,16 @@ import (
 // Attribute types maps for each block, matching the schema exactly.
 
 var attributesAttrTypes = map[string]attr.Type{
-	"searchable_attributes":   types.ListType{ElemType: types.StringType},
-	"attributes_to_retrieve":  types.ListType{ElemType: types.StringType},
+	"searchable_attributes":    types.ListType{ElemType: types.StringType},
+	"attributes_to_retrieve":   types.ListType{ElemType: types.StringType},
 	"unretrievable_attributes": types.ListType{ElemType: types.StringType},
-	"attribute_for_distinct":  types.StringType,
+	"attribute_for_distinct":   types.StringType,
 }
 
 var rankingAttrTypes = map[string]attr.Type{
-	"ranking":               types.ListType{ElemType: types.StringType},
-	"custom_ranking":        types.ListType{ElemType: types.StringType},
-	"relevancy_strictness":  types.Int64Type,
+	"ranking":              types.ListType{ElemType: types.StringType},
+	"custom_ranking":       types.ListType{ElemType: types.StringType},
+	"relevancy_strictness": types.Int64Type,
 }
 
 var facetingAttrTypes = map[string]attr.Type{
@@ -43,65 +43,65 @@ var highlightingAttrTypes = map[string]attr.Type{
 }
 
 var paginationAttrTypes = map[string]attr.Type{
-	"hits_per_page":          types.Int64Type,
-	"pagination_limited_to":  types.Int64Type,
+	"hits_per_page":         types.Int64Type,
+	"pagination_limited_to": types.Int64Type,
 }
 
 var typosAttrTypes = map[string]attr.Type{
-	"typo_tolerance":                      types.StringType,
-	"min_word_size_for_1_typo":            types.Int64Type,
-	"min_word_size_for_2_typos":           types.Int64Type,
-	"allow_typos_on_numeric_tokens":       types.BoolType,
+	"typo_tolerance":                       types.StringType,
+	"min_word_size_for_1_typo":             types.Int64Type,
+	"min_word_size_for_2_typos":            types.Int64Type,
+	"allow_typos_on_numeric_tokens":        types.BoolType,
 	"disable_typo_tolerance_on_attributes": types.ListType{ElemType: types.StringType},
-	"disable_typo_tolerance_on_words":     types.ListType{ElemType: types.StringType},
+	"disable_typo_tolerance_on_words":      types.ListType{ElemType: types.StringType},
 }
 
 var languagesAttrTypes = map[string]attr.Type{
-	"index_languages":              types.ListType{ElemType: types.StringType},
-	"query_languages":              types.ListType{ElemType: types.StringType},
-	"ignore_plurals":               types.BoolType,
-	"ignore_plurals_languages":     types.ListType{ElemType: types.StringType},
-	"remove_stop_words":            types.BoolType,
-	"remove_stop_words_languages":  types.ListType{ElemType: types.StringType},
-	"decompound_query":             types.BoolType,
-	"remove_words_if_no_results":   types.StringType,
-	"attributes_to_transliterate":  types.ListType{ElemType: types.StringType},
-	"camel_case_attributes":        types.ListType{ElemType: types.StringType},
-	"decompounded_attributes":      types.StringType,
-	"custom_normalization":         types.StringType,
+	"index_languages":               types.ListType{ElemType: types.StringType},
+	"query_languages":               types.ListType{ElemType: types.StringType},
+	"ignore_plurals":                types.BoolType,
+	"ignore_plurals_languages":      types.ListType{ElemType: types.StringType},
+	"remove_stop_words":             types.BoolType,
+	"remove_stop_words_languages":   types.ListType{ElemType: types.StringType},
+	"decompound_query":              types.BoolType,
+	"remove_words_if_no_results":    types.StringType,
+	"attributes_to_transliterate":   types.ListType{ElemType: types.StringType},
+	"camel_case_attributes":         types.ListType{ElemType: types.StringType},
+	"decompounded_attributes":       types.StringType,
+	"custom_normalization":          types.StringType,
 	"keep_diacritics_on_characters": types.StringType,
 }
 
 var queryStrategyAttrTypes = map[string]attr.Type{
-	"query_type":                  types.StringType,
-	"advanced_syntax":             types.BoolType,
-	"advanced_syntax_features":    types.ListType{ElemType: types.StringType},
-	"optional_words":              types.ListType{ElemType: types.StringType},
+	"query_type":                   types.StringType,
+	"advanced_syntax":              types.BoolType,
+	"advanced_syntax_features":     types.ListType{ElemType: types.StringType},
+	"optional_words":               types.ListType{ElemType: types.StringType},
 	"disable_prefix_on_attributes": types.ListType{ElemType: types.StringType},
-	"disable_exact_on_attributes": types.ListType{ElemType: types.StringType},
-	"exact_on_single_word_query":  types.StringType,
-	"alternatives_as_exact":       types.ListType{ElemType: types.StringType},
+	"disable_exact_on_attributes":  types.ListType{ElemType: types.StringType},
+	"exact_on_single_word_query":   types.StringType,
+	"alternatives_as_exact":        types.ListType{ElemType: types.StringType},
 }
 
 var performanceAttrTypes = map[string]attr.Type{
-	"numeric_attributes_for_filtering":  types.ListType{ElemType: types.StringType},
+	"numeric_attributes_for_filtering":   types.ListType{ElemType: types.StringType},
 	"allow_compression_of_integer_array": types.BoolType,
 }
 
 var advancedAttrTypes = map[string]attr.Type{
-	"distinct":                  types.Int64Type,
-	"min_proximity":             types.Int64Type,
+	"distinct":                      types.Int64Type,
+	"min_proximity":                 types.Int64Type,
 	"replace_synonyms_in_highlight": types.BoolType,
-	"separators_to_index":       types.StringType,
-	"response_fields":           types.ListType{ElemType: types.StringType},
-	"user_data":                 types.StringType,
-	"enable_rules":              types.BoolType,
-	"enable_personalization":    types.BoolType,
-	"replicas":                  types.ListType{ElemType: types.StringType},
-	"enable_re_ranking":         types.BoolType,
-	"re_ranking_apply_filter":   types.StringType,
-	"mode":                      types.StringType,
-	"semantic_search":           types.StringType,
+	"separators_to_index":           types.StringType,
+	"response_fields":               types.ListType{ElemType: types.StringType},
+	"user_data":                     types.StringType,
+	"enable_rules":                  types.BoolType,
+	"enable_personalization":        types.BoolType,
+	"replicas":                      types.ListType{ElemType: types.StringType},
+	"enable_re_ranking":             types.BoolType,
+	"re_ranking_apply_filter":       types.StringType,
+	"mode":                          types.StringType,
+	"semantic_search":               types.StringType,
 	"attribute_criteria_computed_by_min_proximity": types.BoolType,
 }
 
@@ -566,6 +566,11 @@ func flattenOptionalWords(ctx context.Context, ow utils.Nullable[search.Optional
 }
 
 // flattenReRankingApplyFilter converts a Nullable[ReRankingApplyFilter] union to types.String (JSON-encoded).
+//
+// Both union arms are JSON-encoded, including the bare string one: the attribute
+// is documented as holding JSON and expandIndexSettings decodes it as such, so
+// storing the string unquoted would write state that the next apply rejects with
+// "Invalid re_ranking_apply_filter".
 func flattenReRankingApplyFilter(rr utils.Nullable[search.ReRankingApplyFilter]) types.String {
 	if !rr.IsSet() || rr.Get() == nil {
 		return types.StringNull()
@@ -573,7 +578,11 @@ func flattenReRankingApplyFilter(rr utils.Nullable[search.ReRankingApplyFilter])
 
 	switch v := rr.Get().GetActualInstance().(type) {
 	case string:
-		return types.StringValue(v)
+		data, err := json.Marshal(v)
+		if err != nil {
+			return types.StringNull()
+		}
+		return types.StringValue(string(data))
 	case []search.ReRankingApplyFilter:
 		data, err := json.Marshal(v)
 		if err != nil {
@@ -698,4 +707,3 @@ func flattenSemanticSearch(ss *search.SemanticSearch) types.String {
 	}
 	return types.StringValue(string(data))
 }
-

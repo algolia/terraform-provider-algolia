@@ -2,10 +2,11 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -53,7 +54,16 @@ func (r *destinationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	create, expandDiags := expandDestinationCreate(&plan)
+	createDestination(ctx, client, &plan, resp)
+}
+
+// createDestination is the Create body, split out so that a unit test can drive
+// it against an httptest-backed client (see identity_state_test.go) - the client
+// base.client() builds always talks to the real, region-routed Ingestion API.
+// Create itself only resolves the plan and the client. Same pattern as
+// abtest.createABTest.
+func createDestination(ctx context.Context, client *ingestionapi.APIClient, plan *DestinationResourceModel, resp *resource.CreateResponse) {
+	create, expandDiags := expandDestinationCreate(plan)
 	resp.Diagnostics.Append(expandDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -64,13 +74,24 @@ func (r *destinationResource) Create(ctx context.Context, req resource.CreateReq
 		"type": plan.Type.ValueString(),
 	})
 
-	createResp, err := client.CreateDestination(client.NewApiCreateDestinationRequest(create))
+	createResp, err := client.CreateDestination(client.NewApiCreateDestinationRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Ingestion destination", "Could not create destination "+plan.Name.ValueString()+": "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(createResp.DestinationID))
+	// The destination now exists in Algolia under the server-assigned UUID in
+	// createResp, which is the only handle Terraform will ever have on it.
+	// Persist it before the read-back below, so that a failure there leaves a
+	// resource Terraform can read, update and destroy instead of orphaning a
+	// destination that exists remotely but not in state: the next apply would
+	// create a second destination and nothing would ever adopt the first.
+	resp.Diagnostics.Append(resp.State.Set(ctx, newDestinationIdentityState(*plan, createResp.DestinationID))...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(createResp.DestinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read back destination after creation: "+err.Error())
 		return
@@ -79,12 +100,33 @@ func (r *destinationResource) Create(ctx context.Context, req resource.CreateReq
 	// flattenDestination compares the API's input against plan.Input (the
 	// value the user just configured) and only adopts the API's encoding if
 	// it's not semantically equivalent.
-	resp.Diagnostics.Append(flattenDestination(apiResp, &plan)...)
+	resp.Diagnostics.Append(flattenDestination(apiResp, plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+}
+
+// newDestinationIdentityState returns the state to persist immediately after a
+// successful CreateDestination, before the read-back that can still fail.
+// Terraform rejects an apply result containing unknown values, so every unknown
+// has to be resolved here: id/destination_id come from the create response,
+// while created_at/updated_at are knowable only from the read-back and are
+// therefore written as null - the next Read fills them in. Every other
+// attribute is Required or Optional-only, so the plan holds the configuration
+// verbatim and is already known. That includes transformation_ids, the model's
+// only non-scalar attribute: because it is Optional without Computed, the plan
+// carries the configured list or a *typed* null list, which is what the
+// framework requires (a zero-value types.List carries no element type and fails
+// conversion at runtime), so it is passed through untouched rather than rebuilt.
+func newDestinationIdentityState(plan DestinationResourceModel, destinationID string) DestinationResourceModel {
+	plan.ID = types.StringValue(destinationID)
+	plan.DestinationID = types.StringValue(destinationID)
+	plan.CreatedAt = types.StringNull()
+	plan.UpdatedAt = types.StringNull()
+
+	return plan
 }
 
 func (r *destinationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -101,10 +143,9 @@ func (r *destinationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	destinationID := state.DestinationID.ValueString()
-	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID))
+	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Ingestion destination not found; removing from state", map[string]any{"destination_id": destinationID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -148,12 +189,12 @@ func (r *destinationResource) Update(ctx context.Context, req resource.UpdateReq
 	destinationID := plan.DestinationID.ValueString()
 	tflog.Debug(ctx, "Updating Ingestion destination", map[string]any{"destination_id": destinationID})
 
-	if _, err := client.UpdateDestination(client.NewApiUpdateDestinationRequest(destinationID, update)); err != nil {
+	if _, err := client.UpdateDestination(client.NewApiUpdateDestinationRequest(destinationID, update), ingestionapi.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Ingestion destination", "Could not update destination "+destinationID+": "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID))
+	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read back destination after update: "+err.Error())
 		return
@@ -183,9 +224,8 @@ func (r *destinationResource) Delete(ctx context.Context, req resource.DeleteReq
 	destinationID := state.DestinationID.ValueString()
 	tflog.Debug(ctx, "Deleting Ingestion destination", map[string]any{"destination_id": destinationID})
 
-	if _, err := client.DeleteDestination(client.NewApiDeleteDestinationRequest(destinationID)); err != nil {
-		var apiErr *ingestionapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteDestination(client.NewApiDeleteDestinationRequest(destinationID), ingestionapi.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -201,7 +241,7 @@ func (r *destinationResource) ImportState(ctx context.Context, req resource.Impo
 	}
 
 	destinationID := req.ID
-	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID))
+	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Ingestion destination", "Could not import destination "+destinationID+": "+err.Error())
 		return

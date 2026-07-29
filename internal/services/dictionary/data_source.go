@@ -59,7 +59,7 @@ func (d *dictionaryEntryDataSource) Read(ctx context.Context, req datasource.Rea
 	objectID := model.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading dictionary entry data source", map[string]any{"dictionary": string(dictionaryType), "object_id": objectID})
 
-	entry, err := findDictionaryEntry(d.client, dictionaryType, objectID)
+	entry, err := findDictionaryEntry(ctx, d.client, dictionaryType, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading dictionary entry", "Could not read entry "+objectID+" in dictionary "+string(dictionaryType)+": "+err.Error())
 		return

@@ -42,8 +42,10 @@ func agentDataSourceSchema() datasourceschema.Schema {
 				Computed:    true,
 			},
 			"config": datasourceschema.StringAttribute{
-				Description: "JSON-encoded configuration parameters.",
-				Computed:    true,
+				Description: "JSON-encoded configuration parameters, as Agent Studio reports them. This " +
+					"includes the defaults it merges in, so it can differ from the config written by the " +
+					"algolia_agent resource that manages this agent.",
+				Computed: true,
 			},
 			"publish": datasourceschema.BoolAttribute{
 				Description: "Whether the remote agent is currently published.",
@@ -63,10 +65,11 @@ func agentDataSourceSchema() datasourceschema.Schema {
 			},
 		},
 		Blocks: map[string]datasourceschema.Block{
-			"tool_algolia_search":    toolAlgoliaSearchDataSourceBlockSchema(),
-			"tool_algolia_recommend": toolAlgoliaRecommendDataSourceBlockSchema(),
-			"tool_client_side":       toolClientSideDataSourceBlockSchema(),
-			"tool_mcp":               toolMCPDataSourceBlockSchema(),
+			"tool_algolia_search":          toolAlgoliaSearchDataSourceBlockSchema(),
+			"tool_algolia_recommend":       toolAlgoliaRecommendDataSourceBlockSchema(),
+			"tool_algolia_display_results": toolAlgoliaDisplayResultsDataSourceBlockSchema(),
+			"tool_client_side":             toolClientSideDataSourceBlockSchema(),
+			"tool_mcp":                     toolMCPDataSourceBlockSchema(),
 		},
 	}
 }
@@ -87,7 +90,13 @@ func toolAlgoliaSearchDataSourceBlockSchema() datasourceschema.Block {
 							"name":                 datasourceschema.StringAttribute{Computed: true},
 							"description":          datasourceschema.StringAttribute{Computed: true},
 							"enhanced_description": datasourceschema.StringAttribute{Computed: true},
-							"search_parameters":    datasourceschema.StringAttribute{Computed: true},
+							"search_parameters": datasourceschema.StringAttribute{
+								Description: "JSON-encoded Algolia search parameters, as Algolia reports them, " +
+									"with null parameters removed. Algolia returns only the parameters it " +
+									"recognises, so this can differ from the value written by the algolia_agent " +
+									"resource that manages this agent.",
+								Computed: true,
+							},
 						},
 					},
 				},
@@ -119,14 +128,35 @@ func toolAlgoliaRecommendDataSourceBlockSchema() datasourceschema.Block {
 	}
 }
 
+func toolAlgoliaDisplayResultsDataSourceBlockSchema() datasourceschema.Block {
+	return datasourceschema.ListNestedBlock{
+		Description: "Algolia display results tool configuration.",
+		NestedObject: datasourceschema.NestedBlockObject{
+			Attributes: map[string]datasourceschema.Attribute{
+				"name":                  datasourceschema.StringAttribute{Computed: true},
+				"min_groups":            datasourceschema.Int64Attribute{Computed: true},
+				"max_groups":            datasourceschema.Int64Attribute{Computed: true},
+				"min_results_per_group": datasourceschema.Int64Attribute{Computed: true},
+				"max_results_per_group": datasourceschema.Int64Attribute{Computed: true},
+			},
+		},
+	}
+}
+
 func toolClientSideDataSourceBlockSchema() datasourceschema.Block {
 	return datasourceschema.ListNestedBlock{
 		Description: "Client-side tool configuration.",
 		NestedObject: datasourceschema.NestedBlockObject{
 			Attributes: map[string]datasourceschema.Attribute{
-				"name":         datasourceschema.StringAttribute{Computed: true},
-				"description":  datasourceschema.StringAttribute{Computed: true},
-				"input_schema": datasourceschema.StringAttribute{Computed: true},
+				"name":        datasourceschema.StringAttribute{Computed: true},
+				"description": datasourceschema.StringAttribute{Computed: true},
+				"input_schema": datasourceschema.StringAttribute{
+					Description: "JSON-encoded JSON Schema for the tool's arguments, as Algolia reports " +
+						"it. Algolia strips the keywords it does not model, such as `$schema` and " +
+						"`additionalProperties`, so this can differ from the value written by the " +
+						"algolia_agent resource that manages this agent.",
+					Computed: true,
+				},
 			},
 		},
 	}
@@ -141,7 +171,10 @@ func toolMCPDataSourceBlockSchema() datasourceschema.Block {
 				"url":       datasourceschema.StringAttribute{Computed: true},
 				"transport": datasourceschema.StringAttribute{Computed: true},
 				"headers": datasourceschema.MapAttribute{
+					Description: "Additional headers sent with MCP requests. Sensitive: header values commonly " +
+						"carry credentials.",
 					Computed:    true,
+					Sensitive:   true,
 					ElementType: types.StringType,
 				},
 			},

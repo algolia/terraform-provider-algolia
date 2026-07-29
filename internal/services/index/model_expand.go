@@ -12,7 +12,10 @@ import (
 )
 
 // isKnown returns true if the value is neither null nor unknown.
-func isKnown(v interface{ IsNull() bool; IsUnknown() bool }) bool {
+func isKnown(v interface {
+	IsNull() bool
+	IsUnknown() bool
+}) bool {
 	return !v.IsNull() && !v.IsUnknown()
 }
 

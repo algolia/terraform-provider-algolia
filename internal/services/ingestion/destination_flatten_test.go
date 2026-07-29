@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -100,6 +101,89 @@ func TestFlattenDestination_NoTransformationIDsIsNull(t *testing.T) {
 
 	if !model.TransformationIDs.IsNull() {
 		t.Fatalf("transformation_ids = %#v, want null", model.TransformationIDs)
+	}
+}
+
+// TestFlattenTransformationIDs covers the null-vs-empty contract for
+// `transformation_ids`, which is Optional and not Computed: its planned value
+// is the configuration verbatim, so mapping an empty API value to null
+// regardless of the prior value aborts the apply of an explicitly configured
+// `transformation_ids = []` with "Provider produced inconsistent result after
+// apply". Mirrors flattenAuthenticationIDs in transformation_flatten.go.
+func TestFlattenTransformationIDs(t *testing.T) {
+	emptyList := types.ListValueMust(types.StringType, []attr.Value{})
+	configuredList := types.ListValueMust(types.StringType, []attr.Value{types.StringValue("transformation-1")})
+
+	tests := []struct {
+		name     string
+		ids      []string
+		previous types.List
+		want     types.List
+	}{
+		{
+			name:     "api empty and prior null stays null",
+			ids:      nil,
+			previous: types.ListNull(types.StringType),
+			want:     types.ListNull(types.StringType),
+		},
+		{
+			name:     "api empty and prior known empty stays known empty",
+			ids:      []string{},
+			previous: emptyList,
+			want:     emptyList,
+		},
+		{
+			name:     "api non-empty wins",
+			ids:      []string{"transformation-1"},
+			previous: types.ListNull(types.StringType),
+			want:     configuredList,
+		},
+		{
+			name:     "api empty and prior with entries is drift and becomes null",
+			ids:      nil,
+			previous: configuredList,
+			want:     types.ListNull(types.StringType),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, diags := flattenTransformationIDs(test.ids, test.previous)
+			if diags.HasError() {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+			if !got.Equal(test.want) {
+				t.Fatalf("transformation_ids = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+// TestFlattenDestination_PreservesConfiguredEmptyTransformationIDs is the
+// end-to-end version: the prior value reaches flattenTransformationIDs through
+// the model being refreshed (the plan on Create/Update, the prior state on
+// Read).
+func TestFlattenDestination_PreservesConfiguredEmptyTransformationIDs(t *testing.T) {
+	destination := &ingestionapi.Destination{
+		DestinationID: "destination-4",
+		Type:          ingestionapi.DESTINATION_TYPE_SEARCH,
+		Name:          "my-destination",
+		Input:         *ingestionapi.NewDestinationInput("products"),
+		CreatedAt:     "2024-01-01T00:00:00Z",
+		UpdatedAt:     "2024-01-01T00:00:00Z",
+	}
+
+	model := DestinationResourceModel{
+		TransformationIDs: types.ListValueMust(types.StringType, []attr.Value{}),
+	}
+
+	diags := flattenDestination(destination, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if model.TransformationIDs.IsNull() || len(model.TransformationIDs.Elements()) != 0 {
+		t.Fatalf("transformation_ids = %#v, want a known empty list (the configured value)", model.TransformationIDs)
 	}
 }
 

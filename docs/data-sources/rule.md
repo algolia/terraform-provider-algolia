@@ -56,6 +56,8 @@ data "algolia_rule" "example" {
 - `description` (String) Human-readable description of the rule.
 - `enabled` (Boolean) Whether the rule is active.
 - `id` (String) Terraform identifier in the form <index_name>/<object_id>.
+- `scope` (String) Rule scope. Algolia currently only returns `redirect` for redirect rules.
+- `tags` (List of String) Free-form tags used to group and filter rules in the Algolia dashboard.
 - `validity` (Block List) Time windows during which the rule is active. (see [below for nested schema](#nestedblock--validity))
 
 <a id="nestedblock--conditions"></a>
@@ -75,9 +77,11 @@ Read-Only:
 
 Read-Only:
 
+- `filter_promotes` (Boolean)
 - `hide` (Set of String)
 - `params_json` (String)
 - `promote` (Block List) Promoted object IDs and their position. (see [below for nested schema](#nestedblock--consequence--promote))
+- `redirect_index_name` (String)
 - `user_data` (String)
 
 <a id="nestedblock--consequence--promote"></a>

@@ -170,9 +170,64 @@ func TestAccIndexResource_import(t *testing.T) {
 				ResourceName:                         "algolia_index.test",
 				ImportState:                          true,
 				ImportStateId:                        indexName,
-				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "name",
-				ImportStateVerifyIgnore:              []string{"deletion_protection"},
+				// ImportStateVerify is deliberately not used here. The applied state
+				// leaves blocks absent from the configuration null, while import has no
+				// configuration to consult and therefore populates every block from the
+				// API. Both shapes plan clean (the block attributes are Optional+Computed),
+				// but they are not attribute-wise identical, so a full comparison would
+				// fail for reasons unrelated to correctness. TestAccIndexResource_
+				// importFullSettings covers the round-trip with a config that sets every
+				// block; the check below covers what matters here: import must actually
+				// read settings rather than returning a shell containing only the name.
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 imported state, got %d", len(states))
+					}
+					if got := states[0].Attributes["pagination.hits_per_page"]; got == "" {
+						return fmt.Errorf("imported pagination.hits_per_page is empty; import did not read index settings")
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+// TestAccIndexResource_importAppliesDeletionProtectionDefault guards against a
+// data-loss regression: deletion_protection is not represented in the Algolia
+// API, so if import leaves it null the Delete guard reads null (false) and
+// destroys an index the configuration explicitly protected.
+func TestAccIndexResource_importAppliesDeletionProtectionDefault(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		// This test is about delete semantics, so assert the index really is gone
+		// at the end rather than trusting the framework's own teardown.
+		CheckDestroy: testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_basic(indexName),
+			},
+			{
+				ResourceName:                         "algolia_index.test",
+				ImportState:                          true,
+				ImportStateId:                        indexName,
+				ImportStateVerifyIdentifierAttribute: "name",
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 imported state, got %d", len(states))
+					}
+					if got := states[0].Attributes["deletion_protection"]; got != "true" {
+						return fmt.Errorf("imported deletion_protection = %q, want \"true\"; a null/false value lets destroy delete a protected index", got)
+					}
+					return nil
+				},
+			},
+			{
+				// Disable protection so the test can clean up.
+				Config: testAccIndexResourceConfig_basic(indexName),
 			},
 		},
 	})
@@ -189,10 +244,31 @@ func TestAccIndexResource_importFullSettings(t *testing.T) {
 				Config: testAccIndexResourceConfig_fullSettings(indexName),
 			},
 			{
-				ResourceName:  "algolia_index.test",
-				ImportState:   true,
-				ImportStateId: indexName,
+				ResourceName:                         "algolia_index.test",
+				ImportState:                          true,
+				ImportStateId:                        indexName,
+				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "name",
+				// Each of these three is genuinely unrecoverable on import, verified
+				// rather than assumed. Keep this list minimal: anything added here stops
+				// being checked, which is how the original import defect went unnoticed.
+				//
+				//   deletion_protection - provider-side guard with no API representation.
+				//     Import seeds the safe default (true) while this config sets false;
+				//     TestAccIndexResource_importAppliesDeletionProtectionDefault asserts
+				//     that seeded value instead of ignoring it outright.
+				//
+				//   relevancy_strictness, allow_compression_of_integer_array - Algolia
+				//     accepts both on SetSettings but omits them from GetSettings. Checked
+				//     against the live API: after PUTting relevancyStrictness=90 and
+				//     allowCompressionOfIntegerArray=false, neither key appears in the GET
+				//     response. preservePlannedValues normally carries them over from
+				//     prior state, but import has no prior state to carry them from.
+				ImportStateVerifyIgnore: []string{
+					"deletion_protection",
+					"ranking.relevancy_strictness",
+					"performance.allow_compression_of_integer_array",
+				},
 			},
 			{
 				Config: testAccIndexResourceConfig_fullSettings(indexName),
@@ -224,10 +300,24 @@ func TestAccIndexResource_importJsonFields(t *testing.T) {
 				Config: testAccIndexResourceConfig_jsonFields(indexName),
 			},
 			{
-				ResourceName:  "algolia_index.test",
-				ImportState:   true,
-				ImportStateId: indexName,
+				ResourceName:                         "algolia_index.test",
+				ImportState:                          true,
+				ImportStateId:                        indexName,
 				ImportStateVerifyIdentifierAttribute: "name",
+				// This config sets only 2 of the 10 blocks, so imported state (all
+				// blocks populated from the API) is legitimately richer than applied
+				// state. Assert the JSON-encoded fields survived import instead.
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 imported state, got %d", len(states))
+					}
+					for _, attr := range []string{"advanced.user_data", "languages.custom_normalization"} {
+						if states[0].Attributes[attr] == "" {
+							return fmt.Errorf("imported %s is empty; import did not read JSON-encoded settings", attr)
+						}
+					}
+					return nil
+				},
 			},
 			{
 				Config: testAccIndexResourceConfig_jsonFields(indexName),
@@ -252,9 +342,9 @@ func TestAccIndexResource_importUnionTypes(t *testing.T) {
 				Config: testAccIndexResourceConfig_unionTypes(indexName),
 			},
 			{
-				ResourceName:  "algolia_index.test",
-				ImportState:   true,
-				ImportStateId: indexName,
+				ResourceName:                         "algolia_index.test",
+				ImportState:                          true,
+				ImportStateId:                        indexName,
 				ImportStateVerifyIdentifierAttribute: "name",
 			},
 			{
@@ -281,9 +371,9 @@ func TestAccIndexResource_importPartialBlocks(t *testing.T) {
 				Config: testAccIndexResourceConfig_update_step1(indexName),
 			},
 			{
-				ResourceName:  "algolia_index.test",
-				ImportState:   true,
-				ImportStateId: indexName,
+				ResourceName:                         "algolia_index.test",
+				ImportState:                          true,
+				ImportStateId:                        indexName,
 				ImportStateVerifyIdentifierAttribute: "name",
 			},
 			{
@@ -299,6 +389,60 @@ func TestAccIndexResource_importPartialBlocks(t *testing.T) {
 					resource.TestCheckNoResourceAttr("algolia_index.test", "query_strategy.%"),
 					resource.TestCheckNoResourceAttr("algolia_index.test", "performance.%"),
 					resource.TestCheckNoResourceAttr("algolia_index.test", "advanced.%"),
+				),
+			},
+		},
+	})
+}
+
+// testAccDeleteIndexOutOfBand removes an index behind Terraform's back, the way
+// `algolia indices delete` or a dashboard click would.
+func testAccDeleteIndexOutOfBand(t *testing.T, indexName string) {
+	t.Helper()
+
+	client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	if err != nil {
+		t.Fatalf("could not build Search client: %v", err)
+	}
+
+	delResp, err := client.DeleteIndex(client.NewApiDeleteIndexRequest(indexName))
+	if err != nil {
+		t.Fatalf("could not delete index %s out of band: %v", indexName, err)
+	}
+	if _, err := client.WaitForTask(indexName, delResp.TaskID); err != nil {
+		t.Fatalf("could not confirm out-of-band deletion of index %s: %v", indexName, err)
+	}
+}
+
+// TestAccIndexResource_recoversFromOutOfBandDeletion covers the case that used to
+// wedge the resource: with the index gone, Read raised "Error reading index", so
+// plan, apply and destroy all failed and only `terraform state rm` unblocked the
+// operator. Read must instead drop the resource from state, leaving a plan that
+// recreates it.
+func TestAccIndexResource_recoversFromOutOfBandDeletion(t *testing.T) {
+	indexName := fmt.Sprintf("tf-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_basic(indexName),
+			},
+			{
+				// Refreshing against a deleted index must succeed and empty the
+				// state, which surfaces as a plan that wants to create it again.
+				PreConfig:          func() { testAccDeleteIndexOutOfBand(t, indexName) },
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// And the recreate has to go through rather than failing on a
+				// leftover state entry.
+				Config: testAccIndexResourceConfig_basic(indexName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_index.test", "name", indexName),
+					resource.TestCheckResourceAttr("algolia_index.test", "deletion_protection", "false"),
 				),
 			},
 		},

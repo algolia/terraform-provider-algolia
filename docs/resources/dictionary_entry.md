@@ -57,6 +57,8 @@ resource "algolia_dictionary_entry" "compound" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Import a dictionary entry using the form "dictionary/object_id".
 # dictionary is one of: stopwords, plurals, compounds.

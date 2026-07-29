@@ -24,11 +24,15 @@ func flattenDictionaryEntry(dictionaryType search.DictionaryType, entry *search.
 
 	model.Word = nullableString(entry.Word)
 
-	words, wordsDiags := flattenStringList(entry.GetWords())
+	// The model already holds the value being refreshed - the configuration on
+	// Create/Update, the prior state on Read, nothing on import and data
+	// source reads - which decides how an empty API value is represented. See
+	// flattenStringList.
+	words, wordsDiags := flattenStringList(entry.GetWords(), model.Words)
 	diags.Append(wordsDiags...)
 	model.Words = words
 
-	decomposition, decompositionDiags := flattenStringList(entry.GetDecomposition())
+	decomposition, decompositionDiags := flattenStringList(entry.GetDecomposition(), model.Decomposition)
 	diags.Append(decompositionDiags...)
 	model.Decomposition = decomposition
 
@@ -48,8 +52,21 @@ func flattenDictionaryEntry(dictionaryType search.DictionaryType, entry *search.
 	return diags
 }
 
-func flattenStringList(values []string) (types.List, diag.Diagnostics) {
+// flattenStringList converts an API string slice into a Terraform list.
+// `words` and `decomposition` are Optional and not Computed, so their planned
+// value is the configuration verbatim: emitting a null list where the plan held
+// a known empty list (`words = []`) makes Terraform reject the apply with
+// "Provider produced inconsistent result after apply". When the API returns
+// nothing, the prior value therefore decides: a null prior stays null, while a
+// prior that was explicitly configured as `[]` stays a known empty list. A
+// prior with entries the API no longer returns is real drift and becomes null.
+// Pass a null prior (imports, data source reads) to always map empty to null.
+func flattenStringList(values []string, prior types.List) (types.List, diag.Diagnostics) {
 	if len(values) == 0 {
+		if !prior.IsNull() && !prior.IsUnknown() && len(prior.Elements()) == 0 {
+			return prior, nil // explicit []
+		}
+
 		return types.ListNull(types.StringType), nil
 	}
 

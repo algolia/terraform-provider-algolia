@@ -598,4 +598,3 @@ func boolPtr(b bool) *bool {
 func typoEnumPtr(e search.TypoToleranceEnum) *search.TypoToleranceEnum {
 	return &e
 }
-

@@ -54,7 +54,7 @@ func (d *userIdsDataSource) Configure(_ context.Context, req datasource.Configur
 func (d *userIdsDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
 	tflog.Debug(ctx, "Reading user IDs data source", map[string]any{"app_id": d.appID})
 
-	items, err := fetchAllUserIds(d.client)
+	items, err := fetchAllUserIds(ctx, d.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Error listing user IDs", "Could not list user IDs: "+err.Error())
 		return

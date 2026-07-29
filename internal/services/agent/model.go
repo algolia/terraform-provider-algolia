@@ -19,10 +19,11 @@ type AgentResourceModel struct {
 	DeletionProtection types.Bool   `tfsdk:"deletion_protection"`
 
 	// Tool blocks
-	ToolAlgoliaSearch    types.List `tfsdk:"tool_algolia_search"`
-	ToolAlgoliaRecommend types.List `tfsdk:"tool_algolia_recommend"`
-	ToolClientSide       types.List `tfsdk:"tool_client_side"`
-	ToolMCP              types.List `tfsdk:"tool_mcp"`
+	ToolAlgoliaSearch         types.List `tfsdk:"tool_algolia_search"`
+	ToolAlgoliaRecommend      types.List `tfsdk:"tool_algolia_recommend"`
+	ToolAlgoliaDisplayResults types.List `tfsdk:"tool_algolia_display_results"`
+	ToolClientSide            types.List `tfsdk:"tool_client_side"`
+	ToolMCP                   types.List `tfsdk:"tool_mcp"`
 
 	// Computed
 	Status    types.String `tfsdk:"status"`
@@ -44,10 +45,11 @@ type AgentDataSourceModel struct {
 	Publish      types.Bool   `tfsdk:"publish"`
 
 	// Tool blocks
-	ToolAlgoliaSearch    types.List `tfsdk:"tool_algolia_search"`
-	ToolAlgoliaRecommend types.List `tfsdk:"tool_algolia_recommend"`
-	ToolClientSide       types.List `tfsdk:"tool_client_side"`
-	ToolMCP              types.List `tfsdk:"tool_mcp"`
+	ToolAlgoliaSearch         types.List `tfsdk:"tool_algolia_search"`
+	ToolAlgoliaRecommend      types.List `tfsdk:"tool_algolia_recommend"`
+	ToolAlgoliaDisplayResults types.List `tfsdk:"tool_algolia_display_results"`
+	ToolClientSide            types.List `tfsdk:"tool_client_side"`
+	ToolMCP                   types.List `tfsdk:"tool_mcp"`
 
 	// Computed
 	Status    types.String `tfsdk:"status"`
@@ -81,6 +83,15 @@ type AlgoliaRecommendConfigModel struct {
 	Index       types.String `tfsdk:"index"`
 	ModelName   types.String `tfsdk:"model_name"`
 	Description types.String `tfsdk:"description"`
+}
+
+// ToolAlgoliaDisplayResultsModel represents an algolia_display_results tool.
+type ToolAlgoliaDisplayResultsModel struct {
+	Name               types.String `tfsdk:"name"`
+	MinGroups          types.Int64  `tfsdk:"min_groups"`
+	MaxGroups          types.Int64  `tfsdk:"max_groups"`
+	MinResultsPerGroup types.Int64  `tfsdk:"min_results_per_group"`
+	MaxResultsPerGroup types.Int64  `tfsdk:"max_results_per_group"`
 }
 
 // ToolClientSideModel represents a client_side tool.

@@ -10,15 +10,17 @@ import (
 )
 
 // flattenABTestComputed refreshes only the server-owned computed
-// attributes (id, ab_test_id, status) from a GetABTest response.
+// attributes (id, ab_test_id, status) from a GetABTest response. It is what
+// Create and Update use: for a Required attribute the value Terraform applied
+// must equal the value it planned, so those two must not adopt anything the
+// API echoes back. Read uses flattenABTestRead instead, which also refreshes
+// the two attributes GetABTest returns in the shape they were submitted.
 //
-// It deliberately does NOT touch Name/EndAt/Variants/Metrics/Configuration:
-// GetABTest's response is enriched with runtime results (per-variant
-// conversion/click counts, significance, etc.) and its shape diverges from
-// what was submitted to AddABTests, so overwriting those fields here would
-// corrupt state with runtime data and cause a perpetual diff against the
-// user's configuration. Callers (Create/Read/Update in resource.go) must
-// leave the model's existing values for those fields as-is - see the
+// It deliberately does NOT touch Variants/Metrics/Configuration: GetABTest's
+// response is enriched with runtime results (per-variant conversion/click
+// counts, significance, etc.) and its shape diverges from what was submitted
+// to AddABTests, so overwriting those fields would corrupt state with runtime
+// data and cause a perpetual diff against the user's configuration - see the
 // resource schema's description.
 func flattenABTestComputed(abTest *abtestingapi.ABTest, model *ABTestResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
@@ -31,11 +33,35 @@ func flattenABTestComputed(abTest *abtestingapi.ABTest, model *ABTestResourceMod
 	return diags
 }
 
-// flattenABTestImport populates state for `terraform import`. Unlike Read,
-// there is no prior configuration to preserve, so it seeds
-// name/end_at/variants/configuration from the enriched GetABTest response -
-// but this is a best-effort reconstruction, not a faithful replay of what
-// was originally submitted to AddABTests:
+// flattenABTestRead is the Read-path refresh. On top of the computed
+// attributes it refreshes `name` and `end_at`, so that a test renamed or
+// rescheduled outside Terraform shows up as drift instead of staying
+// invisible forever. Both are plain strings that GetABTest returns exactly as
+// they were submitted to AddABTests (flattenABTestImport relies on the same
+// property, and the import step of TestAccABTestResource_basic verifies it
+// byte-for-byte), so adopting them cannot corrupt state.
+//
+// `variants`, `metrics` and `configuration` stay excluded: unlike name/end_at,
+// GetABTest's shape for those diverges from the create shape (see
+// flattenABTestComputed), so refreshing them would corrupt state rather than
+// reveal drift.
+func flattenABTestRead(abTest *abtestingapi.ABTest, model *ABTestResourceModel) diag.Diagnostics {
+	diags := flattenABTestComputed(abTest, model)
+	if diags.HasError() {
+		return diags
+	}
+
+	model.Name = types.StringValue(abTest.Name)
+	model.EndAt = types.StringValue(abTest.EndAt)
+
+	return diags
+}
+
+// flattenABTestImport populates state for `terraform import`. There is no
+// prior configuration to preserve, so on top of what Read refreshes
+// (name/end_at) it also seeds variants/configuration from the enriched
+// GetABTest response - but that part is a best-effort reconstruction, not a
+// faithful replay of what was originally submitted to AddABTests:
 //
 //   - variants is the enriched Variant shape (adds metrics/metadata/
 //     estimatedSampleSize not present in AddABTestsVariant); it round-trips
@@ -53,13 +79,11 @@ func flattenABTestComputed(abTest *abtestingapi.ABTest, model *ABTestResourceMod
 func flattenABTestImport(abTest *abtestingapi.ABTest, model *ABTestResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	diags.Append(flattenABTestComputed(abTest, model)...)
+	diags.Append(flattenABTestRead(abTest, model)...)
 	if diags.HasError() {
 		return diags
 	}
 
-	model.Name = types.StringValue(abTest.Name)
-	model.EndAt = types.StringValue(abTest.EndAt)
 	model.Metrics = types.StringNull()
 
 	variantsJSON, err := json.Marshal(abTest.Variants)

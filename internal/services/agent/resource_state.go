@@ -4,30 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func hydrateAgentResourceState(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, deletionProtection types.Bool, model *AgentResourceModel) diag.Diagnostics {
-	diags := flattenAgentResponse(ctx, resp, model)
+func hydrateAgentResourceState(ctx context.Context, doc *agentDocument, deletionProtection types.Bool, model *AgentResourceModel) diag.Diagnostics {
+	diags := flattenAgentResponse(ctx, doc, model)
 	if diags.HasError() {
 		return diags
 	}
 
-	model.Publish = remotePublishValue(string(resp.Status))
+	model.Publish = remotePublishValue(string(doc.agent.Status))
 	model.DeletionProtection = deletionProtectionValue(deletionProtection)
 
 	return diags
 }
 
-func hydrateImportedAgentResourceState(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, model *AgentResourceModel) diag.Diagnostics {
-	return hydrateAgentResourceState(ctx, resp, types.BoolValue(true), model)
+func hydrateImportedAgentResourceState(ctx context.Context, doc *agentDocument, model *AgentResourceModel) diag.Diagnostics {
+	return hydrateAgentResourceState(ctx, doc, types.BoolValue(true), model)
 }
 
-func hydrateAgentDataSourceState(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, model *AgentDataSourceModel) diag.Diagnostics {
+func hydrateAgentDataSourceState(ctx context.Context, doc *agentDocument, model *AgentDataSourceModel) diag.Diagnostics {
 	resourceModel := &AgentResourceModel{}
-	diags := flattenAgentResponse(ctx, resp, resourceModel)
+	diags := flattenAgentResponse(ctx, doc, resourceModel)
 	if diags.HasError() {
 		return diags
 	}
@@ -41,9 +40,10 @@ func hydrateAgentDataSourceState(ctx context.Context, resp *agentStudio.AgentWit
 	model.Model = resourceModel.Model
 	model.TemplateType = resourceModel.TemplateType
 	model.Config = resourceModel.Config
-	model.Publish = remotePublishValue(string(resp.Status))
+	model.Publish = remotePublishValue(string(doc.agent.Status))
 	model.ToolAlgoliaSearch = resourceModel.ToolAlgoliaSearch
 	model.ToolAlgoliaRecommend = resourceModel.ToolAlgoliaRecommend
+	model.ToolAlgoliaDisplayResults = resourceModel.ToolAlgoliaDisplayResults
 	model.ToolClientSide = resourceModel.ToolClientSide
 	model.ToolMCP = resourceModel.ToolMCP
 	model.Status = resourceModel.Status

@@ -3,6 +3,8 @@ package ingestion
 import (
 	"context"
 
+	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -54,7 +56,7 @@ func (d *transformationDataSource) Read(ctx context.Context, req datasource.Read
 	transformationID := model.TransformationID.ValueString()
 	tflog.Debug(ctx, "Reading Ingestion transformation data source", map[string]any{"transformation_id": transformationID})
 
-	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID))
+	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read transformation "+transformationID+": "+err.Error())
 		return

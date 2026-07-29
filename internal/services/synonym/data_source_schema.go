@@ -1,7 +1,9 @@
 package synonym
 
-import datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 func synonymDataSourceSchema() datasourceschema.Schema {
 	return datasourceschema.Schema{

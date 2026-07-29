@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   auto-merge:
-    name: Auto-merge patch and minor updates
+    name: Auto-merge patch updates
     runs-on: ubuntu-latest
     # Only act on PRs opened by Dependabot.
     if: github.actor == 'dependabot[bot]'
@@ -19,11 +19,19 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Enable GitHub's native auto-merge so the PR merges as soon as the
-      # required status checks (Build, Lint, Unit Tests) pass. Major version
-      # bumps are intentionally left for manual review.
-      - name: Enable auto-merge for patch and minor bumps
-        if: contains(fromJSON('["version-update:semver-patch", "version-update:semver-minor"]'), steps.metadata.outputs.update-type)
+      # Enable GitHub's native auto-merge so the PR merges as soon as the required
+      # status checks pass.
+      #
+      # Patch-only, deliberately. The checks reachable from a pull request are
+      # Build, Lint and Unit Tests: the acceptance suite runs only on pushes to
+      # main, because it needs the admin API key and secrets must not be exposed to
+      # PR code. Those three checks cannot detect a behavioural change in
+      # algoliasearch-client-go - which is exactly the failure class behind the
+      # recommend_rule outage, and minor bumps of that client are where it lives.
+      # Minor and major bumps therefore wait for a maintainer, who can merge to main
+      # and read the acceptance run before releasing.
+      - name: Enable auto-merge for patch bumps
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

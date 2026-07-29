@@ -34,7 +34,7 @@ func flattenDestination(destination *ingestionapi.Destination, model *Destinatio
 	model.CreatedAt = types.StringValue(destination.CreatedAt)
 	model.UpdatedAt = types.StringValue(destination.UpdatedAt)
 
-	transformationIDs, tIDsDiags := flattenTransformationIDs(destination.TransformationIDs)
+	transformationIDs, tIDsDiags := flattenTransformationIDs(destination.TransformationIDs, model.TransformationIDs)
 	diags.Append(tIDsDiags...)
 	model.TransformationIDs = transformationIDs
 
@@ -82,7 +82,8 @@ func flattenDestinationDataSource(destination *ingestionapi.Destination, model *
 	model.CreatedAt = types.StringValue(destination.CreatedAt)
 	model.UpdatedAt = types.StringValue(destination.UpdatedAt)
 
-	transformationIDs, tIDsDiags := flattenTransformationIDs(destination.TransformationIDs)
+	// The data source has no prior value, so an empty list of IDs is null.
+	transformationIDs, tIDsDiags := flattenTransformationIDs(destination.TransformationIDs, types.ListNull(types.StringType))
 	diags.Append(tIDsDiags...)
 	model.TransformationIDs = transformationIDs
 
@@ -96,11 +97,23 @@ func flattenDestinationDataSource(destination *ingestionapi.Destination, model *
 	return diags
 }
 
-// flattenTransformationIDs converts the API's []string into a Terraform
-// List, mirroring internal/services/dictionary's flattenStringList: a nil
-// or empty slice becomes a null list rather than an empty list value.
-func flattenTransformationIDs(ids []string) (types.List, diag.Diagnostics) {
+// flattenTransformationIDs converts the API's []string into a Terraform List,
+// mirroring flattenAuthenticationIDs in transformation_flatten.go. A non-empty
+// slice is adopted directly. `transformation_ids` is Optional and not Computed,
+// so its planned value is the configuration verbatim: emitting a null list
+// where the plan held a known empty list (`transformation_ids = []`) makes
+// Terraform reject the apply with "Provider produced inconsistent result after
+// apply". When the API returns no IDs, the prior value therefore decides: null
+// stays null (unset), and an explicit `[]` stays `[]`. A prior with entries the
+// API no longer returns is real drift (the transformations were detached
+// externally) and becomes null. Pass a null prior (data source reads) to always
+// map empty to null.
+func flattenTransformationIDs(ids []string, previous types.List) (types.List, diag.Diagnostics) {
 	if len(ids) == 0 {
+		if !previous.IsNull() && !previous.IsUnknown() && len(previous.Elements()) == 0 {
+			return previous, nil // explicit []
+		}
+
 		return types.ListNull(types.StringType), nil
 	}
 

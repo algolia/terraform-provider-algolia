@@ -55,7 +55,7 @@ func (d *allowedSourcesDataSource) Configure(_ context.Context, req datasource.C
 func (d *allowedSourcesDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
 	tflog.Debug(ctx, "Reading allowed sources data source", map[string]any{"app_id": d.appID})
 
-	current, err := d.client.GetSources()
+	current, err := d.client.GetSources(search.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading allowed sources", err.Error())
 		return

@@ -2,6 +2,7 @@ package mcm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -168,7 +169,7 @@ func TestCollectAllUserIds_PropagatesError(t *testing.T) {
 	}
 
 	_, err := collectAllUserIds(fetch, 1000)
-	if err != wantErr {
+	if !errors.Is(err, wantErr) {
 		t.Fatalf("err = %v, want %v", err, wantErr)
 	}
 }

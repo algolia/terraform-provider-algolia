@@ -126,7 +126,16 @@ func TestAccAgentResource_withTools(t *testing.T) {
 					resource.TestCheckResourceAttr("algolia_agent.test", "tool_client_side.#", "1"),
 					resource.TestCheckResourceAttr("algolia_agent.test", "tool_client_side.0.name", "get_order"),
 					resource.TestCheckResourceAttr("algolia_agent.test", "tool_client_side.0.description", "Get order status"),
+					// The applied schema must be the configured bytes, keywords
+					// and formatting included.
+					resource.TestCheckResourceAttr("algolia_agent.test", "tool_client_side.0.input_schema", testAccAgentInputSchema),
 				),
+			},
+			{
+				// A second apply of the same configuration must be a no-op: a
+				// re-encoded schema in state would show up as a permanent diff.
+				Config:   testAccAgentResourceConfig_withTools(agentName),
+				PlanOnly: true,
 			},
 		},
 	})
@@ -363,6 +372,29 @@ resource "algolia_agent" "test" {
 `, name)
 }
 
+// testAccAgentInputSchema is a pretty-printed JSON Schema carrying keywords the
+// Algolia client does not model, and is asserted verbatim on the applied state.
+//
+// The previous fixture used jsonencode with exactly `{type, properties,
+// required}` in alphabetical order, the one shape that survived a round trip
+// through agentStudio.ClientToolsArgsSchema, so it could see neither half of the
+// defect: `$schema` and `additionalProperties` never reached Algolia, and the
+// user's formatting was replaced by the client's. input_schema is Required and so
+// has no Computed escape hatch, which makes either one enough to fail the apply
+// with "Provider produced inconsistent result after apply".
+const testAccAgentInputSchema = `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "description": "The order to look up."
+    }
+  },
+  "required": ["order_id"]
+}`
+
 func testAccAgentResourceConfig_withTools(name string) string {
 	return fmt.Sprintf(`
 resource "algolia_agent" "test" {
@@ -371,18 +403,12 @@ resource "algolia_agent" "test" {
   deletion_protection = false
 
   tool_client_side {
-    name        = "get_order"
-    description = "Get order status"
-    input_schema = jsonencode({
-      type = "object"
-      properties = {
-        order_id = { type = "string" }
-      }
-      required = ["order_id"]
-    })
+    name         = "get_order"
+    description  = "Get order status"
+    input_schema = %[2]q
   }
 }
-`, name)
+`, name, testAccAgentInputSchema)
 }
 
 func testAccAgentResourceConfig_deletionProtection(name string) string {

@@ -18,9 +18,10 @@ func abTestResourceSchema() schema.Schema {
 			"conversion/click counts, significance, status) whose shape diverges from what was submitted to " +
 			"create the test. To avoid corrupting state with that runtime data and causing a perpetual diff, " +
 			"`variants`, `metrics`, and `configuration` are never refreshed from the API - the value you " +
-			"configure is the value that stays in state. Only `status` (and the identifiers) are refreshed on " +
-			"read. Use the `algolia_ab_test` data source to inspect the enriched, read-only view of a test " +
-			"(including per-variant results).\n\n" +
+			"configure is the value that stays in state. `name` and `end_at` *are* refreshed on read - the API " +
+			"returns them in the same shape they were submitted - so changing either outside Terraform shows up " +
+			"as drift and, since both force replacement, plans a replace. Use the `algolia_ab_test` data source " +
+			"to inspect the enriched, read-only view of a test (including per-variant results).\n\n" +
 			"Import limitation: `variants` and `metrics` cannot be perfectly reconstructed from the enriched " +
 			"read response on `terraform import` (metrics in particular: `GetABTest` only returns per-metric " +
 			"*results* nested under each variant, not the original metrics list). See each attribute's " +
@@ -42,7 +43,8 @@ func abTestResourceSchema() schema.Schema {
 			},
 			"name": schema.StringAttribute{
 				Description: "Name of the A/B test. Changing this forces replacement: the A/B Testing API has " +
-					"no update endpoint.",
+					"no update endpoint. Refreshed from `GetABTest` on every read, so a rename outside " +
+					"Terraform is detected as drift.",
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -50,7 +52,8 @@ func abTestResourceSchema() schema.Schema {
 			},
 			"end_at": schema.StringAttribute{
 				Description: "End date and time of the A/B test, in RFC 3339 format. Changing this forces " +
-					"replacement: the A/B Testing API has no update endpoint.",
+					"replacement: the A/B Testing API has no update endpoint. Refreshed from `GetABTest` on " +
+					"every read, so a reschedule outside Terraform is detected as drift.",
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

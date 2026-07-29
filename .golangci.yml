@@ -1,0 +1,27 @@
+# golangci-lint configuration.
+#
+# Keep the version pinned in .tool-versions and in .github/workflows/test.yml in
+# sync with each other, so a lint failure reproduces locally.
+version: "2"
+
+linters:
+  # golangci-lint's defaults (errcheck, govet, ineffassign, staticcheck, unused)
+  # plus a small set that has caught real defects in this repo.
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+
+formatters:
+  # In golangci-lint v2 gofmt is a formatter, not a linter, and formatters are
+  # only checked when listed here. Without this block `golangci-lint run` reports
+  # zero issues on files that `gofmt -l` flags.
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  # Report every occurrence rather than the default three per linter, so CI does
+  # not hide the tail of a formatting or lint regression.
+  max-issues-per-linter: 0
+  max-same-issues: 0

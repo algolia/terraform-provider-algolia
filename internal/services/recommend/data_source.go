@@ -59,7 +59,7 @@ func (d *recommendRuleDataSource) Read(ctx context.Context, req datasource.ReadR
 		"object_id":  objectID,
 	})
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return

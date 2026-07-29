@@ -13,10 +13,6 @@ func indexDataSourceSchema() datasourceschema.Schema {
 				Description: "The name of the Algolia index.",
 				Required:    true,
 			},
-			"deletion_protection": datasourceschema.BoolAttribute{
-				Description: "Whether deletion protection is enabled.",
-				Computed:    true,
-			},
 			"primary": datasourceschema.StringAttribute{
 				Description: "The name of the primary index (for replicas).",
 				Computed:    true,

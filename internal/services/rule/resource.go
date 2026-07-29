@@ -2,11 +2,11 @@ package rule
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -62,30 +62,30 @@ func (r *ruleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	objectID := plan.ObjectID.ValueString()
 	tflog.Debug(ctx, "Creating rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	ruleReq, diags := buildRuleRequest(&plan)
+	body, diags := ruleRequestBodyFromModel(&plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	saveResp, err := r.client.SaveRule(r.client.NewApiSaveRuleRequest(indexName, objectID, ruleReq))
+	taskID, err := saveRuleRaw(ctx, r.client, indexName, objectID, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating rule", "Could not create rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, saveResp.TaskID); err != nil {
+	if err := waitForRuleTask(ctx, r.client, indexName, taskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for rule creation", "Could not confirm rule creation: "+err.Error())
 		return
 	}
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &plan)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -104,10 +104,9 @@ func (r *ruleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	objectID := state.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Rule not found; removing from state", map[string]any{"index_name": indexName, "object_id": objectID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -117,7 +116,7 @@ func (r *ruleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &state)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -136,30 +135,30 @@ func (r *ruleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	objectID := plan.ObjectID.ValueString()
 	tflog.Debug(ctx, "Updating rule", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	ruleReq, diags := buildRuleRequest(&plan)
+	body, diags := ruleRequestBodyFromModel(&plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	saveResp, err := r.client.SaveRule(r.client.NewApiSaveRuleRequest(indexName, objectID, ruleReq))
+	taskID, err := saveRuleRaw(ctx, r.client, indexName, objectID, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating rule", "Could not update rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, saveResp.TaskID); err != nil {
+	if err := waitForRuleTask(ctx, r.client, indexName, taskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for rule update", "Could not confirm rule update: "+err.Error())
 		return
 	}
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &plan)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -177,10 +176,9 @@ func (r *ruleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	indexName := state.IndexName.ValueString()
 	objectID := state.ObjectID.ValueString()
 
-	deleteResp, err := r.client.DeleteRule(r.client.NewApiDeleteRuleRequest(indexName, objectID))
+	deleteResp, err := r.client.DeleteRule(r.client.NewApiDeleteRuleRequest(indexName, objectID), search.WithContext(ctx))
 	if err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -188,9 +186,8 @@ func (r *ruleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	if err := waitForRuleTask(r.client, indexName, deleteResp.TaskID); err != nil {
-		var apiErr *search.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if err := waitForRuleTask(ctx, r.client, indexName, deleteResp.TaskID); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -205,14 +202,14 @@ func (r *ruleResource) ImportState(ctx context.Context, req resource.ImportState
 		return
 	}
 
-	apiResp, err := r.client.GetRule(r.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(ctx, r.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing rule", "Could not import rule "+req.ID+": "+err.Error())
 		return
 	}
 
 	var state RuleResourceModel
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &state)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -220,18 +217,24 @@ func (r *ruleResource) ImportState(ctx context.Context, req resource.ImportState
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func waitForRuleTask(client *search.APIClient, indexName string, taskID int64) error {
+func waitForRuleTask(ctx context.Context, client *search.APIClient, indexName string, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID))
+		resp, err := client.GetTask(client.NewApiGetTaskRequest(indexName, taskID), search.WithContext(ctx))
 		if err != nil {
 			return err
 		}
 		if resp.Status == search.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}

@@ -25,12 +25,31 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
+	"unicode"
 )
 
 // defaultBaseURL is the Crawler API's base URL (API version 1), confirmed by both the
 // algolia/cli client (DefaultBaseURL = "https://crawler.algolia.com/api/1/") and the
 // OpenAPI spec's `servers` entry (https://crawler.algolia.com/api) + `/1/...` paths.
 const defaultBaseURL = "https://crawler.algolia.com/api/1"
+
+// defaultTimeout bounds a single Crawler API call end to end (connect, TLS
+// handshake, headers, and body read). Terraform gives a provider no deadline of its
+// own, so without this a hung or slow-loris endpoint blocks the apply indefinitely.
+const defaultTimeout = 30 * time.Second
+
+// maxResponseBytes bounds how much of a response body is read into memory. The
+// largest legitimate payload here is a single crawler configuration (or a page of
+// at most 100 id/name pairs), which is orders of magnitude smaller; anything past
+// this is a malformed or hostile response, not something to buffer.
+const maxResponseBytes = 8 << 20 // 8 MiB
+
+// maxErrorBodyBytes bounds how much of a non-2xx body is retained in APIError.Body.
+// That field is rendered verbatim in Terraform diagnostics, so it is kept short
+// enough to read and stripped of anything that could corrupt a terminal.
+const maxErrorBodyBytes = 4096
 
 // APIError represents a non-2xx response from the Crawler API.
 type APIError struct {
@@ -40,6 +59,34 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("API error (HTTP %d): %s", e.StatusCode, e.Body)
+}
+
+// sanitizeErrorBody prepares a non-2xx response body for APIError.Body, which is
+// surfaced verbatim in Terraform diagnostics. It truncates to maxErrorBodyBytes,
+// replaces invalid UTF-8, and drops non-printable runes so a hostile or corrupt
+// body cannot inject ANSI escapes into an operator's terminal or a CI log, then
+// collapses whitespace so the remainder reads as one line.
+func sanitizeErrorBody(body []byte) string {
+	truncated := len(body) > maxErrorBodyBytes
+	if truncated {
+		body = body[:maxErrorBodyBytes]
+	}
+
+	// Truncation can split a multi-byte rune; ToValidUTF8 repairs that too.
+	cleaned := strings.Map(func(r rune) rune {
+		if !unicode.IsPrint(r) {
+			return ' '
+		}
+
+		return r
+	}, strings.ToValidUTF8(string(body), " "))
+
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	if truncated {
+		cleaned += " [truncated]"
+	}
+
+	return cleaned
 }
 
 // Client is a lightweight HTTP client for the Algolia Crawler API.
@@ -61,7 +108,7 @@ func NewClient(crawlerUserID, crawlerAPIKey string) *Client {
 	return &Client{
 		crawlerUserID: crawlerUserID,
 		crawlerAPIKey: crawlerAPIKey,
-		http:          &http.Client{},
+		http:          &http.Client{Timeout: defaultTimeout},
 		baseURL:       defaultBaseURL,
 	}
 }
@@ -106,9 +153,14 @@ func (c *Client) do(req *http.Request, result any) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, err := io.ReadAll(resp.Body)
+	// Read one byte past the limit so an oversized body is detected rather than
+	// silently truncated into a confusing JSON syntax error.
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
+	}
+	if len(respBody) > maxResponseBytes {
+		return fmt.Errorf("response body exceeds the %d byte limit", maxResponseBytes)
 	}
 
 	// Treat any non-2xx status as an error (matching APIError's contract). The Go HTTP
@@ -117,7 +169,7 @@ func (c *Client) do(req *http.Request, result any) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &APIError{
 			StatusCode: resp.StatusCode,
-			Body:       string(respBody),
+			Body:       sanitizeErrorBody(respBody),
 		}
 	}
 

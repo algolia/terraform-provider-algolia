@@ -2,7 +2,6 @@ package apikey
 
 import (
 	"context"
-	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -34,7 +33,7 @@ func flattenAPIKeyDataSource(ctx context.Context, resp *search.GetApiKeyResponse
 	model.QueryParameters = nullableString(resp.GetQueryParametersOk())
 	model.Referers = referersValues
 	model.Validity = nullableInt32(resp.GetValidityOk())
-	model.CreatedAt = types.StringValue(time.UnixMilli(resp.GetCreatedAt()).UTC().Format(time.RFC3339))
+	model.CreatedAt = types.StringValue(createdAtTimestamp(resp.GetCreatedAt()))
 
 	return diags
 }
@@ -66,7 +65,7 @@ func flattenAPIKeysDataSource(ctx context.Context, resp *search.ListApiKeysRespo
 			QueryParameters:        nullableString(key.GetQueryParametersOk()),
 			Referers:               referersValues,
 			Validity:               nullableInt32(key.GetValidityOk()),
-			CreatedAt:              types.StringValue(time.UnixMilli(key.GetCreatedAt()).UTC().Format(time.RFC3339)),
+			CreatedAt:              types.StringValue(createdAtTimestamp(key.GetCreatedAt())),
 		})
 	}
 	if diags.HasError() {

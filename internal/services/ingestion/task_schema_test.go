@@ -76,13 +76,24 @@ func TestTaskResourceSchema_FailureThresholdIsOptionalInt64(t *testing.T) {
 	if !ok || !failureThresholdAttr.Optional {
 		t.Fatal("expected failure_threshold to be an optional int64 attribute")
 	}
-	if failureThresholdAttr.Required || failureThresholdAttr.Computed {
-		t.Fatal("expected failure_threshold to be neither required nor computed")
+	if failureThresholdAttr.Required {
+		t.Fatal("expected failure_threshold to not be required")
+	}
+	// Computed on purpose: the API substitutes its own default when the
+	// attribute is omitted, and returning that value against a null plan
+	// aborted every apply with "inconsistent result after apply".
+	if !failureThresholdAttr.Computed {
+		t.Fatal("expected failure_threshold to be computed: the API substitutes a default")
 	}
 }
 
 func TestTaskResourceSchema_InputNotificationsPoliciesAreOptionalAndNotSensitive(t *testing.T) {
 	s := taskResourceSchema()
+
+	// notifications and policies are Computed because the API substitutes its
+	// own defaults for them; input is not, because the API echoes back exactly
+	// what was sent.
+	computed := map[string]bool{"input": false, "notifications": true, "policies": true}
 
 	for _, name := range []string{"input", "notifications", "policies"} {
 		attr, ok := s.Attributes[name].(resourceschema.StringAttribute)
@@ -92,8 +103,11 @@ func TestTaskResourceSchema_InputNotificationsPoliciesAreOptionalAndNotSensitive
 		if !attr.Optional {
 			t.Fatalf("expected %s to be optional", name)
 		}
-		if attr.Required || attr.Computed {
-			t.Fatalf("expected %s to be neither required nor computed", name)
+		if attr.Required {
+			t.Fatalf("expected %s to not be required", name)
+		}
+		if attr.Computed != computed[name] {
+			t.Fatalf("expected %s Computed = %v, got %v", name, computed[name], attr.Computed)
 		}
 		if attr.Sensitive {
 			t.Fatalf("expected %s to not be sensitive: it is configuration, not a secret", name)

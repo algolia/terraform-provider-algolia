@@ -5,6 +5,7 @@ import (
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -42,8 +43,16 @@ func transformationResourceSchema() schema.Schema {
 					"the deprecated, legacy way of specifying a code transformation's logic directly - the " +
 					"Ingestion API recommends `input` with a matching `type` instead. Leave it unset for no-code " +
 					"transformations (which have no `code`); an unset `code` reads back as null. The Ingestion API " +
-					"returns `code` in full (nothing is redacted), so this attribute is refreshed on read.",
+					"returns `code` in full (nothing is redacted), so this attribute is refreshed on read. " +
+					"Computed because the API derives it from `input.code` when the logic is supplied that way.",
 				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("input")),
+				},
+				// Deliberately no UseStateForUnknown: the API re-derives `code`
+				// whenever `input` changes, so pinning the prior value would
+				// report the stale code as the applied result.
 			},
 			"type": schema.StringAttribute{
 				Description: "Type of transformation. One of: " + strings.Join(allowedTransformationTypeStrings(), ", ") +

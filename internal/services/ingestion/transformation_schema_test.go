@@ -26,8 +26,15 @@ func TestTransformationResourceSchema_CodeIsOptionalAndNotSensitive(t *testing.T
 	if !codeAttr.Optional {
 		t.Fatal("expected code to be optional")
 	}
-	if codeAttr.Required || codeAttr.Computed {
-		t.Fatal("expected code to be neither required nor computed")
+	if codeAttr.Required {
+		t.Fatal("expected code to not be required")
+	}
+	// Computed on purpose: the API derives `code` from `input.code` and returns
+	// it, so a null plan value would abort the apply. `code` and `input` are
+	// mutually exclusive in the API, which the schema enforces with
+	// ConflictsWith.
+	if !codeAttr.Computed {
+		t.Fatal("expected code to be computed: the API derives it from input.code")
 	}
 	if codeAttr.Sensitive {
 		t.Fatal("expected code to not be sensitive: it is configuration, not a secret")

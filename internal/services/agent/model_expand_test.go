@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -55,8 +56,10 @@ func TestExpandAgentConfigCreate_basic(t *testing.T) {
 		t.Errorf("expected 0 tools, got %d", len(cfg.Tools))
 	}
 
-	if temp, ok := cfg.Config["temperature"].(float64); !ok || temp != 0.7 {
-		t.Errorf("expected config.temperature=0.7, got %v", cfg.Config["temperature"])
+	// Numbers stay json.Number rather than becoming float64, so re-encoding the
+	// config for the request cannot reformat a literal the user wrote.
+	if temp, ok := cfg.Config["temperature"].(json.Number); !ok || temp.String() != "0.7" {
+		t.Errorf("expected config.temperature=0.7 as a json.Number, got %#v", cfg.Config["temperature"])
 	}
 }
 

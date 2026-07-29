@@ -110,6 +110,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_destination`](docs/resources/ingestion_destination.md)       | Manage Ingestion destinations (the index or event stream a task writes to)    |
 | [`algolia_ingestion_transformation`](docs/resources/ingestion_transformation.md) | Manage Ingestion transformations (code or no-code logic applied to records)   |
 | [`algolia_ingestion_task`](docs/resources/ingestion_task.md)                     | Manage Ingestion tasks (schedule a source → transform → destination pipeline) |
+| [`algolia_ab_test`](docs/resources/ab_test.md)                                   | Manage an A/B test between index variants (region-routed; write-once)          |
 | [`algolia_recommend_rule`](docs/resources/recommend_rule.md)                     | Manage Recommend rules (condition/consequence pairs that customize a Recommend model's results) |
 | [`algolia_composition`](docs/resources/composition.md)                           | Manage a Composition (combine source indices into one search experience) |
 | [`algolia_composition_rule`](docs/resources/composition_rule.md)                 | Manage a Composition rule (condition/consequence pairs on a composition) |
@@ -138,6 +139,7 @@ resource "algolia_index" "products" {
 | [`algolia_ingestion_destination`](docs/data-sources/ingestion_destination.md)       | Read an Ingestion destination's configuration, including `input`   |
 | [`algolia_ingestion_transformation`](docs/data-sources/ingestion_transformation.md) | Read an Ingestion transformation's configuration, including `code`/`input` |
 | [`algolia_ingestion_task`](docs/data-sources/ingestion_task.md)                     | Read an Ingestion task's configuration, including `input`/`notifications`/`policies`/`cursor` |
+| [`algolia_ab_test`](docs/data-sources/ab_test.md)                                   | Read an A/B test by ID, including per-variant runtime results |
 | [`algolia_recommend_rule`](docs/data-sources/recommend_rule.md)                     | Read a Recommend rule by index, model, and object ID |
 | [`algolia_composition`](docs/data-sources/composition.md)                           | Read a Composition by object ID |
 | [`algolia_composition_rule`](docs/data-sources/composition_rule.md)                 | Read a Composition rule by composition and object ID |

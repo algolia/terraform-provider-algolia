@@ -28,8 +28,11 @@ func sourceDataSourceSchema() datasourceschema.Schema {
 			},
 			"input": datasourceschema.StringAttribute{
 				Description: "JSON-encoded configuration matching `type`. Null if the source type requires no " +
-					"configuration (e.g. \"push\").",
-				Computed: true,
+					"configuration (e.g. \"push\"). Treated as sensitive: the API returns `input` unredacted, and " +
+					"several source types carry credentials in it (a `docker` source's `configuration`, or a " +
+					"presigned `url` for `csv`/`json`).",
+				Computed:  true,
+				Sensitive: true,
 			},
 			"authentication_id": datasourceschema.StringAttribute{
 				Description: "Universally unique identifier (UUID) of the authentication resource this source " +

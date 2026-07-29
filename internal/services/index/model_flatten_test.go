@@ -606,4 +606,3 @@ func TestFlattenSemanticSearch(t *testing.T) {
 		}
 	})
 }
-

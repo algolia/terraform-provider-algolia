@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -64,7 +64,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	apiResp, err := r.client.CreateAgent(r.client.NewApiCreateAgentRequest(apiReq), agentStudio.WithContext(ctx))
+	doc, err := createAgent(ctx, r.client, apiReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating agent", "Could not create agent: "+err.Error())
 		return
@@ -72,14 +72,14 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Publish if requested.
 	if plan.Publish.ValueBool() {
-		apiResp, err = r.client.PublishAgent(r.client.NewApiPublishAgentRequest(apiResp.Id), agentStudio.WithContext(ctx))
+		doc, err = publishAgent(ctx, r.client, doc.agent.Id)
 		if err != nil {
 			resp.Diagnostics.AddError("Error publishing agent", "Agent created but could not be published: "+err.Error())
 			return
 		}
 	}
 
-	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, apiResp, plan.DeletionProtection, &plan)...)
+	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, doc, plan.DeletionProtection, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -97,10 +97,9 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	agentID := state.ID.ValueString()
 	tflog.Debug(ctx, "Reading agent", map[string]interface{}{"id": agentID})
 
-	apiResp, err := r.client.GetAgent(r.client.NewApiGetAgentRequest(agentID), agentStudio.WithContext(ctx))
+	doc, err := getAgent(ctx, r.client, agentID)
 	if err != nil {
-		var apiErr *agentStudio.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Agent not found; removing from state", map[string]interface{}{"id": agentID})
 			resp.State.RemoveResource(ctx)
 			return
@@ -109,7 +108,7 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, apiResp, state.DeletionProtection, &state)...)
+	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, doc, state.DeletionProtection, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -144,7 +143,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	apiResp, err := r.client.UpdateAgent(r.client.NewApiUpdateAgentRequest(agentID, apiReq), agentStudio.WithContext(ctx))
+	doc, err := updateAgent(ctx, r.client, agentID, apiReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating agent", "Could not update agent "+agentID+": "+err.Error())
 		return
@@ -152,14 +151,14 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Only publish on update when transitioning from draft to published.
 	if shouldPublishAfterUpdate(state, plan) {
-		apiResp, err = r.client.PublishAgent(r.client.NewApiPublishAgentRequest(agentID), agentStudio.WithContext(ctx))
+		doc, err = publishAgent(ctx, r.client, agentID)
 		if err != nil {
 			resp.Diagnostics.AddError("Error publishing agent", "Agent updated but could not be published: "+err.Error())
 			return
 		}
 	}
 
-	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, apiResp, plan.DeletionProtection, &plan)...)
+	resp.Diagnostics.Append(hydrateAgentResourceState(ctx, doc, plan.DeletionProtection, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -194,14 +193,14 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 }
 
 func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	apiResp, err := r.client.GetAgent(r.client.NewApiGetAgentRequest(req.ID), agentStudio.WithContext(ctx))
+	doc, err := getAgent(ctx, r.client, req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing agent", "Could not import agent "+req.ID+": "+err.Error())
 		return
 	}
 
 	var state AgentResourceModel
-	resp.Diagnostics.Append(hydrateImportedAgentResourceState(ctx, apiResp, &state)...)
+	resp.Diagnostics.Append(hydrateImportedAgentResourceState(ctx, doc, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

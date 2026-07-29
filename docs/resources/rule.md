@@ -43,8 +43,8 @@ resource "algolia_rule" "example" {
 
 ### Required
 
-- `index_name` (String) The index that owns the rule.
-- `object_id` (String) Unique identifier of the rule.
+- `index_name` (String) The index that owns the rule. Changing this forces a new rule to be created.
+- `object_id` (String) Unique identifier of the rule. Changing this forces a new rule to be created.
 
 ### Optional
 
@@ -52,6 +52,8 @@ resource "algolia_rule" "example" {
 - `consequence` (Block List) Rule consequence definition. (see [below for nested schema](#nestedblock--consequence))
 - `description` (String) Human-readable description of the rule.
 - `enabled` (Boolean) Whether the rule is active.
+- `scope` (String) Rule scope. Algolia currently only accepts `redirect`, which turns the rule into a redirect rule and requires `consequence.redirect_index_name` to point at a virtual replica of the index.
+- `tags` (List of String) Free-form tags used to group and filter rules in the Algolia dashboard.
 - `validity` (Block List) Time windows during which the rule is active. (see [below for nested schema](#nestedblock--validity))
 
 ### Read-Only
@@ -75,9 +77,11 @@ Optional:
 
 Optional:
 
+- `filter_promotes` (Boolean) Whether promoted records must also match the active filters for the consequence to apply. Shown as "Pinned items must match active filters to be displayed" in the Algolia dashboard.
 - `hide` (Set of String) Object IDs to hide.
-- `params_json` (String) JSON-encoded consequence params object.
+- `params_json` (String) JSON-encoded consequence params object. The document is sent to Algolia verbatim, so search parameters that this provider release does not know about can still be set here.
 - `promote` (Block List) Promoted object IDs and their position. (see [below for nested schema](#nestedblock--consequence--promote))
+- `redirect_index_name` (String) Name of the virtual replica index searches are redirected to. Only valid together with `scope = "redirect"`.
 - `user_data` (String) JSON-encoded userData payload appended to search responses.
 
 <a id="nestedblock--consequence--promote"></a>
@@ -101,6 +105,8 @@ Optional:
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import a rule using the form "index_name/object_id".

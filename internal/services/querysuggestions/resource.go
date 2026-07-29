@@ -7,6 +7,7 @@ import (
 	"time"
 
 	suggestions "github.com/algolia/algoliasearch-client-go/v4/algolia/query-suggestions"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -76,7 +77,7 @@ func (r *querySuggestionsResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	if _, err := client.CreateConfig(client.NewApiCreateConfigRequest(config)); err != nil {
+	if _, err := client.CreateConfig(client.NewApiCreateConfigRequest(config), suggestions.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error creating Query Suggestions config", "Could not create Query Suggestions config "+plan.IndexName.ValueString()+": "+err.Error())
 		return
 	}
@@ -108,10 +109,9 @@ func (r *querySuggestionsResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(state.IndexName.ValueString()))
+	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(state.IndexName.ValueString()), suggestions.WithContext(ctx))
 	if err != nil {
-		var apiErr *suggestions.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -147,11 +147,9 @@ func (r *querySuggestionsResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	configuration := suggestions.NewConfiguration(configWithIndex.GetSourceIndices())
-	configuration.Languages = configWithIndex.Languages
-	configuration.Exclude = configWithIndex.Exclude
+	configuration := configurationFromWithIndex(configWithIndex)
 
-	if _, err := client.UpdateConfig(client.NewApiUpdateConfigRequest(plan.IndexName.ValueString(), configuration)); err != nil {
+	if _, err := client.UpdateConfig(client.NewApiUpdateConfigRequest(plan.IndexName.ValueString(), configuration), suggestions.WithContext(ctx)); err != nil {
 		resp.Diagnostics.AddError("Error updating Query Suggestions config", "Could not update Query Suggestions config "+plan.IndexName.ValueString()+": "+err.Error())
 		return
 	}
@@ -183,9 +181,8 @@ func (r *querySuggestionsResource) Delete(ctx context.Context, req resource.Dele
 		return
 	}
 
-	if _, err := client.DeleteConfig(client.NewApiDeleteConfigRequest(state.IndexName.ValueString())); err != nil {
-		var apiErr *suggestions.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if _, err := client.DeleteConfig(client.NewApiDeleteConfigRequest(state.IndexName.ValueString()), suggestions.WithContext(ctx)); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -206,7 +203,7 @@ func (r *querySuggestionsResource) ImportState(ctx context.Context, req resource
 		return
 	}
 
-	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName))
+	apiResp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName), suggestions.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Query Suggestions config", "Could not import Query Suggestions config "+req.ID+": "+err.Error())
 		return
@@ -238,7 +235,7 @@ func waitForQuerySuggestionsConfig(ctx context.Context, client *suggestions.APIC
 	deadline := time.Now().Add(2 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName))
+		resp, err := client.GetConfig(client.NewApiGetConfigRequest(indexName), suggestions.WithContext(ctx))
 		if err == nil {
 			return resp, nil
 		}

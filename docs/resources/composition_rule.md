@@ -86,6 +86,8 @@ resource "algolia_composition_rule" "example" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Import a composition rule using the form "composition_id/object_id".
 terraform import algolia_composition_rule.example featured-products/boost-featured-on-mobile

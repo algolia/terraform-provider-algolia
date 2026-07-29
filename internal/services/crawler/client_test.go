@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -328,8 +329,8 @@ func TestAPIError_nonSuccessStatus(t *testing.T) {
 		t.Fatal("GetCrawler() error = nil, want an *APIError")
 	}
 
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("error type = %T, want *APIError", err)
 	}
 	if apiErr.StatusCode != http.StatusNotFound {
@@ -352,8 +353,8 @@ func TestAPIError_non2xxNon4xxStatus(t *testing.T) {
 	c := newTestClient(t, server)
 
 	_, err := c.GetCrawler(context.Background(), "some-id")
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("error type = %T, want *APIError", err)
 	}
 	if apiErr.StatusCode != http.StatusNotModified {
@@ -371,8 +372,8 @@ func TestAPIError_deleteNonSuccessStatus(t *testing.T) {
 	c := newTestClient(t, server)
 
 	err := c.DeleteCrawler(context.Background(), "some-id")
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("error type = %T, want *APIError", err)
 	}
 	if apiErr.StatusCode != http.StatusForbidden {

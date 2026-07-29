@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -50,7 +51,10 @@ func taskResourceSchema() schema.Schema {
 			"action": schema.StringAttribute{
 				Description: "Action to perform on the destination index for each record. One of: " +
 					strings.Join(allowedActionTypeStrings(), ", ") + ". Changing this forces replacement: the " +
-					"Ingestion API's task update endpoint has no way to change a task's action after creation.",
+					"Ingestion API's task update endpoint has no way to change a task's action after creation. " +
+					"Note the API does not return this field when reading a task back, so it cannot be " +
+					"recovered by `terraform import`: set it in configuration after importing, which will " +
+					"plan a replacement.",
 				Required: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(allowedActionTypeStrings()...),
@@ -79,8 +83,13 @@ func taskResourceSchema() schema.Schema {
 				Default:     booldefault.StaticBool(true),
 			},
 			"failure_threshold": schema.Int64Attribute{
-				Description: "Maximum accepted percentage of failures for a task run to finish successfully.",
-				Optional:    true,
+				Description: "Maximum accepted percentage of failures for a task run to finish successfully. " +
+					"Computed because the API substitutes its own default when this is omitted.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"input": schema.StringAttribute{
 				Description: "JSON-encoded configuration for the task's input, when its source's type needs one " +
@@ -94,13 +103,23 @@ func taskResourceSchema() schema.Schema {
 			},
 			"notifications": schema.StringAttribute{
 				Description: "JSON-encoded notification settings, e.g. `jsonencode({ email = { enabled = true } " +
-					"})`. Refreshed on read using the same semantic-equality preservation as `input`.",
+					"})`. Refreshed on read using the same semantic-equality preservation as `input`. Computed " +
+					"because the API substitutes its own defaults when this is omitted.",
 				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"policies": schema.StringAttribute{
 				Description: "JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 50 })`. " +
-					"Refreshed on read using the same semantic-equality preservation as `input`.",
+					"Refreshed on read using the same semantic-equality preservation as `input`. Computed " +
+					"because the API substitutes its own defaults when this is omitted.",
 				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cursor": schema.StringAttribute{
 				Description: "Date and time when the last cursor was created, in RFC 3339 format; used to resume " +

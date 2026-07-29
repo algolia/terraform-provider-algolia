@@ -2,11 +2,11 @@ package recommend
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	recommendapi "github.com/algolia/algoliasearch-client-go/v4/algolia/recommend"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -85,18 +85,31 @@ func (r *recommendRuleResource) Create(ctx context.Context, req resource.CreateR
 
 	batchReq := client.NewApiBatchRecommendRulesRequest(indexName, recommendModel).
 		WithRecommendRule([]recommendapi.RecommendRule{*rule})
-	batchResp, err := client.BatchRecommendRules(batchReq)
+	batchResp, err := client.BatchRecommendRules(batchReq, recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Recommend rule", "Could not create Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err := waitForRecommendRuleTask(client, indexName, recommendModel, batchResp.TaskID); err != nil {
+	// The rule now exists in Algolia. Persist the identifying attributes
+	// immediately, before waiting on the task or reading the rule back, so
+	// that a failure in either of those steps surfaces as an error on a
+	// resource Terraform knows about, instead of orphaning a rule that exists
+	// remotely but not in state (which no subsequent apply would ever adopt).
+	// Every remaining attribute is already known from the plan, so this state
+	// is consistent with what Terraform planned.
+	plan.ID = types.StringValue(recommendRuleResourceID(indexName, string(recommendModel), objectID))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if err := waitForRecommendRuleTask(ctx, client, indexName, recommendModel, batchResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for Recommend rule creation", "Could not confirm Recommend rule creation: "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -127,10 +140,9 @@ func (r *recommendRuleResource) Read(ctx context.Context, req resource.ReadReque
 	recommendModel := recommendapi.RecommendModels(state.Model.ValueString())
 	objectID := state.ObjectID.ValueString()
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *recommendapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Recommend rule not found; removing from state", map[string]any{
 				"index_name": indexName,
 				"model":      string(recommendModel),
@@ -183,18 +195,18 @@ func (r *recommendRuleResource) Update(ctx context.Context, req resource.UpdateR
 
 	batchReq := client.NewApiBatchRecommendRulesRequest(indexName, recommendModel).
 		WithRecommendRule([]recommendapi.RecommendRule{*rule})
-	batchResp, err := client.BatchRecommendRules(batchReq)
+	batchResp, err := client.BatchRecommendRules(batchReq, recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating Recommend rule", "Could not update Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	if err := waitForRecommendRuleTask(client, indexName, recommendModel, batchResp.TaskID); err != nil {
+	if err := waitForRecommendRuleTask(ctx, client, indexName, recommendModel, batchResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for Recommend rule update", "Could not confirm Recommend rule update: "+err.Error())
 		return
 	}
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Recommend rule", "Could not read Recommend rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
@@ -231,10 +243,9 @@ func (r *recommendRuleResource) Delete(ctx context.Context, req resource.DeleteR
 		"object_id":  objectID,
 	})
 
-	deleteResp, err := client.DeleteRecommendRule(client.NewApiDeleteRecommendRuleRequest(indexName, recommendModel, objectID))
+	deleteResp, err := client.DeleteRecommendRule(client.NewApiDeleteRecommendRuleRequest(indexName, recommendModel, objectID), recommendapi.WithContext(ctx))
 	if err != nil {
-		var apiErr *recommendapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -242,9 +253,8 @@ func (r *recommendRuleResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	if err := waitForRecommendRuleTask(client, indexName, recommendModel, deleteResp.TaskID); err != nil {
-		var apiErr *recommendapi.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+	if err := waitForRecommendRuleTask(ctx, client, indexName, recommendModel, deleteResp.TaskID); err != nil {
+		if algoliaerr.IsNotFound(err) {
 			return
 		}
 
@@ -265,7 +275,7 @@ func (r *recommendRuleResource) ImportState(ctx context.Context, req resource.Im
 		return
 	}
 
-	apiResp, err := client.GetRecommendRule(client.NewApiGetRecommendRuleRequest(indexName, recommendapi.RecommendModels(modelName), objectID))
+	apiResp, err := getRecommendRule(client, client.NewApiGetRecommendRuleRequest(indexName, recommendapi.RecommendModels(modelName), objectID), recommendapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error importing Recommend rule", "Could not import Recommend rule "+req.ID+": "+err.Error())
 		return
@@ -284,18 +294,24 @@ func (r *recommendRuleResource) ImportState(ctx context.Context, req resource.Im
 // completes, mirroring waitForRuleTask/waitForSynonymTask in the
 // rule/synonym packages (which poll search.GetTask instead - Recommend has
 // its own, differently-routed task-status endpoint per model/index).
-func waitForRecommendRuleTask(client *recommendapi.APIClient, indexName string, model recommendapi.RecommendModels, taskID int64) error {
+func waitForRecommendRuleTask(ctx context.Context, client *recommendapi.APIClient, indexName string, model recommendapi.RecommendModels, taskID int64) error {
 	deadline := time.Now().Add(30 * time.Minute)
 	interval := 2 * time.Second
 	for time.Now().Before(deadline) {
-		resp, err := client.GetRecommendStatus(client.NewApiGetRecommendStatusRequest(indexName, model, taskID))
+		resp, err := client.GetRecommendStatus(client.NewApiGetRecommendStatusRequest(indexName, model, taskID), recommendapi.WithContext(ctx))
 		if err != nil {
 			return err
 		}
 		if resp.Status == recommendapi.TASK_STATUS_PUBLISHED {
 			return nil
 		}
-		time.Sleep(interval)
+		// Sleep interruptibly: a bare time.Sleep made the 30-minute budget
+		// uncancellable, so Ctrl-C could not stop a plan that was polling.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
 		if interval < 10*time.Second {
 			interval += time.Second
 		}

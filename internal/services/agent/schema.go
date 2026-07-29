@@ -50,8 +50,12 @@ func agentResourceSchema() schema.Schema {
 				Optional:    true,
 			},
 			"config": schema.StringAttribute{
-				Description: "JSON-encoded configuration parameters (e.g. temperature, max_tokens).",
-				Optional:    true,
+				Description: "JSON-encoded configuration parameters (e.g. temperature, max_tokens). " +
+					"Stored as written: Agent Studio merges its own defaults into the config it returns " +
+					"(such as `enableAlgoliaMcp`), so the configured document is kept rather than the " +
+					"one read back, and changes made outside Terraform are not reported for this " +
+					"attribute. When it is not set, the value read from Agent Studio is stored instead.",
+				Optional: true,
 				// Computed: Agent Studio populates server-side defaults (e.g.
 				// {"enableAlgoliaMcp":true}) when config is omitted, so the
 				// applied value can be non-null even when the config was null.
@@ -86,10 +90,11 @@ func agentResourceSchema() schema.Schema {
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"tool_algolia_search":    toolAlgoliaSearchBlockSchema(),
-			"tool_algolia_recommend": toolAlgoliaRecommendBlockSchema(),
-			"tool_client_side":       toolClientSideBlockSchema(),
-			"tool_mcp":               toolMCPBlockSchema(),
+			"tool_algolia_search":          toolAlgoliaSearchBlockSchema(),
+			"tool_algolia_recommend":       toolAlgoliaRecommendBlockSchema(),
+			"tool_algolia_display_results": toolAlgoliaDisplayResultsBlockSchema(),
+			"tool_client_side":             toolClientSideBlockSchema(),
+			"tool_mcp":                     toolMCPBlockSchema(),
 		},
 	}
 }
@@ -132,9 +137,15 @@ func toolAlgoliaSearchBlockSchema() schema.Block {
 								Computed:    true,
 							},
 							"search_parameters": schema.StringAttribute{
-								Description: "JSON-encoded Algolia search parameters.",
-								Optional:    true,
-								Computed:    true,
+								Description: "JSON-encoded Algolia search parameters. Sent to Algolia in full, " +
+									"including parameters this provider version does not model. Stored as " +
+									"written: Algolia answers with only the parameters it recognises, expanded " +
+									"into the full parameter schema, so the configured document is kept rather " +
+									"than the one read back, and changes made outside Terraform are not " +
+									"reported for this attribute. When it is not set, the value read from " +
+									"Algolia is stored instead, with its null parameters removed.",
+								Optional: true,
+								Computed: true,
 							},
 						},
 					},
@@ -192,6 +203,50 @@ func toolAlgoliaRecommendBlockSchema() schema.Block {
 	}
 }
 
+// toolAlgoliaDisplayResultsBlockSchema describes the algolia_display_results
+// tool. Every attribute is Optional and Computed: all of them are optional in
+// the API, and Agent Studio fills in server-side defaults for the ones that
+// are omitted, so they have to be able to take their value from the API
+// response rather than from configuration.
+func toolAlgoliaDisplayResultsBlockSchema() schema.Block {
+	return schema.ListNestedBlock{
+		Description: "Algolia display results tool configuration: controls how the agent groups the search " +
+			"results it shows.",
+		NestedObject: schema.NestedBlockObject{
+			Attributes: map[string]schema.Attribute{
+				"name": schema.StringAttribute{
+					Description: "Tool name (3-32 characters). Assigned by Agent Studio if not set.",
+					Optional:    true,
+					Computed:    true,
+					Validators: []validator.String{
+						stringvalidator.LengthBetween(3, 32),
+					},
+				},
+				"min_groups": schema.Int64Attribute{
+					Description: "Minimum number of result groups to display.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"max_groups": schema.Int64Attribute{
+					Description: "Maximum number of result groups to display.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"min_results_per_group": schema.Int64Attribute{
+					Description: "Minimum number of results to display within each group.",
+					Optional:    true,
+					Computed:    true,
+				},
+				"max_results_per_group": schema.Int64Attribute{
+					Description: "Maximum number of results to display within each group.",
+					Optional:    true,
+					Computed:    true,
+				},
+			},
+		},
+	}
+}
+
 func toolClientSideBlockSchema() schema.Block {
 	return schema.ListNestedBlock{
 		Description: "Client-side tool configuration.",
@@ -212,8 +267,12 @@ func toolClientSideBlockSchema() schema.Block {
 					},
 				},
 				"input_schema": schema.StringAttribute{
-					Description: "JSON-encoded input schema for the tool.",
-					Required:    true,
+					Description: "JSON-encoded JSON Schema for the tool's arguments. Sent to Algolia in " +
+						"full, including keywords this provider version does not model, such as `$schema` " +
+						"and `additionalProperties`. Stored as written: Algolia strips those keywords from " +
+						"the schema it returns, so the configured document is kept rather than the one read " +
+						"back, and changes made outside Terraform are not reported for this attribute.",
+					Required: true,
 				},
 			},
 		},
@@ -247,8 +306,11 @@ func toolMCPBlockSchema() schema.Block {
 					},
 				},
 				"headers": schema.MapAttribute{
-					Description: "Additional headers to send with MCP requests.",
+					Description: "Additional headers to send with MCP requests, such as `Authorization`. " +
+						"Marked sensitive: header values commonly carry credentials, and Agent Studio returns " +
+						"them in full on read, so they are stored in Terraform state as written.",
 					Optional:    true,
+					Sensitive:   true,
 					ElementType: types.StringType,
 				},
 			},

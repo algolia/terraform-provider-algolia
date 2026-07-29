@@ -2,10 +2,10 @@ package agentprovider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -105,8 +105,7 @@ func (r *agentProviderResource) Read(ctx context.Context, req resource.ReadReque
 
 	apiResp, err := r.client.GetProvider(r.client.NewApiGetProviderRequest(providerID), agentStudio.WithContext(ctx))
 	if err != nil {
-		var apiErr *agentStudio.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == 404 {
+		if algoliaerr.IsNotFound(err) {
 			tflog.Warn(ctx, "Provider not found; removing from state", map[string]any{"id": providerID})
 			resp.State.RemoveResource(ctx)
 			return

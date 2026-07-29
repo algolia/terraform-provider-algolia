@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
@@ -41,6 +43,14 @@ var algoliaRecommendToolAttrTypes = map[string]attr.Type{
 	"predefined_recommend_parameters": types.StringType,
 }
 
+var algoliaDisplayResultsToolAttrTypes = map[string]attr.Type{
+	"name":                  types.StringType,
+	"min_groups":            types.Int64Type,
+	"max_groups":            types.Int64Type,
+	"min_results_per_group": types.Int64Type,
+	"max_results_per_group": types.Int64Type,
+}
+
 var clientSideToolAttrTypes = map[string]attr.Type{
 	"name":         types.StringType,
 	"description":  types.StringType,
@@ -64,8 +74,10 @@ var mcpToolAttrTypes = map[string]attr.Type{
 }
 
 // flattenAgentResponse populates the Terraform model from an API response.
-func flattenAgentResponse(ctx context.Context, resp *agentStudio.AgentWithVersionResponse, model *AgentResourceModel) diag.Diagnostics {
+func flattenAgentResponse(ctx context.Context, doc *agentDocument, model *AgentResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
+
+	resp := doc.agent
 
 	model.ID = types.StringValue(resp.Id)
 	model.Name = types.StringValue(resp.Name)
@@ -79,36 +91,103 @@ func flattenAgentResponse(ctx context.Context, resp *agentStudio.AgentWithVersio
 	model.CreatedAt = types.StringValue(resp.CreatedAt)
 	model.UpdatedAt = flattenNullableString(resp.UpdatedAt)
 
-	// Config
-	if len(resp.Config) > 0 {
-		configJSON, err := json.Marshal(resp.Config)
-		if err != nil {
-			diags.AddError("Error marshaling config", err.Error())
-			return diags
-		}
-		configStr := string(configJSON)
-		if configStr == "{}" || configStr == "null" {
-			model.Config = types.StringNull()
-		} else {
-			model.Config = types.StringValue(configStr)
-		}
-	} else {
-		model.Config = types.StringNull()
-	}
+	// Agent Studio merges its own defaults into config - it answers a configured
+	// {"temperature":0.5} with {"temperature":0.5,"enableAlgoliaMcp":true} - so
+	// the document it returns is never the one that was written.
+	model.Config = flattenConfiguredJSONDocument(doc.raw.config, model.Config)
 
 	// Tools
-	d := flattenTools(ctx, resp.Tools, model)
+	d := flattenTools(ctx, resp.Tools, doc.raw.tools, model)
 	diags.Append(d...)
 
 	return diags
 }
 
+// flattenJSONDocument renders one of the API's raw JSON documents into the
+// string attribute that stores it.
+//
+// Those attributes are Required or Optional, so their planned value is the
+// configuration verbatim: a document that carries the same data but differs in
+// key order or whitespace would make Terraform reject the apply as an
+// inconsistent result. Whenever the configured document and the API's carry the
+// same data, the configured string is therefore kept verbatim. Note that an
+// empty object is a document like any other: collapsing it to null would abort
+// the apply of an explicitly configured `jsonencode({})`.
+func flattenJSONDocument(document json.RawMessage, prior types.String) types.String {
+	if isJSONNull(document) {
+		return types.StringNull()
+	}
+
+	if !prior.IsNull() && !prior.IsUnknown() && jsonEqual([]byte(prior.ValueString()), document) {
+		return prior
+	}
+
+	return types.StringValue(string(document))
+}
+
+// flattenConfiguredJSONDocument is flattenJSONDocument for the documents Agent
+// Studio does not hand back the way they were written, whatever the provider
+// sends: it strips the JSON Schema keywords it does not model out of
+// `input_schema`, it strips unmodelled search parameters out of
+// `search_parameters` and expands the rest into the full parameter schema with
+// every unset field explicitly null, and it merges its own defaults into
+// `config`. The documents reach Algolia intact - that is verifiable in the
+// outbound request - but the response is a different document, so there is no
+// value the provider could store that is both the plan and the truth.
+//
+// The configured value therefore wins whenever there is one, and the API's
+// document is used only when there is none: an import or a data source read.
+// This is the trade `preservePlannedValues` already makes for
+// `ranking.relevancy_strictness` on algolia_index, and it costs the same thing -
+// out-of-band drift on these attributes is not reported. That is not a
+// regression, because a drift check needs the API to say what it stored, and here
+// it will not. The alternative is worse: storing the response would make every
+// apply of a configured value fail with "Provider produced inconsistent result
+// after apply".
+//
+// Do not replace this with a looser comparison in jsonEqual, and do not make
+// these attributes Computed to sidestep the contract - Computed frees the
+// provider only while the configuration is null, so it would not help a
+// configured value and would mask the next real defect here.
+func flattenConfiguredJSONDocument(document json.RawMessage, prior types.String) types.String {
+	if !prior.IsNull() && !prior.IsUnknown() {
+		return prior
+	}
+
+	if isJSONNull(document) {
+		return types.StringNull()
+	}
+
+	return types.StringValue(string(document))
+}
+
 // flattenTools distributes API tools into the typed tool list attributes on the model.
-func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, model *AgentResourceModel) diag.Diagnostics {
+//
+// Every variant of agentStudio.ToolConfigInput must be accounted for. Agent
+// writes are full replacements of the tool list (see expandTools), so a
+// variant that is read but not stored is silently deleted from the live agent
+// by the next apply. The switch therefore ends in a default arm that raises an
+// error naming the unhandled variant: a client upgrade that adds a tool type
+// has to fail loudly instead of quietly dropping the user's configuration.
+//
+// raw carries the same tools as apiTools, positionally, holding the JSON
+// documents that must not be rebuilt from the typed models - see agentDocument.
+//
+// The prior values of the model's tool lists (prior state on Read, configuration
+// on Create/Update) are captured before the model is overwritten, so each tool's
+// header map and JSON documents can be compared against what the same tool held
+// before the refresh - see flattenMCPHeaders and flattenJSONDocument.
+func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, raw []rawTool, model *AgentResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
+
+	priorHeaders := priorMCPHeaders(model.ToolMCP)
+	priorInputSchemas := priorToolDocuments(model.ToolClientSide, "input_schema")
+	priorRecommendParameters := priorToolDocuments(model.ToolAlgoliaRecommend, "predefined_recommend_parameters")
+	priorSearchParameters := priorIndexSearchParameters(model.ToolAlgoliaSearch)
 
 	var searchTools []ToolAlgoliaSearchModel
 	var recommendTools []ToolAlgoliaRecommendModel
+	var displayResultsTools []ToolAlgoliaDisplayResultsModel
 	var clientTools []ToolClientSideModel
 	var mcpTools []ToolMCPModel
 
@@ -116,29 +195,55 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, m
 		tool := apiTools[i]
 		switch {
 		case tool.AlgoliaSearchToolConfig != nil:
-			t, d := flattenAlgoliaSearchTool(tool.AlgoliaSearchToolConfig)
+			name := tool.AlgoliaSearchToolConfig.Name
+			t, d := flattenAlgoliaSearchTool(tool.AlgoliaSearchToolConfig, raw[i], priorSearchParameters[name])
 			diags.Append(d...)
 			if t != nil {
 				searchTools = append(searchTools, *t)
 			}
 		case tool.AlgoliaRecommendToolConfigInput != nil:
-			t, d := flattenAlgoliaRecommendTool(tool.AlgoliaRecommendToolConfigInput)
+			name := tool.AlgoliaRecommendToolConfigInput.Name
+			t, d := flattenAlgoliaRecommendTool(tool.AlgoliaRecommendToolConfigInput, raw[i], priorRecommendParameters[name])
 			diags.Append(d...)
 			if t != nil {
 				recommendTools = append(recommendTools, *t)
 			}
 		case tool.ClientSideToolConfig != nil:
-			t, d := flattenClientSideTool(tool.ClientSideToolConfig)
-			diags.Append(d...)
-			if t != nil {
-				clientTools = append(clientTools, *t)
-			}
+			name := tool.ClientSideToolConfig.Name
+			clientTools = append(clientTools,
+				flattenClientSideTool(tool.ClientSideToolConfig, raw[i], priorInputSchemas[name]))
 		case tool.McpServerToolConfig != nil:
-			t, d := flattenMCPTool(tool.McpServerToolConfig)
+			name := tool.McpServerToolConfig.Name
+			t, d := flattenMCPTool(tool.McpServerToolConfig, priorHeaders[name])
 			diags.Append(d...)
 			if t != nil {
 				mcpTools = append(mcpTools, *t)
 			}
+		case tool.AlgoliaDisplayResultsToolConfig != nil:
+			// Checked after the variants above: every optional field of
+			// AlgoliaDisplayResultsToolConfig is a pointer, so the client's
+			// greedy oneOf fallback can populate it for a payload that also
+			// matched a more specific variant.
+			displayResultsTools = append(displayResultsTools, flattenAlgoliaDisplayResultsTool(tool.AlgoliaDisplayResultsToolConfig))
+		case tool.UnknownToolConfig != nil:
+			// The client's placeholder for a tool whose `type` it does not
+			// recognise. There is no Terraform schema that could hold its
+			// arbitrary properties, so refuse to manage the agent instead of
+			// dropping the tool on the next write.
+			diags.AddError(
+				"Unsupported agent tool type",
+				"Agent tool "+tool.UnknownToolConfig.Name+" has type "+tool.UnknownToolConfig.Type+
+					", which this provider version cannot represent. Terraform would delete the tool on the "+
+					"next apply, because updating an agent replaces its whole tool list. Remove the tool from "+
+					"the agent, or upgrade the provider to a version that supports this tool type.",
+			)
+		default:
+			diags.AddError(
+				"Unsupported agent tool variant",
+				fmt.Sprintf("The Algolia client returned an agent tool variant this provider version does not "+
+					"handle (%T). Terraform would delete the tool on the next apply, because updating an agent "+
+					"replaces its whole tool list. This is a provider bug: please report it.", tool.GetActualInstance()),
+			)
 		}
 	}
 
@@ -165,6 +270,15 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, m
 		model.ToolAlgoliaRecommend = types.ListNull(recommendToolType)
 	}
 
+	displayResultsToolType := types.ObjectType{AttrTypes: algoliaDisplayResultsToolAttrTypes}
+	if len(displayResultsTools) > 0 {
+		list, d := types.ListValueFrom(ctx, displayResultsToolType, displayResultsTools)
+		diags.Append(d...)
+		model.ToolAlgoliaDisplayResults = list
+	} else {
+		model.ToolAlgoliaDisplayResults = types.ListNull(displayResultsToolType)
+	}
+
 	clientToolType := types.ObjectType{AttrTypes: clientSideToolAttrTypes}
 	if len(clientTools) > 0 {
 		list, d := types.ListValueFrom(ctx, clientToolType, clientTools)
@@ -186,7 +300,14 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, m
 	return diags
 }
 
-func flattenAlgoliaSearchTool(tool *agentStudio.AlgoliaSearchToolConfig) (*ToolAlgoliaSearchModel, diag.Diagnostics) {
+// flattenAlgoliaSearchTool maps an algolia_search_index tool. priorParameters
+// holds the search_parameters each of its indices already carried in the model,
+// keyed by index name.
+func flattenAlgoliaSearchTool(
+	tool *agentStudio.AlgoliaSearchToolConfig,
+	raw rawTool,
+	priorParameters map[string]types.String,
+) (*ToolAlgoliaSearchModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolAlgoliaSearchModel{
 		Name: types.StringValue(tool.Name),
@@ -205,7 +326,7 @@ func flattenAlgoliaSearchTool(tool *agentStudio.AlgoliaSearchToolConfig) (*ToolA
 			idx.EnhancedDescription = types.StringNull()
 		}
 
-		searchParams, d := flattenSearchParameters(src.SearchParameters)
+		searchParams, d := flattenSearchParameters(raw.searchParameters[src.Index], priorParameters[src.Index])
 		diags.Append(d...)
 		if diags.HasError() {
 			return nil, diags
@@ -227,23 +348,29 @@ func flattenAlgoliaSearchTool(tool *agentStudio.AlgoliaSearchToolConfig) (*ToolA
 	return model, diags
 }
 
-// flattenSearchParameters marshals the typed search parameters back into the
-// compact JSON string stored in Terraform state, stripping null values so the
-// stored value matches what the user wrote.
-func flattenSearchParameters(params utils.Nullable[agentStudio.SearchParameters]) (types.String, diag.Diagnostics) {
+// flattenSearchParameters renders an index's raw searchParameters document. The
+// configured value wins whenever there is one, because Algolia does not return
+// this document faithfully - see flattenConfiguredJSONDocument.
+//
+// Without a configured value, for an import or a data source read, the API's
+// document is stored with its null values stripped: Algolia answers with the full
+// search parameter schema, every unset parameter explicitly null, which would
+// otherwise bury the handful that are actually set under some sixty nulls.
+func flattenSearchParameters(document json.RawMessage, prior types.String) (types.String, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	if !params.IsSet() || params.Get() == nil {
+	if !prior.IsNull() && !prior.IsUnknown() {
+		return prior, diags
+	}
+
+	if isJSONNull(document) {
 		return types.StringNull(), diags
 	}
 
-	raw, err := json.Marshal(params.Get())
-	if err != nil {
-		diags.AddError("Error marshaling searchParameters", err.Error())
-		return types.StringNull(), diags
-	}
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	decoder.UseNumber()
 
 	var decoded any
-	if err := json.Unmarshal(raw, &decoded); err != nil {
+	if err := decoder.Decode(&decoded); err != nil {
 		diags.AddError("Error decoding searchParameters", err.Error())
 		return types.StringNull(), diags
 	}
@@ -262,7 +389,11 @@ func flattenSearchParameters(params utils.Nullable[agentStudio.SearchParameters]
 	return types.StringValue(string(b)), diags
 }
 
-func flattenAlgoliaRecommendTool(tool *agentStudio.AlgoliaRecommendToolConfigInput) (*ToolAlgoliaRecommendModel, diag.Diagnostics) {
+func flattenAlgoliaRecommendTool(
+	tool *agentStudio.AlgoliaRecommendToolConfigInput,
+	raw rawTool,
+	priorParameters types.String,
+) (*ToolAlgoliaRecommendModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolAlgoliaRecommendModel{
 		Name: types.StringValue(tool.Name),
@@ -292,38 +423,40 @@ func flattenAlgoliaRecommendTool(tool *agentStudio.AlgoliaRecommendToolConfigInp
 		model.AllowedConfigs = types.ListNull(configObjType)
 	}
 
-	if len(tool.PredefinedRecommendParameters) > 0 {
-		b, err := json.Marshal(tool.PredefinedRecommendParameters)
-		if err != nil {
-			diags.AddError("Error marshaling predefinedRecommendParameters", err.Error())
-			return nil, diags
-		}
-		model.PredefinedRecommendParameters = types.StringValue(string(b))
-	} else {
-		model.PredefinedRecommendParameters = types.StringNull()
-	}
+	// Unlike input_schema, search_parameters and config, this document does come
+	// back exactly as it was written - Algolia stores it opaquely, unmodelled keys
+	// included - so it keeps the stricter rule and with it real drift detection.
+	// Verified against the live API; do not "align" it with the others.
+	model.PredefinedRecommendParameters = flattenJSONDocument(raw.predefinedRecommendParameters, priorParameters)
 
 	return model, diags
 }
 
-func flattenClientSideTool(tool *agentStudio.ClientSideToolConfig) (*ToolClientSideModel, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	model := &ToolClientSideModel{
+// flattenAlgoliaDisplayResultsTool maps an algolia_display_results tool. All
+// of its fields are optional in the API, and all of them are Computed in the
+// schema, so an absent field becomes null and is filled from the API response.
+func flattenAlgoliaDisplayResultsTool(tool *agentStudio.AlgoliaDisplayResultsToolConfig) ToolAlgoliaDisplayResultsModel {
+	return ToolAlgoliaDisplayResultsModel{
+		Name:               types.StringPointerValue(tool.Name),
+		MinGroups:          flattenNullableInt32(tool.MinGroups),
+		MaxGroups:          flattenNullableInt32(tool.MaxGroups),
+		MinResultsPerGroup: flattenNullableInt32(tool.MinResultsPerGroup),
+		MaxResultsPerGroup: flattenNullableInt32(tool.MaxResultsPerGroup),
+	}
+}
+
+func flattenClientSideTool(tool *agentStudio.ClientSideToolConfig, raw rawTool, priorSchema types.String) ToolClientSideModel {
+	return ToolClientSideModel{
 		Name:        types.StringValue(tool.Name),
 		Description: types.StringValue(tool.Description),
+		// Algolia strips the JSON Schema keywords it does not model - `$schema`
+		// and `additionalProperties` among them - so the configured document
+		// wins. See flattenConfiguredJSONDocument.
+		InputSchema: flattenConfiguredJSONDocument(raw.inputSchema, priorSchema),
 	}
-
-	b, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		diags.AddError("Error marshaling inputSchema", err.Error())
-		return nil, diags
-	}
-	model.InputSchema = types.StringValue(string(b))
-
-	return model, diags
 }
 
-func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.Diagnostics) {
+func flattenMCPTool(tool *agentStudio.McpServerToolConfig, priorHeaders types.Map) (*ToolMCPModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	model := &ToolMCPModel{
 		Name: types.StringValue(tool.Name),
@@ -336,14 +469,9 @@ func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.
 		model.Transport = types.StringNull()
 	}
 
-	// Headers
-	if len(tool.Headers) > 0 {
-		headerMap, d := types.MapValueFrom(context.Background(), types.StringType, tool.Headers)
-		diags.Append(d...)
-		model.Headers = headerMap
-	} else {
-		model.Headers = types.MapNull(types.StringType)
-	}
+	headers, d := flattenMCPHeaders(tool.Headers, priorHeaders)
+	diags.Append(d...)
+	model.Headers = headers
 
 	// Allowed tools
 	if len(tool.AllowedTools) > 0 {
@@ -383,6 +511,112 @@ func flattenMCPTool(tool *agentStudio.McpServerToolConfig) (*ToolMCPModel, diag.
 	}
 
 	return model, diags
+}
+
+// flattenMCPHeaders converts the API's header map into a Terraform map.
+// `headers` is Optional and not Computed, so its planned value is the
+// configuration verbatim: emitting a null map where the plan held a known
+// empty map (`headers = {}`) makes Terraform reject the apply with "Provider
+// produced inconsistent result after apply". When the API returns no headers
+// the prior value therefore decides: a null prior stays null, while a prior
+// that was explicitly configured as `{}` stays a known empty map. A prior with
+// entries that the API no longer returns is real drift and becomes null.
+func flattenMCPHeaders(headers map[string]string, prior types.Map) (types.Map, diag.Diagnostics) {
+	if len(headers) == 0 {
+		if !prior.IsNull() && !prior.IsUnknown() && len(prior.Elements()) == 0 {
+			return prior, nil // explicit {}
+		}
+
+		return types.MapNull(types.StringType), nil
+	}
+
+	return types.MapValueFrom(context.Background(), types.StringType, headers)
+}
+
+// priorMCPHeaders indexes the `headers` map of every MCP tool already present
+// in the model by tool name, so flattenMCPHeaders can compare the API response
+// against the value the same tool held before the refresh. Returns nil for a
+// null/unknown list, i.e. for imports and data source reads, where every empty
+// header map maps to null.
+func priorMCPHeaders(prior types.List) map[string]types.Map {
+	if prior.IsNull() || prior.IsUnknown() {
+		return nil
+	}
+
+	headers := make(map[string]types.Map, len(prior.Elements()))
+	forEachNamedBlock(prior, func(name string, attributes map[string]attr.Value) {
+		if value, ok := attributes["headers"].(types.Map); ok {
+			headers[name] = value
+		}
+	})
+
+	return headers
+}
+
+// priorToolDocuments indexes a JSON-document attribute of every tool already
+// present in the model by tool name, so flattenJSONDocument can compare the API
+// response against the value the same tool held before the refresh. A tool
+// absent from the map yields the zero types.String, which is null, i.e. "no
+// configured value to preserve".
+func priorToolDocuments(prior types.List, attribute string) map[string]types.String {
+	documents := make(map[string]types.String, len(prior.Elements()))
+	forEachNamedBlock(prior, func(name string, attributes map[string]attr.Value) {
+		if value, ok := attributes[attribute].(types.String); ok {
+			documents[name] = value
+		}
+	})
+
+	return documents
+}
+
+// priorIndexSearchParameters indexes the `search_parameters` of every index of
+// every algolia_search_index tool already present in the model, by tool name and
+// then index name.
+func priorIndexSearchParameters(prior types.List) map[string]map[string]types.String {
+	parameters := make(map[string]map[string]types.String, len(prior.Elements()))
+	forEachNamedBlock(prior, func(name string, attributes map[string]attr.Value) {
+		indices, ok := attributes["index"].(types.List)
+		if !ok {
+			return
+		}
+		parameters[name] = priorToolDocuments(indices, "search_parameters")
+	})
+
+	return parameters
+}
+
+// forEachNamedBlock calls fn with the name and attributes of every element of a
+// list of named blocks, skipping any element without a usable name. Both tool
+// names and index names are unique within their parent (a tool name addresses
+// the tool in the LLM prompt), so they can key a lookup keeping the model's prior
+// values reachable while it is being overwritten.
+func forEachNamedBlock(list types.List, fn func(name string, attributes map[string]attr.Value)) {
+	if list.IsNull() || list.IsUnknown() {
+		return
+	}
+
+	for _, element := range list.Elements() {
+		obj, ok := element.(types.Object)
+		if !ok {
+			continue
+		}
+
+		name, ok := obj.Attributes()["name"].(types.String)
+		if !ok || name.IsNull() || name.IsUnknown() {
+			continue
+		}
+
+		fn(name.ValueString(), obj.Attributes())
+	}
+}
+
+// flattenNullableInt32 converts an optional API int32 to a types.Int64.
+func flattenNullableInt32(value *int32) types.Int64 {
+	if value == nil {
+		return types.Int64Null()
+	}
+
+	return types.Int64Value(int64(*value))
 }
 
 // flattenNullableString converts a utils.Nullable[string] to a types.String.

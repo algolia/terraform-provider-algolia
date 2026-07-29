@@ -72,8 +72,31 @@ func (r *dictionarySettingsResource) Create(ctx context.Context, req resource.Cr
 
 	tflog.Debug(ctx, "Setting dictionary settings", map[string]any{"app_id": r.appID})
 
-	if err := r.saveDictionarySettings(entries); err != nil {
+	if err := r.saveDictionarySettings(ctx, entries); err != nil {
 		resp.Diagnostics.AddError("Error setting dictionary settings", err.Error())
+		return
+	}
+
+	// The settings are now applied to the application. Persist them before the
+	// read-back so a failure there cannot leave standard entries disabled with
+	// no Terraform record of it: this resource is a singleton with nothing to
+	// "create", but its Delete is what resets the entries, so a settings change
+	// that never reached state would never be undone either.
+	//
+	// Terraform rejects an apply result that still contains unknown values.
+	// disable_standard_entries is Optional+Computed, so it is unknown when the
+	// configuration omits it; flattening the entries that were just written
+	// resolves it to the values the application now holds, and does so as a
+	// *typed* Object built from disableStandardEntriesAttrTypes (a zero-value
+	// types.Object carries no attribute types and fails conversion at runtime).
+	early := plan
+	early.ID = types.StringValue(r.appID)
+	resp.Diagnostics.Append(flattenDictionarySettings(ctx, entries, &early)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &early)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -132,7 +155,7 @@ func (r *dictionarySettingsResource) Update(ctx context.Context, req resource.Up
 
 	tflog.Debug(ctx, "Updating dictionary settings", map[string]any{"app_id": r.appID})
 
-	if err := r.saveDictionarySettings(entries); err != nil {
+	if err := r.saveDictionarySettings(ctx, entries); err != nil {
 		resp.Diagnostics.AddError("Error updating dictionary settings", err.Error())
 		return
 	}
@@ -159,7 +182,7 @@ func (r *dictionarySettingsResource) Delete(ctx context.Context, _ resource.Dele
 	// mirroring how algolia_personalization_strategy resets on Delete.
 	tflog.Debug(ctx, "Resetting dictionary settings to defaults", map[string]any{"app_id": r.appID})
 
-	if err := r.saveDictionarySettings(search.StandardEntries{}); err != nil {
+	if err := r.saveDictionarySettings(ctx, search.StandardEntries{}); err != nil {
 		resp.Diagnostics.AddError("Error resetting dictionary settings", err.Error())
 	}
 }
@@ -190,13 +213,13 @@ func (r *dictionarySettingsResource) ImportState(ctx context.Context, req resour
 // resulting application-level task to complete before returning. Reuses the
 // waitForDictionaryTask helper already defined in resource.go for the
 // algolia_dictionary_entry resource.
-func (r *dictionarySettingsResource) saveDictionarySettings(entries search.StandardEntries) error {
+func (r *dictionarySettingsResource) saveDictionarySettings(ctx context.Context, entries search.StandardEntries) error {
 	params := search.NewDictionarySettingsParams(entries)
 
-	updateResp, err := r.client.SetDictionarySettings(r.client.NewApiSetDictionarySettingsRequest(params))
+	updateResp, err := r.client.SetDictionarySettings(r.client.NewApiSetDictionarySettingsRequest(params), search.WithContext(ctx))
 	if err != nil {
 		return err
 	}
 
-	return waitForDictionaryTask(r.client, updateResp.TaskID)
+	return waitForDictionaryTask(ctx, r.client, updateResp.TaskID)
 }

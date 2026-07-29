@@ -59,13 +59,13 @@ func (d *ruleDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	objectID := model.ObjectID.ValueString()
 	tflog.Debug(ctx, "Reading rule data source", map[string]any{"index_name": indexName, "object_id": objectID})
 
-	apiResp, err := d.client.GetRule(d.client.NewApiGetRuleRequest(indexName, objectID))
+	apiResp, rawParams, err := getRuleRaw(ctx, d.client, indexName, objectID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading rule", "Could not read rule "+objectID+" on index "+indexName+": "+err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, &model)...)
+	resp.Diagnostics.Append(hydrateRuleModel(indexName, apiResp, rawParams, &model)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

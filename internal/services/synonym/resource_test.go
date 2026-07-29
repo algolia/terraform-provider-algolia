@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -48,6 +49,92 @@ func TestAccSynonymResource_basic(t *testing.T) {
 				ResourceName:      "algolia_synonym.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccSynonymResource_objectIDChangeForcesReplacement(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-test-synonym-replace-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckSynonymDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSynonymRegularConfig(indexName, "brand-synonym"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_synonym.test", "object_id", "brand-synonym"),
+				),
+			},
+			{
+				// Renaming the synonym must destroy the original object instead
+				// of writing to the new identity and leaving the old one live.
+				Config: testAccSynonymRegularConfig(indexName, "brand-synonym-renamed"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_synonym.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_synonym.test", "object_id", "brand-synonym-renamed"),
+					testAccCheckSynonymAbsent(indexName, "brand-synonym"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccSynonymResource_indexNameChangeForcesReplacement(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	firstIndex := fmt.Sprintf("tf-test-synonym-idx-a-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	secondIndex := fmt.Sprintf("tf-test-synonym-idx-b-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckSynonymDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSynonymRegularConfig(firstIndex, "brand-synonym"),
+			},
+			{
+				Config: testAccSynonymRegularConfig(secondIndex, "brand-synonym"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_synonym.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_synonym.test", "index_name", secondIndex),
+				),
+			},
+		},
+	})
+}
+
+// TestAccSynonymResource_explicitEmptyCollections covers collections that are
+// configured as `[]`: the API never returns them, so the read has to keep them
+// known-empty instead of null or the apply is rejected as inconsistent.
+func TestAccSynonymResource_explicitEmptyCollections(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	indexName := fmt.Sprintf("tf-test-synonym-empty-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	objectID := "brand-synonym"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckSynonymDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSynonymEmptyCollectionsConfig(indexName, objectID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_synonym.test", "synonyms.#", "2"),
+					resource.TestCheckResourceAttr("algolia_synonym.test", "corrections.#", "0"),
+					resource.TestCheckResourceAttr("algolia_synonym.test", "replacements.#", "0"),
+				),
 			},
 		},
 	})
@@ -125,6 +212,23 @@ func testAccCheckSynonymDestroy(s *terraform.State) error {
 	}
 
 	return nil
+}
+
+// testAccCheckSynonymAbsent asserts that a synonym the provider stopped
+// tracking was actually deleted rather than orphaned on the index.
+func testAccCheckSynonymAbsent(indexName, objectID string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			return err
+		}
+
+		if _, err := client.GetSynonym(client.NewApiGetSynonymRequest(indexName, objectID)); err == nil {
+			return fmt.Errorf("synonym %s/%s still exists", indexName, objectID)
+		}
+
+		return nil
+	}
 }
 
 func testAccRequireCredentials(t *testing.T) {
@@ -209,6 +313,24 @@ resource "algolia_synonym" "test" {
   object_id  = %[2]q
   type       = "synonym"
   synonyms   = ["iphone", "ios phone"]
+}
+`, indexName, objectID)
+}
+
+func testAccSynonymEmptyCollectionsConfig(indexName, objectID string) string {
+	return fmt.Sprintf(`
+resource "algolia_index" "test" {
+  name                = %[1]q
+  deletion_protection = false
+}
+
+resource "algolia_synonym" "test" {
+  index_name   = algolia_index.test.name
+  object_id    = %[2]q
+  type         = "synonym"
+  synonyms     = ["iphone", "ios phone"]
+  corrections  = []
+  replacements = []
 }
 `, indexName, objectID)
 }

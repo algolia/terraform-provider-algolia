@@ -32,7 +32,7 @@ output "agent_name" {
 
 ### Read-Only
 
-- `config` (String) JSON-encoded configuration parameters.
+- `config` (String) JSON-encoded configuration parameters, as Agent Studio reports them. This includes the defaults it merges in, so it can differ from the config written by the algolia_agent resource that manages this agent.
 - `created_at` (String) ISO 8601 timestamp of when the agent was created.
 - `description` (String) A summary of the agent's purpose.
 - `instructions` (String) The agent prompt.
@@ -43,11 +43,24 @@ output "agent_name" {
 - `status` (String) The agent status: draft or published.
 - `system_prompt` (String) System-level rules and constraints.
 - `template_type` (String) Template classification for the agent.
+- `tool_algolia_display_results` (Block List) Algolia display results tool configuration. (see [below for nested schema](#nestedblock--tool_algolia_display_results))
 - `tool_algolia_recommend` (Block List) Algolia recommend tool configuration. (see [below for nested schema](#nestedblock--tool_algolia_recommend))
 - `tool_algolia_search` (Block List) Algolia search index tool configuration. (see [below for nested schema](#nestedblock--tool_algolia_search))
 - `tool_client_side` (Block List) Client-side tool configuration. (see [below for nested schema](#nestedblock--tool_client_side))
 - `tool_mcp` (Block List) MCP server tool configuration. (see [below for nested schema](#nestedblock--tool_mcp))
 - `updated_at` (String) ISO 8601 timestamp of when the agent was last updated.
+
+<a id="nestedblock--tool_algolia_display_results"></a>
+### Nested Schema for `tool_algolia_display_results`
+
+Read-Only:
+
+- `max_groups` (Number)
+- `max_results_per_group` (Number)
+- `min_groups` (Number)
+- `min_results_per_group` (Number)
+- `name` (String)
+
 
 <a id="nestedblock--tool_algolia_recommend"></a>
 ### Nested Schema for `tool_algolia_recommend`
@@ -85,7 +98,7 @@ Read-Only:
 - `description` (String)
 - `enhanced_description` (String)
 - `name` (String)
-- `search_parameters` (String)
+- `search_parameters` (String) JSON-encoded Algolia search parameters, as Algolia reports them, with null parameters removed. Algolia returns only the parameters it recognises, so this can differ from the value written by the algolia_agent resource that manages this agent.
 
 
 
@@ -95,7 +108,7 @@ Read-Only:
 Read-Only:
 
 - `description` (String)
-- `input_schema` (String)
+- `input_schema` (String) JSON-encoded JSON Schema for the tool's arguments, as Algolia reports it. Algolia strips the keywords it does not model, such as `$schema` and `additionalProperties`, so this can differ from the value written by the algolia_agent resource that manages this agent.
 - `name` (String)
 
 
@@ -105,7 +118,7 @@ Read-Only:
 Read-Only:
 
 - `allowed_tool` (Block List) (see [below for nested schema](#nestedblock--tool_mcp--allowed_tool))
-- `headers` (Map of String)
+- `headers` (Map of String, Sensitive) Additional headers sent with MCP requests. Sensitive: header values commonly carry credentials.
 - `name` (String)
 - `transport` (String)
 - `url` (String)

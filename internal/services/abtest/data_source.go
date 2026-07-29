@@ -3,6 +3,7 @@ package abtest
 import (
 	"context"
 
+	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -52,7 +53,7 @@ func (d *abTestDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	abTestID := int32(model.ABTestID.ValueInt64())
 	tflog.Debug(ctx, "Reading A/B test data source", map[string]any{"ab_test_id": abTestID})
 
-	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID))
+	apiResp, err := client.GetABTest(client.NewApiGetABTestRequest(abTestID), abtestingapi.WithContext(ctx))
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading A/B test", "Could not read A/B test: "+err.Error())
 		return
