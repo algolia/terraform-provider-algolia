@@ -413,9 +413,9 @@ func unlinkedVirtualIndexDetail(indexName, primaryIndexName string) string {
 		detail += " Its replica link on primary index " + primaryIndexName + " appears to have been removed."
 	}
 
-	return detail + " The usual cause is a wholesale write of the primary index's replicas list - " +
-		"from algolia_index's advanced.replicas, or from outside Terraform - that omitted " +
-		virtualReplicaName(indexName) + "."
+	return detail + " The usual cause is a write to the primary index's replicas list from outside " +
+		"Terraform that omitted " + virtualReplicaName(indexName) + ". A write through " +
+		"algolia_index's advanced.replicas preserves virtual entries, so it is not this."
 }
 
 // readIndexModel populates model from the Algolia API, reporting whether the

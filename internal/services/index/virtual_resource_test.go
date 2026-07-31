@@ -163,33 +163,58 @@ func TestAccVirtualIndexResource_multipleOnOnePrimary(t *testing.T) {
 	})
 }
 
-// TestAccVirtualIndexResource_primaryDeclaresReplicas covers the ownership rule
-// the schema documents: when the primary's advanced.replicas is managed
-// explicitly, listing the virtual(...) entry there as well must agree with the
-// algolia_virtual_index resource rather than fight it.
-func TestAccVirtualIndexResource_primaryDeclaresReplicas(t *testing.T) {
+// TestAccVirtualIndexResource_standardAndVirtualCoexist is the ownership rule end
+// to end. The primary declares a standard replica in advanced.replicas while an
+// algolia_virtual_index declares a virtual one, and both survive - which is only
+// true because the two own disjoint parts of the same Algolia setting. Before that
+// split, whichever applied last unlinked the other's replica.
+func TestAccVirtualIndexResource_standardAndVirtualCoexist(t *testing.T) {
 	testAccRequireCredentials(t)
 
-	primaryIndexName := fmt.Sprintf("tf-virtual-declared-primary-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
-	replicaName := fmt.Sprintf("tf-virtual-declared-replica-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	suffix := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	primaryIndexName := fmt.Sprintf("tf-virtual-coexist-primary-%s", suffix)
+	standardName := fmt.Sprintf("tf-virtual-coexist-standard-%s", suffix)
+	virtualName := fmt.Sprintf("tf-virtual-coexist-virtual-%s", suffix)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccVirtualIndexProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckVirtualIndexDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccVirtualIndexDeclaredByPrimaryConfig(primaryIndexName, replicaName),
+				Config: testAccVirtualIndexCoexistConfig(primaryIndexName, standardName, virtualName),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("algolia_virtual_index.test", "primary_index_name", primaryIndexName),
-					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, replicaName),
+					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, virtualName),
+					testAccCheckPrimaryHasStandardReplicas(primaryIndexName, standardName),
 				),
 			},
 			{
-				// Applying it a second time must be a no-op: if the two resources
-				// disagreed about the list, each apply would undo the other and this
-				// step's plan would never be empty.
-				Config:   testAccVirtualIndexDeclaredByPrimaryConfig(primaryIndexName, replicaName),
+				// A second apply must be a no-op. If the two resources disagreed
+				// about the list, each would undo the other and this plan would never
+				// be empty.
+				Config:   testAccVirtualIndexCoexistConfig(primaryIndexName, standardName, virtualName),
 				PlanOnly: true,
+			},
+		},
+	})
+}
+
+// TestAccVirtualIndexResource_virtualEntryRejectedOnPrimary covers the other half:
+// a virtual entry named in advanced.replicas is a category error, caught at plan
+// time rather than becoming a silent tug of war over the setting.
+func TestAccVirtualIndexResource_virtualEntryRejectedOnPrimary(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	suffix := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	primaryIndexName := fmt.Sprintf("tf-virtual-rejected-primary-%s", suffix)
+	replicaName := fmt.Sprintf("tf-virtual-rejected-replica-%s", suffix)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccVirtualIndexProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccVirtualIndexDeclaredByPrimaryConfig(primaryIndexName, replicaName),
+				ExpectError: regexp.MustCompile(`Virtual replica declared on the wrong resource`),
+				PlanOnly:    true,
 			},
 		},
 	})
@@ -305,8 +330,19 @@ func TestAccVirtualIndexResource_standardReplicaConversion(t *testing.T) {
 }
 
 // TestAccVirtualIndexResource_standardReplicaRepair covers recovering from the
-// conversion: declaring the virtual(...) form on the primary must put the replica
-// back to being a view over its records.
+// conversion: the replica must go back to being a view over the primary's records.
+//
+// The repair belongs to the algolia_virtual_index resource, which relinks its own
+// entry on every write. It is no longer expressed by naming the virtual(...) form
+// in the primary's advanced.replicas - that list owns standard entries only and
+// rejects the virtual form at plan time - so the trigger here is an ordinary edit
+// to the virtual index itself.
+//
+// A conversion that nothing else edits therefore stays broken with a warning until
+// the next write to the resource, because Read deliberately keeps the resource in
+// state rather than planning a replacement that would delete the index. Closing
+// that gap needs plan-time diagnostics (ModifyPlan), which the provider does not
+// implement yet.
 func TestAccVirtualIndexResource_standardReplicaRepair(t *testing.T) {
 	testAccRequireCredentials(t)
 
@@ -326,9 +362,13 @@ func TestAccVirtualIndexResource_standardReplicaRepair(t *testing.T) {
 			},
 			{
 				PreConfig: testAccConvertToStandardReplica(t, primaryIndexName, replicaName),
-				Config:    testAccVirtualIndexDeclaredByPrimaryConfig(primaryIndexName, replicaName),
+				// Same configuration apart from relevancy_strictness, so the only
+				// reason an Update runs is that edit - and the relink it performs is
+				// what this step asserts.
+				Config: testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 60),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, replicaName),
+					resource.TestCheckResourceAttr("algolia_virtual_index.test", "ranking.relevancy_strictness", "60"),
 				),
 			},
 		},
@@ -606,6 +646,76 @@ resource "algolia_virtual_index" "first" {
 }
 %[3]s
 `, primaryIndexName, firstReplica, second, dependsOn, minProximity)
+}
+
+// testAccVirtualIndexCoexistConfig declares the standard replica as its own
+// algolia_index and references that resource from advanced.replicas rather than
+// repeating the name as a literal.
+//
+// The reference is load-bearing, not style. Both writes create the same index -
+// one directly, one as a side effect of linking it as a replica - and Terraform
+// applies resources with no dependency between them concurrently. When the two
+// land together, the plain index's own SetSettings task never reaches published,
+// so its Create waits out the full 30-minute budget: Algolia appears to restart
+// the index's task queue when it turns it into a replica, discarding the earlier
+// task. Referencing the resource orders the two writes, which is how a
+// configuration expresses this in the first place.
+func testAccVirtualIndexCoexistConfig(primaryIndexName, standardName, virtualName string) string {
+	return fmt.Sprintf(`
+resource "algolia_index" "primary" {
+  name                = %[1]q
+  deletion_protection = false
+
+  advanced {
+    replicas = [algolia_index.standard_replica.name]
+  }
+}
+
+resource "algolia_index" "standard_replica" {
+  name                = %[2]q
+  deletion_protection = false
+}
+
+resource "algolia_virtual_index" "test" {
+  name                = %[3]q
+  primary_index_name  = algolia_index.primary.name
+  deletion_protection = false
+
+  ranking {
+    custom_ranking = ["asc(price)"]
+  }
+}
+`, primaryIndexName, standardName, virtualName)
+}
+
+// testAccCheckPrimaryHasStandardReplicas asserts the primary lists each named
+// replica under its plain name, i.e. not in the virtual(...) form.
+func testAccCheckPrimaryHasStandardReplicas(primaryIndexName string, replicaNames ...string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		client, err := search.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			return err
+		}
+
+		settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName))
+		if err != nil {
+			return fmt.Errorf("read settings of primary index %s: %w", primaryIndexName, err)
+		}
+
+		present := make(map[string]struct{}, len(settings.Replicas))
+		for _, entry := range settings.Replicas {
+			present[entry] = struct{}{}
+		}
+
+		for _, replicaName := range replicaNames {
+			if _, ok := present[replicaName]; !ok {
+				return fmt.Errorf("primary index %s does not list %s as a standard replica; its replicas are %v",
+					primaryIndexName, replicaName, settings.Replicas)
+			}
+		}
+
+		return nil
+	}
 }
 
 func testAccVirtualIndexDeclaredByPrimaryConfig(primaryIndexName, replicaName string) string {

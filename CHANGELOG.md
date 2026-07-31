@@ -7,6 +7,16 @@ FEATURES:
 
 BREAKING CHANGES:
 
+- `algolia_index`: **`advanced.replicas` now owns standard replicas only, and rejects a
+  `virtual(...)` entry.** Algolia keeps both kinds of replica in that one setting, and both this
+  attribute and `algolia_virtual_index` write it - so whichever applied last unlinked the other's
+  replicas, and unlinking a virtual replica empties it. Ownership is now split by kind: this attribute
+  owns the standard entries, each `algolia_virtual_index` owns its own virtual entry, and the two sets
+  are disjoint. A write here preserves the virtual entries Algolia reports instead of treating them as
+  absent, so the previous advice to list `virtual(<name>)` here is not only unnecessary but refused at
+  plan time. Remove those entries; the `algolia_virtual_index` resources keep their replicas linked on
+  their own. Declaring the same replica as standard here while an `algolia_virtual_index` holds it as
+  virtual is also refused, since Algolia cannot hold one index as a replica in both modes.
 - `algolia_virtual_index`: an index that Algolia keeps as a *standard* replica is no longer accepted
   as a virtual one. A replica's own settings report a primary index whichever kind it is, so the
   provider used to treat any replica as virtual; only the primary's `replicas` list distinguishes

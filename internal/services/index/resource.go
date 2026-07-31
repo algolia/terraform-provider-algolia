@@ -87,15 +87,19 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		settings.Replicas = nil
 	}
 
-	// Hold the primary's replica lock for any write that carries a replicas list,
-	// so it cannot interleave with algolia_virtual_index's read-modify-write of
-	// the same field: without this the check below could pass, a virtual replica
-	// link land, and this write then drop it unreported.
+	// Hold the primary's replica lock across the merge below and the write that
+	// follows: both read the current list, and an algolia_virtual_index linking
+	// itself in between would otherwise be dropped by this write.
 	if settings.Replicas != nil {
 		defer lockPrimaryReplicas(indexName)()
-	}
 
-	warnDroppedVirtualReplicas(ctx, r.client, indexName, settings.Replicas, &resp.Diagnostics)
+		merged, mergeDiags := mergeStandardReplicas(ctx, r.client, indexName, settings.Replicas)
+		resp.Diagnostics.Append(mergeDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		settings.Replicas = merged
+	}
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
@@ -210,13 +214,17 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		settings.Replicas = nil
 	}
 
-	// See Create: a replicas-carrying write must not interleave with virtual
-	// replica linking.
+	// See Create: the merge and the write share the primary's replica lock.
 	if settings.Replicas != nil {
 		defer lockPrimaryReplicas(indexName)()
-	}
 
-	warnDroppedVirtualReplicas(ctx, r.client, indexName, settings.Replicas, &resp.Diagnostics)
+		merged, mergeDiags := mergeStandardReplicas(ctx, r.client, indexName, settings.Replicas)
+		resp.Diagnostics.Append(mergeDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		settings.Replicas = merged
+	}
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {

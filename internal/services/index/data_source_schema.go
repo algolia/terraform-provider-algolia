@@ -374,7 +374,10 @@ func advancedDataSourceBlockSchema() map[string]datasourceschema.Attribute {
 			Computed:    true,
 		},
 		"replicas": datasourceschema.ListAttribute{
-			Description: "List of replica index names.",
+			Description: "Names of this index's **standard** replicas - the ones holding their own copy of " +
+				"the records. Virtual replicas are excluded, matching what the attribute means on the " +
+				"resource; read one with the `algolia_virtual_index` data source, or list every index with " +
+				"`algolia_indices`.",
 			Computed:    true,
 			ElementType: types.StringType,
 		},
