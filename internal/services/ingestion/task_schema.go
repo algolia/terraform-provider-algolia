@@ -65,16 +65,31 @@ func taskResourceSchema() schema.Schema {
 			},
 			"subscription_action": schema.StringAttribute{
 				Description: "Action to perform on the destination index for records ingested through a " +
-					"streaming/subscription-based source. One of: " + strings.Join(allowedActionTypeStrings(), ", ") + ".",
+					"streaming/subscription-based source. One of: " + strings.Join(allowedActionTypeStrings(), ", ") + ". " +
+					"Changing the value updates the task in place, but removing the attribute forces " +
+					"replacement: the Ingestion API's task update endpoint can set this field and change " +
+					"it, but has no way to clear it.",
 				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(allowedActionTypeStrings()...),
 				},
+				PlanModifiers: []planmodifier.String{
+					requiresReplaceOnRemoval(),
+				},
 			},
 			"cron": schema.StringAttribute{
 				Description: "Cron expression for the task's schedule (e.g. `0 0 * * *` for daily). Omit for an " +
-					"on-demand task that only runs when triggered manually.",
+					"on-demand task that only runs when triggered manually.\n\n" +
+					"Changing the schedule updates the task in place. Removing `cron` altogether forces " +
+					"replacement, because the Ingestion API has no way to clear a schedule: an empty " +
+					"expression is rejected as invalid and a null one is ignored, so a task can only " +
+					"become on-demand by being recreated. To stop a scheduled task from running without " +
+					"recreating it, set `enabled = false` instead - that keeps the schedule and is almost " +
+					"always what is wanted.",
 				Optional: true,
+				PlanModifiers: []planmodifier.String{
+					requiresReplaceOnRemoval(),
+				},
 			},
 			"enabled": schema.BoolAttribute{
 				Description: "Whether the task is enabled. Defaults to true.",
@@ -112,7 +127,8 @@ func taskResourceSchema() schema.Schema {
 				},
 			},
 			"policies": schema.StringAttribute{
-				Description: "JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 50 })`. " +
+				Description: "JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 5 })`. The API " +
+					"caps `criticalThreshold` at 10 and rejects anything higher. " +
 					"Refreshed on read using the same semantic-equality preservation as `input`. Computed " +
 					"because the API substitutes its own defaults when this is omitted.",
 				Optional: true,

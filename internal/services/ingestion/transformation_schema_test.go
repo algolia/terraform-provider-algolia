@@ -1,10 +1,16 @@
 package ingestion
 
 import (
+	"context"
 	"testing"
 
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 func TestTransformationResourceSchema_NameIsRequired(t *testing.T) {
@@ -42,6 +48,7 @@ func TestTransformationResourceSchema_CodeIsOptionalAndNotSensitive(t *testing.T
 }
 
 func TestTransformationResourceSchema_TypeIsOptionalWithoutReplace(t *testing.T) {
+	ctx := context.Background()
 	s := transformationResourceSchema()
 
 	typeAttr, ok := s.Attributes["type"].(resourceschema.StringAttribute)
@@ -51,8 +58,48 @@ func TestTransformationResourceSchema_TypeIsOptionalWithoutReplace(t *testing.T)
 	if !typeAttr.Optional {
 		t.Fatal("expected type to be optional")
 	}
-	if len(typeAttr.PlanModifiers) != 0 {
-		t.Fatal("expected type to have no RequiresReplace plan modifier: UpdateTransformation accepts a `type` field")
+	// Computed as well: a transformation defined through the legacy `code`
+	// attribute sets no type of its own, and the API derives one.
+	if !typeAttr.Computed {
+		t.Fatal("expected type to be computed: the API derives it for a code-only transformation")
+	}
+
+	// Asserted behaviourally rather than by counting modifiers, because `type`
+	// carries UseStateForUnknown to stop an unconfigured value planning as "known
+	// after apply" forever. What must stay true is that changing the type updates
+	// in place: UpdateTransformation accepts a `type` field.
+	changed := "noCode"
+	minimal := resourceschema.Schema{
+		Attributes: map[string]resourceschema.Attribute{
+			"type": resourceschema.StringAttribute{
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: typeAttr.PlanModifiers,
+			},
+		},
+	}
+	objectType := minimal.Type().TerraformType(ctx)
+	raw := func(v string) tftypes.Value {
+		return tftypes.NewValue(objectType, map[string]tftypes.Value{"type": tftypes.NewValue(tftypes.String, v)})
+	}
+
+	for _, modifier := range typeAttr.PlanModifiers {
+		req := planmodifier.StringRequest{
+			Path:        path.Root("type"),
+			State:       tfsdk.State{Schema: minimal, Raw: raw("code")},
+			Plan:        tfsdk.Plan{Schema: minimal, Raw: raw(changed)},
+			Config:      tfsdk.Config{Schema: minimal, Raw: raw(changed)},
+			StateValue:  types.StringValue("code"),
+			PlanValue:   types.StringValue(changed),
+			ConfigValue: types.StringValue(changed),
+		}
+		resp := &planmodifier.StringResponse{PlanValue: types.StringValue(changed)}
+
+		modifier.PlanModifyString(ctx, req, resp)
+
+		if resp.RequiresReplace {
+			t.Fatal("changing type must not force replacement: UpdateTransformation accepts a `type` field")
+		}
 	}
 }
 

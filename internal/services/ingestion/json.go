@@ -104,6 +104,15 @@ func normalizeJSON(v any) any {
 	case map[string]any:
 		m := make(map[string]any, len(val))
 		for k, v := range val {
+			// A key the API echoes back with an explicit null is the same thing
+			// as a key it never mentioned: both mean "not set". The Ingestion API
+			// fills optional fields in this way - a no-code transformation step
+			// comes back carrying `"condition": null` that was never configured -
+			// and treating that as a difference would make the applied value
+			// disagree with the plan on every apply.
+			if v == nil {
+				continue
+			}
 			m[k] = normalizeJSON(v)
 		}
 		return m

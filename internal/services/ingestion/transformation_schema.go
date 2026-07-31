@@ -59,10 +59,18 @@ func transformationResourceSchema() schema.Schema {
 					". The Ingestion API's transformation update endpoint accepts the same body as create " +
 					"(including `type`), so changing this does not force replacement - unlike " +
 					"`algolia_ingestion_source`/`algolia_ingestion_destination`, whose update endpoints have no " +
-					"`type` field at all.",
+					"`type` field at all. Computed because the API derives a type for a transformation " +
+					"defined through the legacy `code` attribute, which sets no type of its own.",
 				Optional: true,
+				Computed: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(allowedTransformationTypeStrings()...),
+				},
+				PlanModifiers: []planmodifier.String{
+					// Without this, an unconfigured `type` would plan as "known
+					// after apply" on every run, since the value is Computed and
+					// the configuration never supplies one.
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"input": schema.StringAttribute{

@@ -48,6 +48,37 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_ingestion_task`: **removing `cron` from a task no longer fails the apply.** Task updates are
+  a `PATCH` and the client models `cron` as a pointer with `omitempty`, so dropping the attribute sent
+  nothing at all; the server kept the schedule, the read-back restored it, and Terraform rejected the
+  result with `Provider produced inconsistent result after apply: .cron: was null, but now
+  cty.StringVal(...)`. Verified against the live API: the endpoint has no way to clear a schedule -
+  an empty expression is rejected as invalid, and an explicit null returns 200 while changing nothing -
+  so removing `cron` now forces the task to be replaced, which is the only operation that converges.
+  Changing a schedule is still an in-place update. To stop a scheduled task without recreating it, set
+  `enabled = false`, which keeps the schedule.
+- `algolia_ingestion_transformation`: **a transformation defined through the legacy `code` attribute
+  now applies.** The API derives an `input` and a `type` from `code` and returns both, and the provider
+  wrote them into state for attributes the configuration had left unset, failing the apply twice over
+  with `Provider produced inconsistent result after apply`. `type` is now Computed, since the API
+  genuinely derives it, and the derived `input` is dropped when the logic came from `code` - the two
+  are mutually exclusive, so it carries nothing new. An import, which has neither configured, still
+  adopts what the API returns.
+- `algolia_ingestion_transformation`: **a no-code transformation no longer fails on every apply.** The
+  API echoes optional fields it was not given back as explicit nulls - a step comes back carrying a
+  `condition` that was never configured - and the JSON comparison counted that as a change, so the
+  applied value never matched the plan. A key present with a null value is now treated as absent, which
+  is what the API means by it. A null against a real value is still a difference.
+- `algolia_ingestion_task`: `subscription_action` is treated the same way, for the same reason: it has
+  the identical `omitempty` pointer shape in the same request struct, so the provider cannot express
+  its removal either. Unlike `cron` this could not be confirmed against the live API, because creating
+  a task that accepts a `subscription_action` requires a reachable platform source, which the API
+  validates on create.
+- `algolia_virtual_index`: **destroying a replica that Algolia holds as a standard one now succeeds.**
+  Unlinking matched only the `virtual(...)` form of the entry in the primary index's `replicas` list,
+  so a replica listed under its plain name stayed linked and the delete that followed was refused with
+  `403 cannot apply the deleteIndex operation on a replica index`. Either form is now removed before
+  the index is deleted.
 - `algolia_virtual_index`: **an unlinked virtual replica no longer wedges Terraform.** When an index
   still existed but had stopped being a virtual replica - which is what a wholesale write of the
   primary's `replicas` list causes - `Read` raised an error. That error surfaced on every operation

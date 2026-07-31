@@ -25,6 +25,31 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			expected: true,
 		},
 		{
+			// The Ingestion API fills in optional fields it was not given with an
+			// explicit null - a no-code transformation step comes back carrying a
+			// `condition` that was never configured. That is the same thing as the
+			// key being absent, and treating it as a difference made the applied
+			// value disagree with the plan on every apply.
+			name:     "key echoed back as an explicit null",
+			a:        `{"steps":[{"id":"s1","configuration":{"action":{"kind":"addAttribute"}}}]}`,
+			b:        `{"steps":[{"id":"s1","configuration":{"action":{"kind":"addAttribute"},"condition":null}}]}`,
+			expected: true,
+		},
+		{
+			name:     "top-level key echoed back as an explicit null",
+			a:        `{"url":"https://example.com/data.csv"}`,
+			b:        `{"url":"https://example.com/data.csv","description":null}`,
+			expected: true,
+		},
+		{
+			// A null is only equivalent to absence. It must not collapse a real
+			// value into nothing.
+			name:     "null against a real value still differs",
+			a:        `{"condition":null}`,
+			b:        `{"condition":"record.price > 0"}`,
+			expected: false,
+		},
+		{
 			name:     "different array order",
 			a:        `{"languages":["en","fr"]}`,
 			b:        `{"languages":["fr","en"]}`,

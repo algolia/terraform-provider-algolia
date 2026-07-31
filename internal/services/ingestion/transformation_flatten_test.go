@@ -111,6 +111,63 @@ func TestFlattenTransformation_NoTypeIsNull(t *testing.T) {
 	}
 }
 
+// TestFlattenTransformation_CodeSuppliedDoesNotAdoptDerivedInput covers a
+// transformation whose logic is given through the legacy `code` attribute. The
+// API derives an `input` from it and returns that, and adopting it put a value
+// into state for an attribute the configuration left unset - which Terraform
+// rejects with "Provider produced inconsistent result after apply: .input: was
+// null, but now ...".
+func TestFlattenTransformation_CodeSuppliedDoesNotAdoptDerivedInput(t *testing.T) {
+	code := "function transform({ record }) { return record; }"
+	transformation := &ingestionapi.Transformation{
+		TransformationID: "transformation-code-only",
+		Name:             "my-transformation",
+		Code:             code,
+		Input:            ingestionapi.TransformationCodeAsTransformationInput(ingestionapi.NewTransformationCode(code)),
+		CreatedAt:        "2024-01-01T00:00:00Z",
+		UpdatedAt:        "2024-01-01T00:00:00Z",
+	}
+
+	// What the operator configured: code, no input.
+	model := TransformationResourceModel{Code: types.StringValue(code)}
+
+	diags := flattenTransformation(transformation, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if !model.Input.IsNull() {
+		t.Errorf("input = %#v, want null: the operator configured code instead", model.Input)
+	}
+}
+
+// TestFlattenTransformation_ImportAdoptsDerivedInput is the other side of the
+// same rule: an import has no configured code to defer to, so the API's input is
+// the only thing that can populate state.
+func TestFlattenTransformation_ImportAdoptsDerivedInput(t *testing.T) {
+	code := "function transform({ record }) { return record; }"
+	transformation := &ingestionapi.Transformation{
+		TransformationID: "transformation-import",
+		Name:             "my-transformation",
+		Code:             code,
+		Input:            ingestionapi.TransformationCodeAsTransformationInput(ingestionapi.NewTransformationCode(code)),
+		CreatedAt:        "2024-01-01T00:00:00Z",
+		UpdatedAt:        "2024-01-01T00:00:00Z",
+	}
+
+	// An import starts from an empty model: nothing configured at all.
+	var model TransformationResourceModel
+
+	diags := flattenTransformation(transformation, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if model.Input.IsNull() {
+		t.Error("input = null after import, want the value the API returned")
+	}
+}
+
 func TestFlattenTransformation_NoAuthenticationIDsIsNull(t *testing.T) {
 	transformation := &ingestionapi.Transformation{
 		TransformationID: "transformation-4",

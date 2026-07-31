@@ -8,6 +8,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -65,6 +66,67 @@ func TestAccIngestionTaskResource_basic(t *testing.T) {
 				// recovered on import. Read preserves the prior value, but an
 				// import has no prior to preserve.
 				ImportStateVerifyIgnore: []string{"action"},
+			},
+		},
+	})
+}
+
+// TestAccIngestionTaskResource_cronRemovalForcesReplace covers removing a
+// schedule. The Ingestion API can set a cron and change it, but has no way to
+// clear one - an empty expression is rejected as invalid and an explicit null is
+// ignored - so the only route to an on-demand task is creating one without a
+// cron. The third step is the one that matters: it proves the configuration
+// converges, which is exactly what removing a cron did not do before.
+func TestAccIngestionTaskResource_cronRemovalForcesReplace(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	suffix := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	sourceName := fmt.Sprintf("tf-acc-cron-source-%s", suffix)
+	destinationName := fmt.Sprintf("tf-acc-cron-destination-%s", suffix)
+	indexName := fmt.Sprintf("tf_acc_cron_%s", suffix)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIngestionTaskDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIngestionTaskCronConfig(sourceName, destinationName, indexName, "0 0 * * *"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_ingestion_task.test", "cron", "0 0 * * *"),
+					resource.TestCheckResourceAttrSet("algolia_ingestion_task.test", "next_run"),
+				),
+			},
+			{
+				// Changing the schedule is a plain update: the task keeps its ID.
+				Config: testAccIngestionTaskCronConfig(sourceName, destinationName, indexName, "30 4 * * 1"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_ingestion_task.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_ingestion_task.test", "cron", "30 4 * * 1"),
+				),
+			},
+			{
+				// Removing it entirely cannot be expressed as an update, so the
+				// task has to be replaced.
+				Config: testAccIngestionTaskCronConfig(sourceName, destinationName, indexName, ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_ingestion_task.test", plancheck.ResourceActionReplace),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("algolia_ingestion_task.test", "cron"),
+				),
+			},
+			{
+				// The convergence check. Without the replacement above, the task
+				// would still carry its schedule remotely and this plan would
+				// propose the same removal again.
+				Config:   testAccIngestionTaskCronConfig(sourceName, destinationName, indexName, ""),
+				PlanOnly: true,
 			},
 		},
 	})
@@ -175,6 +237,57 @@ resource "algolia_ingestion_task" "test" {
   %[5]s
 }
 `, sourceName, destinationName, indexName, enabled, cronAttr, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+}
+
+// testAccIngestionTaskCronConfig uses a "csv" source rather than the "push" one
+// the other task tests use: the API refuses to schedule a task on a push source,
+// so a cron test needs a pull-based one. The URL is never fetched - nothing here
+// runs the task - but a "search" destination does need an "algolia"
+// authentication whose appID matches the requesting application.
+func testAccIngestionTaskCronConfig(sourceName, destinationName, indexName, cron string) string {
+	cronAttr := ""
+	if cron != "" {
+		cronAttr = fmt.Sprintf("cron = %q", cron)
+	}
+
+	return fmt.Sprintf(`
+resource "algolia_ingestion_source" "test" {
+  name = %[1]q
+  type = "csv"
+
+  input = jsonencode({
+    url            = "https://example.com/products.csv"
+    uniqueIDColumn = "id"
+  })
+}
+
+resource "algolia_ingestion_authentication" "test" {
+  name = "%[2]s-auth"
+  type = "algolia"
+
+  input = jsonencode({
+    appID  = %[5]q
+    apiKey = %[6]q
+  })
+}
+
+resource "algolia_ingestion_destination" "test" {
+  name              = %[2]q
+  type              = "search"
+  authentication_id = algolia_ingestion_authentication.test.authentication_id
+
+  input = jsonencode({
+    indexName = %[3]q
+  })
+}
+
+resource "algolia_ingestion_task" "test" {
+  source_id      = algolia_ingestion_source.test.source_id
+  destination_id = algolia_ingestion_destination.test.destination_id
+  action         = "replace"
+  %[4]s
+}
+`, sourceName, destinationName, indexName, cronAttr, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
 }
 
 func testAccIngestionTaskDataSourceConfig(sourceName, destinationName, indexName string) string {

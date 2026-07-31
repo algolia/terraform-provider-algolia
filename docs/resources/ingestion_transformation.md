@@ -27,14 +27,31 @@ provider "algolia" {
   analytics_region = "us"
 }
 
-# A "code" transformation runs custom JavaScript against each record. The
-# deprecated `code` attribute is the simplest way to specify it directly.
+# A "code" transformation runs custom JavaScript against each record. Supply it
+# through `input`, which is what the API expects whenever `type` is set - a
+# payload carrying `type` without `input` is rejected with "'input' is required
+# if 'Type' is present".
 resource "algolia_ingestion_transformation" "code" {
   name = "terraform-example-code-transformation"
   type = "code"
 
+  input = jsonencode({
+    code = <<-EOT
+      function transform({ record }) {
+        record.indexedAt = new Date().toISOString();
+        return record;
+      }
+    EOT
+  })
+}
+
+# The deprecated `code` attribute still works on its own, without `type`. It
+# conflicts with `input`, so set one or the other.
+resource "algolia_ingestion_transformation" "legacy_code" {
+  name = "terraform-example-legacy-code-transformation"
+
   code = <<-EOT
-    function transform(record) {
+    function transform({ record }) {
       record.indexedAt = new Date().toISOString();
       return record;
     }
@@ -44,41 +61,60 @@ resource "algolia_ingestion_transformation" "code" {
 # A "noCode" transformation is built from a series of steps instead of raw
 # code. Its `input` is JSON-encoded, like algolia_ingestion_source and
 # algolia_ingestion_destination.
+#
+# Every step needs an `id`, a `name` and a `configuration.action`, and the
+# action's `kind` is one of addAttribute, removeAttribute or filterRecords.
+# `formula` is an expression, so a literal string value is quoted inside it.
+# Note `enabled` defaults to false: a step is authored but inert until you set
+# it, which is easy to miss.
 resource "algolia_ingestion_transformation" "no_code" {
   name        = "terraform-example-no-code-transformation"
   type        = "noCode"
-  description = "Adds a static field to every record"
+  description = "Adds a static attribute to every record"
 
   input = jsonencode({
     steps = [
       {
-        action = "addField"
-        field  = "source"
-        value  = "terraform"
+        id      = "add-source"
+        name    = "Add a source attribute"
+        enabled = true
+
+        configuration = {
+          action = {
+            kind          = "addAttribute"
+            attributeName = "source"
+            formula       = "\"terraform\""
+          }
+        }
       }
     ]
   })
 }
 
-resource "algolia_ingestion_authentication" "shopify" {
-  name     = "terraform-example-shopify-auth"
-  type     = "apiKey"
-  platform = "shopify"
+# A transformation's authentications must be of type "secrets" - the API
+# rejects any other type with "Invalid authentications for transformation".
+# Each key becomes available to the transformation code at run time, which is
+# how it reaches an external API without the credential appearing in the code.
+resource "algolia_ingestion_authentication" "enrichment_api" {
+  name = "terraform-example-enrichment-secrets"
+  type = "secrets"
 
   input = jsonencode({
-    key = "shpat_example_api_key"
+    enrichmentApiKey = "example-secret-value"
   })
 }
 
 # `authentication_ids` associates the algolia_ingestion_authentication
-# resources this transformation needs (e.g. to call an external API as part
-# of its logic).
+# resources this transformation needs.
 resource "algolia_ingestion_transformation" "with_authentication" {
   name = "terraform-example-transformation-with-auth"
   type = "code"
-  code = "function transform(record) { return record; }"
 
-  authentication_ids = [algolia_ingestion_authentication.shopify.authentication_id]
+  input = jsonencode({
+    code = "function transform({ record }) { return record; }"
+  })
+
+  authentication_ids = [algolia_ingestion_authentication.enrichment_api.authentication_id]
 }
 ```
 
@@ -95,7 +131,7 @@ resource "algolia_ingestion_transformation" "with_authentication" {
 - `code` (String) The transformation's source code (for `type = "code"` transformations). This is the deprecated, legacy way of specifying a code transformation's logic directly - the Ingestion API recommends `input` with a matching `type` instead. Leave it unset for no-code transformations (which have no `code`); an unset `code` reads back as null. The Ingestion API returns `code` in full (nothing is redacted), so this attribute is refreshed on read. Computed because the API derives it from `input.code` when the logic is supplied that way.
 - `description` (String) A descriptive name for the transformation explaining what it does.
 - `input` (String) JSON-encoded configuration matching `type` (e.g. `jsonencode({ steps = [...] })` for a no-code transformation, or `jsonencode({ code = "..." })` for a code transformation). Optional: a transformation's logic can instead be supplied via the legacy `code` attribute. The Ingestion API returns a transformation's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (object key order, and the order of arrays of scalars), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned. Note the order of arrays of objects (e.g. `steps`) is significant and preserved.
-- `type` (String) Type of transformation. One of: code, noCode. The Ingestion API's transformation update endpoint accepts the same body as create (including `type`), so changing this does not force replacement - unlike `algolia_ingestion_source`/`algolia_ingestion_destination`, whose update endpoints have no `type` field at all.
+- `type` (String) Type of transformation. One of: code, noCode. The Ingestion API's transformation update endpoint accepts the same body as create (including `type`), so changing this does not force replacement - unlike `algolia_ingestion_source`/`algolia_ingestion_destination`, whose update endpoints have no `type` field at all. Computed because the API derives a type for a transformation defined through the legacy `code` attribute, which sets no type of its own.
 
 ### Read-Only
 

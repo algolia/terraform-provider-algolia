@@ -27,6 +27,12 @@ func flattenTransformation(transformation *ingestionapi.Transformation, model *T
 	model.CreatedAt = types.StringValue(transformation.CreatedAt)
 	model.UpdatedAt = types.StringValue(transformation.UpdatedAt)
 
+	// Captured before model.Code is overwritten: this is the value the caller
+	// brought in - the configured one on Create/Update, the prior state on Read -
+	// and it is what says whether this transformation's logic is expressed
+	// through `code` rather than `input`.
+	logicSuppliedAsCode := !model.Code.IsNull() && !model.Code.IsUnknown()
+
 	model.Code = flattenCode(transformation.Code, model.Code)
 
 	if transformation.Type != nil {
@@ -39,7 +45,7 @@ func flattenTransformation(transformation *ingestionapi.Transformation, model *T
 	diags.Append(authIDsDiags...)
 	model.AuthenticationIDs = authIDs
 
-	inputValue, inputDiags := flattenTransformationInput(transformation.Input, model.Input)
+	inputValue, inputDiags := flattenTransformationInput(transformation.Input, model.Input, logicSuppliedAsCode)
 	diags.Append(inputDiags...)
 	model.Input = inputValue
 
@@ -54,7 +60,14 @@ func flattenTransformation(transformation *ingestionapi.Transformation, model *T
 // `input` is Optional, so a nil *TransformationInput (e.g. a transformation
 // defined via the legacy `code` attribute instead) is only surfaced as null
 // if nothing was configured either.
-func flattenTransformationInput(input *ingestionapi.TransformationInput, previous types.String) (types.String, diag.Diagnostics) {
+//
+// logicSuppliedAsCode says the transformation's logic comes from `code`. The API
+// derives an `input` from it and returns that, but adopting it would put a value
+// into state for an attribute the configuration deliberately left unset, which
+// Terraform rejects as an inconsistent apply result. `code` and `input` are
+// mutually exclusive, so in that case the derived value is redundant with `code`
+// and is dropped. An import has neither, so it still adopts what the API returns.
+func flattenTransformationInput(input *ingestionapi.TransformationInput, previous types.String, logicSuppliedAsCode bool) (types.String, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	if input == nil {
@@ -63,6 +76,10 @@ func flattenTransformationInput(input *ingestionapi.TransformationInput, previou
 		}
 
 		return previous, diags
+	}
+
+	if logicSuppliedAsCode && (previous.IsNull() || previous.IsUnknown()) {
+		return types.StringNull(), diags
 	}
 
 	encoded, err := json.Marshal(input)
