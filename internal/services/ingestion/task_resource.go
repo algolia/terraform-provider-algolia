@@ -75,7 +75,7 @@ func createTask(ctx context.Context, client *ingestionapi.APIClient, plan *TaskR
 
 	createResp, err := client.CreateTask(client.NewApiCreateTaskRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating Ingestion task", "Could not create task: "+err.Error())
+		resp.Diagnostics.AddError("Error creating Ingestion task", "Could not create task: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -94,7 +94,7 @@ func createTask(ctx context.Context, client *ingestionapi.APIClient, plan *TaskR
 
 	apiResp, err := client.GetTask(client.NewApiGetTaskRequest(createResp.TaskID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read back task after creation: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read back task after creation: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -174,7 +174,7 @@ func (r *taskResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read task "+taskID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read task "+taskID+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -231,13 +231,13 @@ func (r *taskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	tflog.Debug(ctx, "Updating Ingestion task", map[string]any{"task_id": taskID})
 
 	if _, err := client.UpdateTask(client.NewApiUpdateTaskRequest(taskID, update), ingestionapi.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error updating Ingestion task", "Could not update task "+taskID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating Ingestion task", "Could not update task "+taskID+": "+algoliaerr.Explain(err))
 		return
 	}
 
 	apiResp, err := client.GetTask(client.NewApiGetTaskRequest(taskID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read back task after update: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion task", "Could not read back task after update: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -270,7 +270,7 @@ func (r *taskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting Ingestion task", "Could not delete task "+taskID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting Ingestion task", "Could not delete task "+taskID+": "+algoliaerr.Explain(err))
 	}
 }
 
@@ -284,7 +284,7 @@ func (r *taskResource) ImportState(ctx context.Context, req resource.ImportState
 	taskID := req.ID
 	apiResp, err := client.GetTask(client.NewApiGetTaskRequest(taskID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing Ingestion task", "Could not import task "+taskID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing Ingestion task", "Could not import task "+taskID+": "+algoliaerr.Explain(err))
 		return
 	}
 

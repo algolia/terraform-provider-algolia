@@ -36,6 +36,21 @@ import (
 // in err's chain. The second return value is false when err is nil or wraps no
 // Algolia API error, in which case no status is available -- callers must not
 // read the zero status as meaningful.
+func Status(err error) (int, bool) {
+	status, _, ok := apiError(err)
+	return status, ok
+}
+
+// extras returns the properties an Algolia API error carries beyond its message,
+// which is where the API puts anything structured it has to say about a failure -
+// see Explain. Nil when err wraps no Algolia API error, or carries nothing extra.
+func extras(err error) map[string]any {
+	_, properties, _ := apiError(err)
+	return properties
+}
+
+// apiError finds an Algolia API error anywhere in err's chain and reports its
+// status and its additional properties.
 //
 // Each API surface needs its own concrete target type, so this is a dispatch
 // table rather than a loop: add a pair of cases when the client gains a surface.
@@ -43,9 +58,9 @@ import (
 // generated APIError declares Error() on its value receiver and so satisfies the
 // error interface either way, even though the clients all return pointers. The
 // pointer cases guard against a typed nil, which errors.As happily matches.
-func Status(err error) (int, bool) {
+func apiError(err error) (int, map[string]any, bool) {
 	if err == nil {
-		return 0, false
+		return 0, nil, false
 	}
 
 	var (
@@ -65,67 +80,67 @@ func Status(err error) (int, bool) {
 
 	switch {
 	case errors.As(err, &searchPtr) && searchPtr != nil:
-		return searchPtr.Status, true
+		return searchPtr.Status, searchPtr.AdditionalProperties, true
 	case errors.As(err, &searchVal):
-		return searchVal.Status, true
+		return searchVal.Status, searchVal.AdditionalProperties, true
 
 	case errors.As(err, &recommendPtr) && recommendPtr != nil:
-		return recommendPtr.Status, true
+		return recommendPtr.Status, recommendPtr.AdditionalProperties, true
 	case errors.As(err, &recommendVal):
-		return recommendVal.Status, true
+		return recommendVal.Status, recommendVal.AdditionalProperties, true
 
 	case errors.As(err, &ingestionPtr) && ingestionPtr != nil:
-		return ingestionPtr.Status, true
+		return ingestionPtr.Status, ingestionPtr.AdditionalProperties, true
 	case errors.As(err, &ingestionVal):
-		return ingestionVal.Status, true
+		return ingestionVal.Status, ingestionVal.AdditionalProperties, true
 
 	case errors.As(err, &compositionPtr) && compositionPtr != nil:
-		return compositionPtr.Status, true
+		return compositionPtr.Status, compositionPtr.AdditionalProperties, true
 	case errors.As(err, &compositionVal):
-		return compositionVal.Status, true
+		return compositionVal.Status, compositionVal.AdditionalProperties, true
 
 	case errors.As(err, &personalizationPtr) && personalizationPtr != nil:
-		return personalizationPtr.Status, true
+		return personalizationPtr.Status, personalizationPtr.AdditionalProperties, true
 	case errors.As(err, &personalizationVal):
-		return personalizationVal.Status, true
+		return personalizationVal.Status, personalizationVal.AdditionalProperties, true
 
 	case errors.As(err, &suggestionsPtr) && suggestionsPtr != nil:
-		return suggestionsPtr.Status, true
+		return suggestionsPtr.Status, suggestionsPtr.AdditionalProperties, true
 	case errors.As(err, &suggestionsVal):
-		return suggestionsVal.Status, true
+		return suggestionsVal.Status, suggestionsVal.AdditionalProperties, true
 
 	case errors.As(err, &abtestingPtr) && abtestingPtr != nil:
-		return abtestingPtr.Status, true
+		return abtestingPtr.Status, abtestingPtr.AdditionalProperties, true
 	case errors.As(err, &abtestingVal):
-		return abtestingVal.Status, true
+		return abtestingVal.Status, abtestingVal.AdditionalProperties, true
 
 	case errors.As(err, &abtestingV3Ptr) && abtestingV3Ptr != nil:
-		return abtestingV3Ptr.Status, true
+		return abtestingV3Ptr.Status, abtestingV3Ptr.AdditionalProperties, true
 	case errors.As(err, &abtestingV3Val):
-		return abtestingV3Val.Status, true
+		return abtestingV3Val.Status, abtestingV3Val.AdditionalProperties, true
 
 	case errors.As(err, &agentStudioPtr) && agentStudioPtr != nil:
-		return agentStudioPtr.Status, true
+		return agentStudioPtr.Status, agentStudioPtr.AdditionalProperties, true
 	case errors.As(err, &agentStudioVal):
-		return agentStudioVal.Status, true
+		return agentStudioVal.Status, agentStudioVal.AdditionalProperties, true
 
 	case errors.As(err, &analyticsPtr) && analyticsPtr != nil:
-		return analyticsPtr.Status, true
+		return analyticsPtr.Status, analyticsPtr.AdditionalProperties, true
 	case errors.As(err, &analyticsVal):
-		return analyticsVal.Status, true
+		return analyticsVal.Status, analyticsVal.AdditionalProperties, true
 
 	case errors.As(err, &insightsPtr) && insightsPtr != nil:
-		return insightsPtr.Status, true
+		return insightsPtr.Status, insightsPtr.AdditionalProperties, true
 	case errors.As(err, &insightsVal):
-		return insightsVal.Status, true
+		return insightsVal.Status, insightsVal.AdditionalProperties, true
 
 	case errors.As(err, &monitoringPtr) && monitoringPtr != nil:
-		return monitoringPtr.Status, true
+		return monitoringPtr.Status, monitoringPtr.AdditionalProperties, true
 	case errors.As(err, &monitoringVal):
-		return monitoringVal.Status, true
+		return monitoringVal.Status, monitoringVal.AdditionalProperties, true
 	}
 
-	return 0, false
+	return 0, nil, false
 }
 
 // IsNotFound reports whether err is an Algolia API error with status 404.

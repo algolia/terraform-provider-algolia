@@ -48,6 +48,12 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- **Ingestion diagnostics now name the field the API rejected.** The Ingestion API answers an invalid
+  request with a summary plus a list of exactly what was wrong, and the provider reported only the
+  summary - so a rejected apply said `Invalid payload, see error.details` and left the operator with no
+  way to see those details. All five ingestion resources and their data sources now append them, as
+  `policies.criticalThreshold: 'criticalThreshold' must be lower or equal to '10'`. Errors carrying
+  nothing structured, and errors from other Algolia APIs, read exactly as before.
 - `algolia_ingestion_task`: **removing `cron` from a task no longer fails the apply.** Task updates are
   a `PATCH` and the client models `cron` as a pointer with `omitempty`, so dropping the attribute sent
   nothing at all; the server kept the schedule, the read-back restored it, and Terraform rejected the

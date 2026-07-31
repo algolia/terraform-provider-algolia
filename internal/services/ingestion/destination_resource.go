@@ -76,7 +76,7 @@ func createDestination(ctx context.Context, client *ingestionapi.APIClient, plan
 
 	createResp, err := client.CreateDestination(client.NewApiCreateDestinationRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating Ingestion destination", "Could not create destination "+plan.Name.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError("Error creating Ingestion destination", "Could not create destination "+plan.Name.ValueString()+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -93,7 +93,7 @@ func createDestination(ctx context.Context, client *ingestionapi.APIClient, plan
 
 	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(createResp.DestinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read back destination after creation: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read back destination after creation: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -151,7 +151,7 @@ func (r *destinationResource) Read(ctx context.Context, req resource.ReadRequest
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read destination "+destinationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read destination "+destinationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -190,13 +190,13 @@ func (r *destinationResource) Update(ctx context.Context, req resource.UpdateReq
 	tflog.Debug(ctx, "Updating Ingestion destination", map[string]any{"destination_id": destinationID})
 
 	if _, err := client.UpdateDestination(client.NewApiUpdateDestinationRequest(destinationID, update), ingestionapi.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error updating Ingestion destination", "Could not update destination "+destinationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating Ingestion destination", "Could not update destination "+destinationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
 	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read back destination after update: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion destination", "Could not read back destination after update: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -229,7 +229,7 @@ func (r *destinationResource) Delete(ctx context.Context, req resource.DeleteReq
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting Ingestion destination", "Could not delete destination "+destinationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting Ingestion destination", "Could not delete destination "+destinationID+": "+algoliaerr.Explain(err))
 	}
 }
 
@@ -243,7 +243,7 @@ func (r *destinationResource) ImportState(ctx context.Context, req resource.Impo
 	destinationID := req.ID
 	apiResp, err := client.GetDestination(client.NewApiGetDestinationRequest(destinationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing Ingestion destination", "Could not import destination "+destinationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing Ingestion destination", "Could not import destination "+destinationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
