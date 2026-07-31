@@ -289,6 +289,14 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Error waiting for index deletion", "Could not wait for task: "+err.Error())
 		return
 	}
+
+	// A published delete task is not proof the index went away; see
+	// confirmIndexDeleted. Erroring here keeps the resource in state, which is what
+	// makes the next destroy retry it.
+	if err = confirmIndexDeleted(ctx, r.client, indexName); err != nil {
+		resp.Diagnostics.AddError("Index still exists after deletion", deleteNotConfirmedDetail(indexName, err))
+		return
+	}
 }
 
 func (r *indexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

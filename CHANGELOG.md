@@ -48,6 +48,16 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_index`, `algolia_virtual_index`: **`terraform destroy` no longer reports success for an
+  index that is still there.** Delete waited for Algolia to report its delete task as published and
+  stopped, but a published task is not proof the index went away: Algolia refuses to delete an index
+  that is a destination of an A/B test, and that association can outlive the test that created it,
+  leaving a delete that is accepted, queued, published and has no effect. Terraform then dropped the
+  resource from state and the index kept existing, kept costing money and kept answering queries with
+  nothing tracking it. Delete now confirms the index is actually gone and fails with the likely cause
+  if it is not, keeping the resource in state so the next destroy retries it. The confirmation costs
+  one extra read: measured against the live API, a deleted index reads as absent the moment its task
+  publishes.
 - **Ingestion diagnostics now name the field the API rejected.** The Ingestion API answers an invalid
   request with a summary plus a list of exactly what was wrong, and the provider reported only the
   summary - so a rejected apply said `Invalid payload, see error.details` and left the operator with no

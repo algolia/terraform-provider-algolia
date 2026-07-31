@@ -288,6 +288,11 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	if err = waitForIndexTask(ctx, r.client, indexName, delResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for virtual index deletion", "Could not wait for task: "+err.Error())
+		return
+	}
+
+	if err = confirmIndexDeleted(ctx, r.client, indexName); err != nil {
+		resp.Diagnostics.AddError("Index still exists after deletion", deleteNotConfirmedDetail(indexName, err))
 	}
 }
 
