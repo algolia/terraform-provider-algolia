@@ -7,6 +7,26 @@ FEATURES:
 
 BREAKING CHANGES:
 
+- `algolia_index`, `algolia_virtual_index`: a settings write whose Algolia task never reports as
+  published is now sent again rather than waited out. Algolia restarts an index's task queue when
+  another write turns that index into a replica, which voids the task ID the provider is waiting on
+  even though the write itself landed - so an `algolia_index` for an index that another index's
+  `replicas` list also creates used to hang for the full 30-minute budget and then fail a create that
+  had in fact succeeded. Such a write now costs about half a minute instead. Settings writes are
+  idempotent, so the only cost of re-sending one unnecessarily is the write itself, capped at two.
+- `algolia_index`: `terraform destroy` now removes an index that its primary still lists as a
+  replica, instead of failing with Algolia's bare "cannot apply the deleteIndex operation on a
+  replica index". The delete is retried first and the primary is only written to if the refusal
+  persists, because unlinking means writing the primary's settings and a settings write is what
+  creates an index: unlinking unconditionally recreated a primary that the same destroy had just
+  deleted, leaving an empty index behind. `algolia_virtual_index` deletes go through the same path,
+  so they no longer write to the primary when the delete would have succeeded anyway.
+- `algolia_virtual_index`: a replica Algolia has turned into a *standard* one is now repaired by the
+  next plan, which shows an in-place update even for an unchanged configuration. Previously the
+  conversion only produced a warning on every refresh and the relink waited for an unrelated edit to
+  the resource. Note what the repair does: Algolia drops the records it copied into the replica when
+  it becomes a view again, so an index that should keep them must be managed with `algolia_index`
+  instead. This costs one extra read of the primary index per plan of a virtual index.
 - `algolia_index`: **`advanced.replicas` now owns standard replicas only, and rejects a
   `virtual(...)` entry.** Algolia keeps both kinds of replica in that one setting, and both this
   attribute and `algolia_virtual_index` write it - so whichever applied last unlinked the other's

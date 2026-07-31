@@ -2,8 +2,10 @@ package index
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
@@ -144,26 +146,22 @@ func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, p
 		replicas = append(replicas, virtualName)
 	}
 
-	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
+	return setIndexSettings(ctx, client, primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(replicas),
-	)), search.WithContext(ctx))
-	if err != nil {
-		return err
-	}
-
-	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
+	))
 }
 
-// removeVirtualReplicaLink drops replicaName from primaryIndexName's replicas
-// list, tolerating a primary that no longer exists.
+// removeReplicaLink drops replicaName from primaryIndexName's replicas list,
+// tolerating a primary that no longer exists.
 //
 // Both forms of the entry are removed, not just virtual(...). Algolia refuses
-// `deleteIndex` on an index that is still a replica, so leaving a plain-name entry
-// behind - which is how the primary lists this index once Algolia has converted it
-// to a standard replica - makes the delete that follows fail with a bare
-// "cannot apply the deleteIndex operation on a replica index". The index is going
-// away, so the primary must stop listing it in any form.
-func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
+// `deleteIndex` on an index that is still a replica, so leaving either form behind
+// makes the delete that follows fail with a bare "cannot apply the deleteIndex
+// operation on a replica index". The index is going away, so the primary must stop
+// listing it in any form - and which form it is listed under is not something the
+// resource being deleted can rely on, since Algolia rewrites it when a replica
+// changes kind.
+func removeReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
 	defer lockPrimaryReplicas(primaryIndexName)()
 
 	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
@@ -189,14 +187,129 @@ func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, pri
 		return nil
 	}
 
-	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
+	return setIndexSettings(ctx, client, primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(filtered),
-	)), search.WithContext(ctx))
+	))
+}
+
+// unlinkFromPrimary stops an index's primary, if it has one, from listing it as a
+// replica.
+//
+// Deleting an index needs this: Algolia refuses `deleteIndex` while the index is
+// listed as a replica, so a destroy would otherwise only succeed when Terraform
+// happens to delete the primary first - which it does only when the configuration
+// references the replica resource from the primary's `advanced.replicas` instead of
+// repeating its name. It applies to a replica of either kind, and to an index managed
+// as a plain algolia_index just as much as to an algolia_virtual_index, so both go
+// through deleteIndexWithUnlink rather than either one unlinking on its own.
+//
+// The primary is read from the live index rather than from Terraform state, because
+// the linkage can change without Terraform writing it: this is the same reason a
+// replica's kind has to be classified on every read.
+func unlinkFromPrimary(ctx context.Context, client *search.APIClient, indexName string) error {
+	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(indexName), search.WithContext(ctx))
 	if err != nil {
+		if algoliaerr.IsNotFound(err) {
+			// Already gone, so there is nothing left to unlink.
+			return nil
+		}
+
 		return err
 	}
 
-	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
+	if settings.Primary == nil || *settings.Primary == "" {
+		return nil
+	}
+
+	return removeReplicaLink(ctx, client, *settings.Primary, indexName)
+}
+
+// replicaDeleteAttempts and replicaDeleteInterval bound how long a refused delete
+// is retried before the index is unlinked from its primary. Vars only so a test can
+// shorten the wait.
+var (
+	replicaDeleteAttempts = 4
+	replicaDeleteInterval = 2 * time.Second
+)
+
+// deleteIndexWithUnlink deletes an index, unlinking it from its primary if Algolia
+// refuses because the index is still listed as a replica.
+//
+// Algolia answers 403 "cannot apply the deleteIndex operation on a replica index"
+// while the primary lists the index, and stops the moment the primary is gone - a
+// deleted primary needs no unlinking for its replicas to become deletable. Those two
+// facts are what make the ordering here matter, because unlinking means writing the
+// primary's `replicas`, and a settings write is what creates an index in Algolia.
+// Unlinking first therefore recreates a primary that a concurrent delete has just
+// removed, leaving behind an empty index nothing owns. That is not hypothetical: it
+// is what destroying a primary and its replica in one apply did, twice, since
+// nothing orders the two unless the configuration references one from the other.
+//
+// So the delete is retried before anything is written. A refusal that persists is
+// itself the evidence that the primary is still there, which is what makes the
+// unlink that follows safe; had the primary gone, the retry would have succeeded
+// instead. A destroy of both indexes needs no write at all, and a destroy of the
+// replica alone pays a few seconds of retries before the unlink it does need.
+func deleteIndexWithUnlink(ctx context.Context, client *search.APIClient, indexName string) error {
+	taskID, err := deleteIndexOnce(ctx, client, indexName)
+
+	for attempt := 1; err != nil && refusedAsReplica(err) && attempt < replicaDeleteAttempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(replicaDeleteInterval):
+		}
+
+		tflog.Debug(ctx, "Retrying a delete Algolia refused while the index is a replica", map[string]any{
+			"name":    indexName,
+			"attempt": attempt,
+		})
+
+		taskID, err = deleteIndexOnce(ctx, client, indexName)
+	}
+
+	if err != nil {
+		// Report the refusal itself if the unlink cannot even be attempted: it
+		// describes the actual obstacle, where the unlink error would only describe a
+		// failed attempt to clear it.
+		if unlinkErr := unlinkFromPrimary(ctx, client, indexName); unlinkErr != nil {
+			return err
+		}
+
+		if taskID, err = deleteIndexOnce(ctx, client, indexName); err != nil {
+			return err
+		}
+	}
+
+	if taskID == 0 {
+		// Already gone, so there is no task to wait on.
+		return nil
+	}
+
+	return waitForIndexTask(ctx, client, indexName, taskID)
+}
+
+// deleteIndexOnce deletes an index, reporting an index that has already gone as a
+// zero task ID rather than an error so a repeated destroy stays a no-op.
+func deleteIndexOnce(ctx context.Context, client *search.APIClient, indexName string) (int64, error) {
+	resp, err := client.DeleteIndex(client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
+	if err != nil {
+		if algoliaerr.IsNotFound(err) {
+			return 0, nil
+		}
+
+		return 0, err
+	}
+
+	return resp.TaskID, nil
+}
+
+// refusedAsReplica reports whether err is Algolia declining to delete an index
+// because its primary still lists it as a replica.
+func refusedAsReplica(err error) bool {
+	status, ok := algoliaerr.Status(err)
+
+	return ok && status == http.StatusForbidden
 }
 
 // replicasDeclared reports whether `advanced.replicas` is set in configuration,

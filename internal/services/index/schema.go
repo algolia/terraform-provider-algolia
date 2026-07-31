@@ -644,13 +644,13 @@ func advancedBlockSchema() map[string]schema.Attribute {
 				"split is what lets both resources write the same setting without overwriting each other: " +
 				"this attribute owns the standard entries, `algolia_virtual_index` owns the virtual ones, " +
 				"and a virtual replica is removed by removing its resource.\n\n" +
-				"When a replica is also managed by its own `algolia_index` resource, reference it here " +
-				"(`replicas = [algolia_index.example.name]`) instead of repeating the name. Both the entry " +
+				"When a replica is also managed by its own `algolia_index` resource, prefer referencing it " +
+				"here (`replicas = [algolia_index.example.name]`) over repeating its name. Both the entry " +
 				"and the resource create that index, and Terraform applies resources with no dependency " +
-				"between them concurrently: when the two writes land together, the replica's own settings " +
-				"task never completes and its apply waits out the full task budget. The reference also " +
-				"orders `terraform destroy`, which has to delete the primary before a replica the primary " +
-				"still lists.",
+				"between them concurrently, which Algolia handles by restarting the index's task queue: " +
+				"the provider then has to notice its write went unacknowledged and send it again, adding " +
+				"about half a minute. Referencing the resource orders the two writes so neither the " +
+				"create nor the destroy has to recover from the collision.",
 			Optional:    true,
 			Computed:    true,
 			ElementType: types.StringType,

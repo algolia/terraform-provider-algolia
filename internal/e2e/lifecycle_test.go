@@ -103,6 +103,73 @@ func TestE2EReplicaClusterLifecycle(t *testing.T) {
 	})
 }
 
+// TestE2EReplicaCreatedByTwoResources covers the configuration that has no
+// dependency between a primary and a replica managed as its own algolia_index,
+// because the replica is named as a literal string rather than referenced.
+//
+// Terraform creates the same index twice concurrently, and both halves of that go
+// wrong in ways only the live API shows:
+//
+//   - Algolia restarts the index's task queue when it turns the index into a
+//     replica, so the task ID the provider is waiting on never publishes even though
+//     the write landed. The create used to hang for the full 30-minute budget and
+//     then fail.
+//   - Nothing orders the destroy either, and unlinking a replica means writing its
+//     primary's settings - which is how an index gets created in Algolia. Unlinking
+//     before attempting the delete recreated the primary the same destroy had just
+//     removed, leaving an empty index behind. CheckDestroy is what catches that.
+//
+// Referencing the resource is still the better configuration, and the schema says
+// so. This test is about the provider surviving the other one.
+func TestE2EReplicaCreatedByTwoResources(t *testing.T) {
+	requireE2E(t)
+
+	client := e2eSearchClient(t)
+	suffix := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	primary := fmt.Sprintf("tf-e2e-pair-primary-%s", suffix)
+	replica := fmt.Sprintf("tf-e2e-pair-replica-%s", suffix)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: providerFactories,
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			checkIndexAbsent(client, replica),
+			// The one that regressed: a destroy that recreates this index reports
+			// success while leaving it behind.
+			checkIndexAbsent(client, primary),
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "algolia_index" "primary" {
+  name                = %[1]q
+  deletion_protection = false
+
+  advanced {
+    replicas = [%[2]q]
+  }
+}
+
+resource "algolia_index" "replica" {
+  name                = %[2]q
+  deletion_protection = false
+
+  pagination {
+    hits_per_page = 77
+  }
+}
+`, primary, replica),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkPrimaryReplicas(client, primary, replica),
+					// The settings the re-sent write carried have to be the ones that
+					// stuck, not the defaults of an index Algolia rebuilt as a replica.
+					checkIndexHitsPerPage(client, replica, 77),
+					resource.TestCheckResourceAttr("algolia_index.replica", "primary", primary),
+				),
+			},
+		},
+	})
+}
+
 const (
 	ruleObjectID    = "e2e-promo-rule"
 	synonymObjectID = "e2e-phone-syn"

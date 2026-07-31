@@ -296,12 +296,19 @@ func TestAccVirtualIndexResource_standardReplicaConversion(t *testing.T) {
 				),
 			},
 			{
-				// Convert it to a standard replica behind Terraform's back. Refreshing
-				// must not fail: an error here would break plan, apply and destroy
-				// together, and unlike the unlinked case no configuration edit could be
-				// applied past it, because refresh runs first.
-				PreConfig: testAccConvertToStandardReplica(t, primaryIndexName, replicaName),
-				Config:    testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 80),
+				// Convert it to a standard replica behind Terraform's back, then refresh
+				// without applying. Refreshing must not fail: an error here would break
+				// plan, apply and destroy together, and unlike the unlinked case no
+				// configuration edit could be applied past it, because refresh runs first.
+				//
+				// The plan that follows is expected to be non-empty. Both the relink
+				// ModifyPlan adds and the settings Algolia rewrites when it copies the
+				// records make it so, so this asserts only that the conversion is visible
+				// to a plan at all; that the relink specifically is planned is the job of
+				// TestAccVirtualIndexResource_standardReplicaRepair.
+				PreConfig:          testAccConvertToStandardReplica(t, primaryIndexName, replicaName),
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Still tracked, so Delete stays reachable and deletion_protection
 					// still guards the records now sitting in it.
@@ -310,10 +317,12 @@ func TestAccVirtualIndexResource_standardReplicaConversion(t *testing.T) {
 			},
 			{
 				// Adopting it must fail while it is a standard replica. This is the step
-				// that actually asserts the classification live: the refresh above stays
-				// silent apart from a warning, which the test framework cannot assert on,
-				// so without this step the whole test would still pass if the provider
-				// went back to treating every replica as virtual.
+				// that asserts the classification live: the refresh above stays silent
+				// apart from a warning, which the test framework cannot assert on, so
+				// without this step the test would still pass if the provider went back to
+				// treating every replica as virtual. It has to come before any apply,
+				// since an apply now repairs the conversion - see
+				// TestAccVirtualIndexResource_standardReplicaRepair.
 				ResourceName:                         "algolia_virtual_index.test",
 				ImportState:                          true,
 				ImportStateId:                        replicaName,
@@ -333,16 +342,15 @@ func TestAccVirtualIndexResource_standardReplicaConversion(t *testing.T) {
 // conversion: the replica must go back to being a view over the primary's records.
 //
 // The repair belongs to the algolia_virtual_index resource, which relinks its own
-// entry on every write. It is no longer expressed by naming the virtual(...) form
-// in the primary's advanced.replicas - that list owns standard entries only and
-// rejects the virtual form at plan time - so the trigger here is an ordinary edit
-// to the virtual index itself.
+// entry on every write. It is not expressed by naming the virtual(...) form in the
+// primary's advanced.replicas, which owns standard entries only and rejects the
+// virtual form at plan time.
 //
-// A conversion that nothing else edits therefore stays broken with a warning until
-// the next write to the resource, because Read deliberately keeps the resource in
-// state rather than planning a replacement that would delete the index. Closing
-// that gap needs plan-time diagnostics (ModifyPlan), which the provider does not
-// implement yet.
+// What this asserts is that the repair needs no edit at all. Read keeps a converted
+// replica in state rather than planning a replacement that would delete a
+// record-bearing index, so the diff that drives the repair comes from ModifyPlan:
+// an unchanged configuration must still plan an update. Before that, the warning
+// repeated on every refresh and the relink waited for an unrelated change.
 func TestAccVirtualIndexResource_standardReplicaRepair(t *testing.T) {
 	testAccRequireCredentials(t)
 
@@ -362,13 +370,16 @@ func TestAccVirtualIndexResource_standardReplicaRepair(t *testing.T) {
 			},
 			{
 				PreConfig: testAccConvertToStandardReplica(t, primaryIndexName, replicaName),
-				// Same configuration apart from relevancy_strictness, so the only
-				// reason an Update runs is that edit - and the relink it performs is
-				// what this step asserts.
-				Config: testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 60),
+				// Byte for byte the configuration of the step above, so the update this
+				// plan check demands can only come from the linkage having drifted.
+				Config: testAccVirtualIndexResourceConfig(primaryIndexName, replicaName, 80),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_virtual_index.test", plancheck.ResourceActionUpdate),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckPrimaryHasVirtualReplicas(primaryIndexName, replicaName),
-					resource.TestCheckResourceAttr("algolia_virtual_index.test", "ranking.relevancy_strictness", "60"),
 				),
 			},
 		},
