@@ -75,7 +75,7 @@ func createSource(ctx context.Context, client *ingestionapi.APIClient, plan *Sou
 
 	createResp, err := client.CreateSource(client.NewApiCreateSourceRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating Ingestion source", "Could not create source "+plan.Name.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError("Error creating Ingestion source", "Could not create source "+plan.Name.ValueString()+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -92,7 +92,7 @@ func createSource(ctx context.Context, client *ingestionapi.APIClient, plan *Sou
 
 	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(createResp.SourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read back source after creation: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read back source after creation: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -147,7 +147,7 @@ func (r *sourceResource) Read(ctx context.Context, req resource.ReadRequest, res
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read source "+sourceID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read source "+sourceID+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -192,13 +192,13 @@ func (r *sourceResource) Update(ctx context.Context, req resource.UpdateRequest,
 	tflog.Debug(ctx, "Updating Ingestion source", map[string]any{"source_id": sourceID})
 
 	if _, err := client.UpdateSource(client.NewApiUpdateSourceRequest(sourceID, update), ingestionapi.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error updating Ingestion source", "Could not update source "+sourceID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating Ingestion source", "Could not update source "+sourceID+": "+algoliaerr.Explain(err))
 		return
 	}
 
 	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read back source after update: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion source", "Could not read back source after update: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -231,7 +231,7 @@ func (r *sourceResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting Ingestion source", "Could not delete source "+sourceID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting Ingestion source", "Could not delete source "+sourceID+": "+algoliaerr.Explain(err))
 	}
 }
 
@@ -245,7 +245,7 @@ func (r *sourceResource) ImportState(ctx context.Context, req resource.ImportSta
 	sourceID := req.ID
 	apiResp, err := client.GetSource(client.NewApiGetSourceRequest(sourceID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing Ingestion source", "Could not import source "+sourceID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing Ingestion source", "Could not import source "+sourceID+": "+algoliaerr.Explain(err))
 		return
 	}
 

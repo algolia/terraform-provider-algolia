@@ -75,7 +75,7 @@ func createAuthentication(ctx context.Context, client *ingestionapi.APIClient, p
 
 	createResp, err := client.CreateAuthentication(client.NewApiCreateAuthenticationRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating Ingestion authentication", "Could not create authentication "+plan.Name.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError("Error creating Ingestion authentication", "Could not create authentication "+plan.Name.ValueString()+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -93,7 +93,7 @@ func createAuthentication(ctx context.Context, client *ingestionapi.APIClient, p
 
 	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(createResp.AuthenticationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read back authentication after creation: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read back authentication after creation: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -147,7 +147,7 @@ func (r *authenticationResource) Read(ctx context.Context, req resource.ReadRequ
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read authentication "+authenticationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read authentication "+authenticationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -186,13 +186,13 @@ func (r *authenticationResource) Update(ctx context.Context, req resource.Update
 	tflog.Debug(ctx, "Updating Ingestion authentication", map[string]any{"authentication_id": authenticationID})
 
 	if _, err := client.UpdateAuthentication(client.NewApiUpdateAuthenticationRequest(authenticationID, update), ingestionapi.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error updating Ingestion authentication", "Could not update authentication "+authenticationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating Ingestion authentication", "Could not update authentication "+authenticationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
 	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read back authentication after update: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion authentication", "Could not read back authentication after update: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -225,7 +225,7 @@ func (r *authenticationResource) Delete(ctx context.Context, req resource.Delete
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting Ingestion authentication", "Could not delete authentication "+authenticationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting Ingestion authentication", "Could not delete authentication "+authenticationID+": "+algoliaerr.Explain(err))
 	}
 }
 
@@ -239,7 +239,7 @@ func (r *authenticationResource) ImportState(ctx context.Context, req resource.I
 	authenticationID := req.ID
 	apiResp, err := client.GetAuthentication(client.NewApiGetAuthenticationRequest(authenticationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing Ingestion authentication", "Could not import authentication "+authenticationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing Ingestion authentication", "Could not import authentication "+authenticationID+": "+algoliaerr.Explain(err))
 		return
 	}
 

@@ -73,7 +73,7 @@ func createTransformation(ctx context.Context, client *ingestionapi.APIClient, p
 
 	createResp, err := client.CreateTransformation(client.NewApiCreateTransformationRequest(create), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating Ingestion transformation", "Could not create transformation "+plan.Name.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError("Error creating Ingestion transformation", "Could not create transformation "+plan.Name.ValueString()+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -91,7 +91,7 @@ func createTransformation(ctx context.Context, client *ingestionapi.APIClient, p
 
 	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(createResp.TransformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read back transformation after creation: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read back transformation after creation: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -155,7 +155,7 @@ func (r *transformationResource) Read(ctx context.Context, req resource.ReadRequ
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read transformation "+transformationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read transformation "+transformationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -197,13 +197,13 @@ func (r *transformationResource) Update(ctx context.Context, req resource.Update
 	tflog.Debug(ctx, "Updating Ingestion transformation", map[string]any{"transformation_id": transformationID})
 
 	if _, err := client.UpdateTransformation(client.NewApiUpdateTransformationRequest(transformationID, update), ingestionapi.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error updating Ingestion transformation", "Could not update transformation "+transformationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating Ingestion transformation", "Could not update transformation "+transformationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
 	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read back transformation after update: "+err.Error())
+		resp.Diagnostics.AddError("Error reading Ingestion transformation", "Could not read back transformation after update: "+algoliaerr.Explain(err))
 		return
 	}
 
@@ -236,7 +236,7 @@ func (r *transformationResource) Delete(ctx context.Context, req resource.Delete
 			return
 		}
 
-		resp.Diagnostics.AddError("Error deleting Ingestion transformation", "Could not delete transformation "+transformationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting Ingestion transformation", "Could not delete transformation "+transformationID+": "+algoliaerr.Explain(err))
 	}
 }
 
@@ -250,7 +250,7 @@ func (r *transformationResource) ImportState(ctx context.Context, req resource.I
 	transformationID := req.ID
 	apiResp, err := client.GetTransformation(client.NewApiGetTransformationRequest(transformationID), ingestionapi.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing Ingestion transformation", "Could not import transformation "+transformationID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing Ingestion transformation", "Could not import transformation "+transformationID+": "+algoliaerr.Explain(err))
 		return
 	}
 
