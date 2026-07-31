@@ -3,6 +3,8 @@ package ingestion
 import (
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func TestJSONSemanticallyEqual(t *testing.T) {
@@ -25,26 +27,17 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			expected: true,
 		},
 		{
-			// The Ingestion API fills in optional fields it was not given with an
-			// explicit null - a no-code transformation step comes back carrying a
-			// `condition` that was never configured. That is the same thing as the
-			// key being absent, and treating it as a difference made the applied
-			// value disagree with the plan on every apply.
-			name:     "key echoed back as an explicit null",
-			a:        `{"steps":[{"id":"s1","configuration":{"action":{"kind":"addAttribute"}}}]}`,
-			b:        `{"steps":[{"id":"s1","configuration":{"action":{"kind":"addAttribute"},"condition":null}}]}`,
-			expected: true,
-		},
-		{
-			name:     "top-level key echoed back as an explicit null",
+			// Strict about nulls on purpose: expandSourceUpdate uses this to decide
+			// whether to send `input` in a PATCH at all, so a difference dismissed
+			// here is a write that never happens. The looser comparison lives in
+			// TestJSONEqualIgnoringAPINulls.
+			name:     "key present with a null differs from the key being absent",
 			a:        `{"url":"https://example.com/data.csv"}`,
 			b:        `{"url":"https://example.com/data.csv","description":null}`,
-			expected: true,
+			expected: false,
 		},
 		{
-			// A null is only equivalent to absence. It must not collapse a real
-			// value into nothing.
-			name:     "null against a real value still differs",
+			name:     "null against a real value differs",
 			a:        `{"condition":null}`,
 			b:        `{"condition":"record.price > 0"}`,
 			expected: false,
@@ -98,6 +91,117 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			got := jsonSemanticallyEqual(tt.a, tt.b)
 			if got != tt.expected {
 				t.Errorf("jsonSemanticallyEqual(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestSourceInputUnchanged_TreatsNullKeysAsAChange is the regression guard for the
+// most damaging way to get this wrong. Unlike every other use of a JSON
+// comparison in this package, this one decides whether `input` is included in the
+// PATCH at all - so a difference dismissed here is a write that never reaches
+// Algolia, while state records the new value and no later refresh disagrees. A
+// source's `input` holds free-form, operator-authored configuration (a docker
+// source's `configuration` map, for one), where a null is the operator's and not
+// the API's.
+func TestSourceInputUnchanged_TreatsNullKeysAsAChange(t *testing.T) {
+	cases := []struct {
+		name    string
+		planned string
+		prior   string
+		want    bool
+	}{
+		{
+			name:    "operator removed a null-valued key",
+			planned: `{"start_date":"2024-01-01"}`,
+			prior:   `{"start_date":"2024-01-01","cursor_field":null}`,
+			want:    false,
+		},
+		{
+			name:    "operator added a key set to null",
+			planned: `{"start_date":"2024-01-01","cursor_field":null}`,
+			prior:   `{"start_date":"2024-01-01"}`,
+			want:    false,
+		},
+		{
+			name:    "genuinely unchanged, re-encoded",
+			planned: `{"start_date":"2024-01-01","cursor_field":"updated_at"}`,
+			prior:   `{"cursor_field":"updated_at","start_date":"2024-01-01"}`,
+			want:    true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sourceInputUnchanged(types.StringValue(tc.planned), types.StringValue(tc.prior))
+			if got != tc.want {
+				t.Errorf("sourceInputUnchanged() = %v, want %v - a false positive here silently skips the update", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestJSONEqualIgnoringAPINulls covers the one-directional tolerance used when
+// deciding whether to adopt an API response into state. It must accept a null the
+// API added, and nothing else - in particular it must never make two different
+// configurations look the same, and it must never be reachable from a decision
+// about whether to send a write.
+func TestJSONEqualIgnoringAPINulls(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured string
+		apiValue   string
+		expected   bool
+	}{
+		{
+			// The case this exists for: the API adds a `condition` to every no-code
+			// step, which nobody configured.
+			name:       "api added a null key",
+			configured: `{"steps":[{"id":"s1","configuration":{"action":{"kind":"addAttribute"}}}]}`,
+			apiValue:   `{"steps":[{"id":"s1","configuration":{"action":{"kind":"addAttribute"},"condition":null}}]}`,
+			expected:   true,
+		},
+		{
+			name:       "api added a null key at the top level",
+			configured: `{"url":"https://example.com/data.csv"}`,
+			apiValue:   `{"url":"https://example.com/data.csv","description":null}`,
+			expected:   true,
+		},
+		{
+			// Two different documents. Collapsing both sides would make these equal,
+			// which is the failure mode this direction is designed to avoid.
+			name:       "different keys, both null",
+			configured: `{"a":null}`,
+			apiValue:   `{"b":null}`,
+			expected:   false,
+		},
+		{
+			// The operator wrote a null and the API dropped it. That is drift, and
+			// stripping the configured side would have hidden it.
+			name:       "configured null the api does not report",
+			configured: `{"cursorField":null}`,
+			apiValue:   `{}`,
+			expected:   false,
+		},
+		{
+			name:       "api replaced a value with null",
+			configured: `{"cursorField":"updated_at"}`,
+			apiValue:   `{"cursorField":null}`,
+			expected:   false,
+		},
+		{
+			name:       "genuinely different values",
+			configured: `{"url":"https://example.com/old.csv"}`,
+			apiValue:   `{"url":"https://example.com/new.csv"}`,
+			expected:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := jsonEqualIgnoringAPINulls(tt.configured, tt.apiValue)
+			if got != tt.expected {
+				t.Errorf("jsonEqualIgnoringAPINulls(%q, %q) = %v, want %v", tt.configured, tt.apiValue, got, tt.expected)
 			}
 		})
 	}

@@ -58,22 +58,34 @@ BUG FIXES:
   Changing a schedule is still an in-place update. To stop a scheduled task without recreating it, set
   `enabled = false`, which keeps the schedule.
 - `algolia_ingestion_transformation`: **a transformation defined through the legacy `code` attribute
-  now applies.** The API derives an `input` and a `type` from `code` and returns both, and the provider
-  wrote them into state for attributes the configuration had left unset, failing the apply twice over
-  with `Provider produced inconsistent result after apply`. `type` is now Computed, since the API
-  genuinely derives it, and the derived `input` is dropped when the logic came from `code` - the two
-  are mutually exclusive, so it carries nothing new. An import, which has neither configured, still
-  adopts what the API returns.
+  now applies, and can be switched to.** The API derives an `input` and a `type` from `code` and
+  returns both, and the provider wrote them into state for attributes the configuration had left unset,
+  failing the apply twice over with `Provider produced inconsistent result after apply`. Both derived
+  values are now dropped when the logic came from `code`: `input` because it is mutually exclusive with
+  `code` and carries nothing new, and `type` because a stored type is sent back on the next update -
+  which is how moving an existing `input`-based transformation to `code` came to fail with
+  `'input' is required if 'Type' is present`. A `type` set explicitly in configuration is untouched,
+  and an import, having neither configured, still adopts what the API returns.
 - `algolia_ingestion_transformation`: **a no-code transformation no longer fails on every apply.** The
   API echoes optional fields it was not given back as explicit nulls - a step comes back carrying a
   `condition` that was never configured - and the JSON comparison counted that as a change, so the
   applied value never matched the plan. A key present with a null value is now treated as absent, which
   is what the API means by it. A null against a real value is still a difference.
-- `algolia_ingestion_task`: `subscription_action` is treated the same way, for the same reason: it has
-  the identical `omitempty` pointer shape in the same request struct, so the provider cannot express
-  its removal either. Unlike `cron` this could not be confirmed against the live API, because creating
-  a task that accepts a `subscription_action` requires a reachable platform source, which the API
-  validates on create.
+- `algolia_ingestion_task`: **removing `subscription_action` is now refused with an error instead of
+  silently doing nothing.** It shares `cron`'s request shape but not its read shape - the prior value
+  is kept when the API omits it - so the apply succeeded while state recorded null and the server kept
+  its value, and no later refresh ever noticed. It is deliberately *not* replaced automatically the way
+  `cron` is: a task carrying a subscription action sits on a platform source the API validates when a
+  task is created, Terraform destroys before it creates, and this resource has no deletion protection,
+  so an automatic replacement could destroy the task and then fail to recreate it. Run
+  `terraform apply -replace=...` to ask for that explicitly. Existing state that already went through
+  the old silent removal still records null while the server holds a value; re-import those tasks to
+  reconcile them.
+- `algolia_ingestion_task`: `cron` now rejects an empty string at plan time. It was sent to the API
+  verbatim and came back as a 400; omit the attribute instead.
+- `algolia_ingestion_transformation`: setting `code` together with `type` is now rejected at plan time
+  rather than by the API, which refuses that combination with `'input' is required if 'Type' is
+  present`.
 - `algolia_virtual_index`: **destroying a replica that Algolia holds as a standard one now succeeds.**
   Unlinking matched only the `virtual(...)` form of the entry in the primary index's `replicas` list,
   so a replica listed under its plain name stayed linked and the delete that followed was refused with

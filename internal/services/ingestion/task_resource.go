@@ -204,6 +204,23 @@ func (r *taskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
+	var state TaskResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Backstop for the one path requiresReplaceOnRemoval cannot catch. That plan
+	// modifier only sees a *known* null configuration value; when the value is an
+	// expression still unknown at plan time that later resolves to null, the plan
+	// is an in-place update and reaches here instead. Updating would silently do
+	// nothing to the field - the request omits it and the server keeps its value -
+	// so say so rather than report a success that changed nothing.
+	resp.Diagnostics.Append(errorOnUnclearableRemoval(state, plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	update, expandDiags := expandTaskUpdate(&plan)
 	resp.Diagnostics.Append(expandDiags...)
 	if resp.Diagnostics.HasError() {

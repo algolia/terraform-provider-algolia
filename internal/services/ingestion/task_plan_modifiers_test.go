@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -134,21 +135,102 @@ func TestRequiresReplaceOnRemoval(t *testing.T) {
 	}
 }
 
-// TestTaskResourceSchema_RemovalRequiresReplace pins the wiring. The Ingestion
-// API can set and change these two fields but not clear them, so without a
-// replace-on-removal modifier a configuration that drops one proposes the same
-// removal on every plan and never converges.
-func TestTaskResourceSchema_RemovalRequiresReplace(t *testing.T) {
-	s := taskResourceSchema()
+// TestErrorOnUnclearableRemoval covers the backstop for a removal that reaches
+// Update instead of being planned as a replacement, which happens when the
+// configured value was an expression still unknown at plan time.
+func TestErrorOnUnclearableRemoval(t *testing.T) {
+	cases := []struct {
+		name      string
+		state     TaskResourceModel
+		plan      TaskResourceModel
+		wantError bool
+	}{
+		{
+			name:      "cron removed",
+			state:     TaskResourceModel{Cron: types.StringValue("0 0 * * *")},
+			plan:      TaskResourceModel{Cron: types.StringNull()},
+			wantError: true,
+		},
+		{
+			name:      "subscription_action removed",
+			state:     TaskResourceModel{SubscriptionAction: types.StringValue("save")},
+			plan:      TaskResourceModel{SubscriptionAction: types.StringNull()},
+			wantError: true,
+		},
+		{
+			name:      "cron changed, not removed",
+			state:     TaskResourceModel{Cron: types.StringValue("0 0 * * *")},
+			plan:      TaskResourceModel{Cron: types.StringValue("30 4 * * 1")},
+			wantError: false,
+		},
+		{
+			name:      "never had a cron",
+			state:     TaskResourceModel{Cron: types.StringNull()},
+			plan:      TaskResourceModel{Cron: types.StringNull()},
+			wantError: false,
+		},
+		{
+			// Still unknown when Update runs: nothing is being removed yet.
+			name:      "plan value unknown",
+			state:     TaskResourceModel{Cron: types.StringValue("0 0 * * *")},
+			plan:      TaskResourceModel{Cron: types.StringUnknown()},
+			wantError: false,
+		},
+	}
 
-	for _, name := range []string{"cron", "subscription_action"} {
-		t.Run(name, func(t *testing.T) {
-			attribute, ok := s.Attributes[name].(schema.StringAttribute)
-			if !ok {
-				t.Fatalf("expected %s to be a string attribute", name)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := errorOnUnclearableRemoval(tc.state, tc.plan)
+
+			if got := diags.HasError(); got != tc.wantError {
+				t.Fatalf("HasError() = %v, want %v (diagnostics: %v)", got, tc.wantError, diags)
 			}
-			if len(attribute.PlanModifiers) == 0 {
-				t.Fatalf("expected %s to carry a replace-on-removal plan modifier", name)
+			if !tc.wantError {
+				return
+			}
+			if detail := diags.Errors()[0].Detail(); !strings.Contains(detail, "-replace") {
+				t.Errorf("error does not tell the operator how to fix it:\n%s", detail)
+			}
+		})
+	}
+}
+
+// TestTaskResourceSchema_RemovalWiring pins which field gets which remedy. The
+// asymmetry is deliberate: `cron` is replaced automatically, while
+// `subscription_action` is refused with an error, because replacing a task that
+// carries one risks destroying it with no way back. Asserted by matching the
+// modifier's description rather than counting modifiers, so wiring a different
+// modifier cannot pass.
+func TestTaskResourceSchema_RemovalWiring(t *testing.T) {
+	ctx := context.Background()
+	s := taskResourceSchema()
+	want := requiresReplaceOnRemoval().Description(ctx)
+
+	cases := []struct {
+		attribute   string
+		wantWired   bool
+		wantMessage string
+	}{
+		{attribute: "cron", wantWired: true, wantMessage: "replaced automatically"},
+		{attribute: "subscription_action", wantWired: false, wantMessage: "handled by errorOnUnclearableRemoval"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.attribute, func(t *testing.T) {
+			attribute, ok := s.Attributes[tc.attribute].(schema.StringAttribute)
+			if !ok {
+				t.Fatalf("expected %s to be a string attribute", tc.attribute)
+			}
+
+			wired := false
+			for _, modifier := range attribute.PlanModifiers {
+				if modifier.Description(ctx) == want {
+					wired = true
+				}
+			}
+
+			if wired != tc.wantWired {
+				t.Errorf("%s replace-on-removal wired = %v, want %v (%s)", tc.attribute, wired, tc.wantWired, tc.wantMessage)
 			}
 		})
 	}

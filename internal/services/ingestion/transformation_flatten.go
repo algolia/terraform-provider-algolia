@@ -35,10 +35,17 @@ func flattenTransformation(transformation *ingestionapi.Transformation, model *T
 
 	model.Code = flattenCode(transformation.Code, model.Code)
 
-	if transformation.Type != nil {
-		model.Type = types.StringValue(string(*transformation.Type))
-	} else {
+	// `type` gets the same treatment as `input` below: the API derives one for a
+	// transformation whose logic came from `code`, and adopting it would both set an
+	// attribute the configuration left unset and, on a later update, send that
+	// derived type back alongside the code - which the API rejects.
+	switch {
+	case transformation.Type == nil:
 		model.Type = types.StringNull()
+	case logicSuppliedAsCode && (model.Type.IsNull() || model.Type.IsUnknown()):
+		model.Type = types.StringNull()
+	default:
+		model.Type = types.StringValue(string(*transformation.Type))
 	}
 
 	authIDs, authIDsDiags := flattenAuthenticationIDs(transformation.AuthenticationIDs, model.AuthenticationIDs)
@@ -89,7 +96,10 @@ func flattenTransformationInput(input *ingestionapi.TransformationInput, previou
 	}
 	apiValue := string(encoded)
 
-	if !previous.IsNull() && !previous.IsUnknown() && jsonSemanticallyEqual(previous.ValueString(), apiValue) {
+	// The looser comparison: the API adds a null `condition` to every no-code step,
+	// which is not a change. Nulls are tolerated on the API side only, and this
+	// decides what goes into state rather than whether anything is written.
+	if !previous.IsNull() && !previous.IsUnknown() && jsonEqualIgnoringAPINulls(previous.ValueString(), apiValue) {
 		return previous, diags
 	}
 

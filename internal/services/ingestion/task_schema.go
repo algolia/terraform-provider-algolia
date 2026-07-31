@@ -66,16 +66,20 @@ func taskResourceSchema() schema.Schema {
 			"subscription_action": schema.StringAttribute{
 				Description: "Action to perform on the destination index for records ingested through a " +
 					"streaming/subscription-based source. One of: " + strings.Join(allowedActionTypeStrings(), ", ") + ". " +
-					"Changing the value updates the task in place, but removing the attribute forces " +
-					"replacement: the Ingestion API's task update endpoint can set this field and change " +
-					"it, but has no way to clear it.",
+					"Changing the value updates the task in place. Removing the attribute is refused with an " +
+					"error, because the Ingestion API can set and change this field but has no way to clear " +
+					"it: the task has to be recreated, and recreating it is not something the provider will " +
+					"do on its own here. A task that accepts a `subscription_action` sits on a platform " +
+					"source the API validates when the task is created, so a replacement destroys the task " +
+					"first and can then fail to recreate it, leaving nothing behind. Run " +
+					"`terraform apply -replace=...` to say that is what you want.",
 				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(allowedActionTypeStrings()...),
 				},
-				PlanModifiers: []planmodifier.String{
-					requiresReplaceOnRemoval(),
-				},
+				// Deliberately no requiresReplaceOnRemoval here, unlike `cron`. See
+				// errorOnUnclearableRemoval for why an error beats an automatic
+				// replacement for this field.
 			},
 			"cron": schema.StringAttribute{
 				Description: "Cron expression for the task's schedule (e.g. `0 0 * * *` for daily). Omit for an " +
@@ -87,6 +91,12 @@ func taskResourceSchema() schema.Schema {
 					"recreating it, set `enabled = false` instead - that keeps the schedule and is almost " +
 					"always what is wanted.",
 				Optional: true,
+				Validators: []validator.String{
+					// An empty string is not "no schedule": it reaches the API as
+					// `"cron": ""` and comes back as a 400. Omit the attribute
+					// instead.
+					stringvalidator.LengthAtLeast(1),
+				},
 				PlanModifiers: []planmodifier.String{
 					requiresReplaceOnRemoval(),
 				},
