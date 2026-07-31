@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -15,7 +17,7 @@ func hydrateAgentResourceState(ctx context.Context, doc *agentDocument, deletion
 	}
 
 	model.Publish = remotePublishValue(string(doc.agent.Status))
-	model.DeletionProtection = deletionProtectionValue(deletionProtection)
+	model.DeletionProtection = deletionprotection.Value(deletionProtection)
 
 	return diags
 }
@@ -79,12 +81,4 @@ func shouldPublishAfterUpdate(state, plan AgentResourceModel) bool {
 
 func remotePublishValue(status string) types.Bool {
 	return types.BoolValue(status == "published")
-}
-
-func deletionProtectionValue(v types.Bool) types.Bool {
-	if v.IsNull() || v.IsUnknown() {
-		return types.BoolValue(true)
-	}
-
-	return v
 }

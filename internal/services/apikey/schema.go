@@ -2,6 +2,7 @@ package apikey
 
 import (
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -69,6 +70,7 @@ func apiKeyResourceSchema() schema.Schema {
 				Description: "RFC3339 timestamp of when the API key was created.",
 				Computed:    true,
 			},
+			"deletion_protection": deletionprotection.Attribute("API key"),
 		},
 	}
 }

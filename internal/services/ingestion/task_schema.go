@@ -3,6 +3,8 @@ package ingestion
 import (
 	"strings"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -178,6 +180,7 @@ func taskResourceSchema() schema.Schema {
 					"on-demand tasks or tasks without a `cron` schedule.",
 				Computed: true,
 			},
+			"deletion_protection": deletionprotection.Attribute("ingestion task"),
 		},
 	}
 }

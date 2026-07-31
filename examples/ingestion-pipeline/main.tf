@@ -9,6 +9,10 @@ provider "algolia" {
 
 # 1. Source - where records come from. Here, a CSV feed pulled over HTTPS.
 resource "algolia_ingestion_source" "products_csv" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  # This example is meant to be torn down again, so the guard is off.
+  deletion_protection = false
+
   name = "products-csv-feed"
   type = "csv"
 
@@ -22,6 +26,10 @@ resource "algolia_ingestion_source" "products_csv" {
 #    stamps an ingestion timestamp onto every record. The logic goes in
 #    `input`: the API requires it whenever `type` is set.
 resource "algolia_ingestion_transformation" "stamp_indexed_at" {
+  # Destroying this is not a recoverable step: removing it changes what every task using it writes.
+  # This example is meant to be torn down again, so the guard is off.
+  deletion_protection = false
+
   name = "stamp-indexed-at"
   type = "code"
 
@@ -39,6 +47,10 @@ resource "algolia_ingestion_transformation" "stamp_indexed_at" {
 #    destination's type: a "search" destination requires "algolia", and the
 #    API rejects an authentication pointing at a different application.
 resource "algolia_ingestion_authentication" "destination" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  # This example is meant to be torn down again, so the guard is off.
+  deletion_protection = false
+
   name = "products-destination-auth"
   type = "algolia"
 
@@ -51,6 +63,10 @@ resource "algolia_ingestion_authentication" "destination" {
 # 4. Destination - the Algolia index records are written to, with the
 #    transformation applied on the way in.
 resource "algolia_ingestion_destination" "products_index" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks write to it.
+  # This example is meant to be torn down again, so the guard is off.
+  deletion_protection = false
+
   name              = "products-search-destination"
   type              = "search"
   authentication_id = algolia_ingestion_authentication.destination.authentication_id
@@ -67,6 +83,10 @@ resource "algolia_ingestion_destination" "products_index" {
 #    later forces the task to be replaced, since the API cannot clear a
 #    schedule; to pause it instead, set `enabled = false`.
 resource "algolia_ingestion_task" "nightly_sync" {
+  # Destroying this is not a recoverable step: removing it stops a running pipeline.
+  # This example is meant to be torn down again, so the guard is off.
+  deletion_protection = false
+
   source_id      = algolia_ingestion_source.products_csv.source_id
   destination_id = algolia_ingestion_destination.products_index.destination_id
   action         = "replace"

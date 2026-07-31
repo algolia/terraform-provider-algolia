@@ -3,6 +3,7 @@ package ingestion
 import (
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -16,6 +17,11 @@ import (
 // credentials configured by the user. Callers (Create/Read/Update) must
 // leave the model's existing Input value as-is.
 func flattenAuthentication(auth *ingestionapi.Authentication, model *AuthenticationResourceModel) diag.Diagnostics {
+	// Algolia does not store this flag, so it survives only by being carried through
+	// every rebuild of the model. Resolving it here also seeds an import, which
+	// arrives with no value at all.
+	model.DeletionProtection = deletionprotection.Value(model.DeletionProtection)
+
 	var diags diag.Diagnostics
 
 	model.ID = types.StringValue(auth.AuthenticationID)

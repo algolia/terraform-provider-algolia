@@ -30,6 +30,9 @@ variable "algolia_api_key" {
 # Only a pull-based source can be scheduled - the API rejects a `cron` on a
 # "push" source with "a source of type 'push' isn't able to schedule tasks".
 resource "algolia_ingestion_source" "products_csv" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-csv-source"
   type = "csv"
 
@@ -41,6 +44,9 @@ resource "algolia_ingestion_source" "products_csv" {
 
 # A "search" destination requires an authentication of type "algolia".
 resource "algolia_ingestion_authentication" "destination" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-task-destination-auth"
   type = "algolia"
 
@@ -51,6 +57,9 @@ resource "algolia_ingestion_authentication" "destination" {
 }
 
 resource "algolia_ingestion_destination" "products" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks write to it.
+  deletion_protection = true
+
   name              = "terraform-example-products-destination"
   type              = "search"
   authentication_id = algolia_ingestion_authentication.destination.authentication_id
@@ -67,6 +76,9 @@ resource "algolia_ingestion_destination" "products" {
 # replacement too, because the API cannot clear a schedule - to pause a task
 # instead, set `enabled = false`.
 resource "algolia_ingestion_task" "csv_to_products" {
+  # Destroying this is not a recoverable step: removing it stops a running pipeline.
+  deletion_protection = true
+
   source_id      = algolia_ingestion_source.products_csv.source_id
   destination_id = algolia_ingestion_destination.products.destination_id
   action         = "replace"
@@ -89,11 +101,17 @@ resource "algolia_ingestion_task" "csv_to_products" {
 # `input` either: records are pushed to it directly rather than pulled on
 # a schedule, so this task is on-demand (no `cron`).
 resource "algolia_ingestion_source" "push" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-push-source"
   type = "push"
 }
 
 resource "algolia_ingestion_task" "push_to_products" {
+  # Destroying this is not a recoverable step: removing it stops a running pipeline.
+  deletion_protection = true
+
   source_id      = algolia_ingestion_source.push.source_id
   destination_id = algolia_ingestion_destination.products.destination_id
   action         = "save"

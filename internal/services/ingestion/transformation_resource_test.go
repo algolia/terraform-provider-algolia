@@ -51,6 +51,11 @@ func TestAccIngestionTransformationResource_basic(t *testing.T) {
 				ResourceName:      "algolia_ingestion_transformation.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+				// deletion_protection is not represented in the Algolia API, so an import
+				// cannot read it back and seeds the protected default instead. A fixture
+				// that turns protection off therefore differs from the imported value by
+				// design, which is the fail-safe working rather than a mismatch.
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
 			},
 		},
 	})
@@ -145,8 +150,9 @@ func testAccCheckIngestionTransformationDestroy(s *terraform.State) error {
 func testAccIngestionTransformationLegacyCodeConfig(name, code string) string {
 	return fmt.Sprintf(`
 resource "algolia_ingestion_transformation" "test" {
-  name = %[1]q
-  code = %[2]q
+  deletion_protection = false
+  name                = %[1]q
+  code                = %[2]q
 }
 `, name, code)
 }
@@ -157,10 +163,11 @@ func testAccIngestionTransformationConfig(name, code string) string {
 	// This is also the shape that exercises the TransformationInput union.
 	return fmt.Sprintf(`
 resource "algolia_ingestion_transformation" "test" {
-  name = %[1]q
-  type = "code"
+  deletion_protection = false
+  name                = %[1]q
+  type                = "code"
 
-  input = jsonencode({
+  input               = jsonencode({
     code = %[2]q
   })
 }

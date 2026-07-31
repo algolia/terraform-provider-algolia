@@ -24,16 +24,17 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 //     to avoid a perpetual diff. See flattenTransformation/
 //     flattenTransformationInput.
 type TransformationResourceModel struct {
-	ID                types.String `tfsdk:"id"`
-	TransformationID  types.String `tfsdk:"transformation_id"`
-	Name              types.String `tfsdk:"name"`
-	Code              types.String `tfsdk:"code"`
-	Type              types.String `tfsdk:"type"`
-	Input             types.String `tfsdk:"input"`
-	Description       types.String `tfsdk:"description"`
-	AuthenticationIDs types.List   `tfsdk:"authentication_ids"`
-	CreatedAt         types.String `tfsdk:"created_at"`
-	UpdatedAt         types.String `tfsdk:"updated_at"`
+	ID                 types.String `tfsdk:"id"`
+	TransformationID   types.String `tfsdk:"transformation_id"`
+	Name               types.String `tfsdk:"name"`
+	Code               types.String `tfsdk:"code"`
+	Type               types.String `tfsdk:"type"`
+	Input              types.String `tfsdk:"input"`
+	Description        types.String `tfsdk:"description"`
+	AuthenticationIDs  types.List   `tfsdk:"authentication_ids"`
+	CreatedAt          types.String `tfsdk:"created_at"`
+	UpdatedAt          types.String `tfsdk:"updated_at"`
+	DeletionProtection types.Bool   `tfsdk:"deletion_protection"`
 }
 
 // TransformationDataSourceModel describes the

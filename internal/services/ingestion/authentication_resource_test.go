@@ -51,10 +51,14 @@ func TestAccIngestionAuthenticationResource_basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            "algolia_ingestion_authentication.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"input"},
+				ResourceName:      "algolia_ingestion_authentication.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// deletion_protection is not represented in the Algolia API, so an import
+				// cannot read it back and seeds the protected default instead. A fixture
+				// that turns protection off therefore differs from the imported value by
+				// design, which is the fail-safe working rather than a mismatch.
+				ImportStateVerifyIgnore: []string{"input", "deletion_protection"},
 			},
 		},
 	})
@@ -119,10 +123,11 @@ func testAccRequireCredentials(t *testing.T) {
 func testAccIngestionAuthenticationConfig(name, appID, apiKey string) string {
 	return fmt.Sprintf(`
 resource "algolia_ingestion_authentication" "test" {
-  name = %[1]q
-  type = "algolia"
+  deletion_protection = false
+  name                = %[1]q
+  type                = "algolia"
 
-  input = jsonencode({
+  input               = jsonencode({
     appID  = %[2]q
     apiKey = %[3]q
   })

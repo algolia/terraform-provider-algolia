@@ -45,6 +45,9 @@ variable "algolia_api_key" {
 # Only a pull-based source can be scheduled - the API rejects a `cron` on a
 # "push" source with "a source of type 'push' isn't able to schedule tasks".
 resource "algolia_ingestion_source" "products_csv" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-csv-source"
   type = "csv"
 
@@ -56,6 +59,9 @@ resource "algolia_ingestion_source" "products_csv" {
 
 # A "search" destination requires an authentication of type "algolia".
 resource "algolia_ingestion_authentication" "destination" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-task-destination-auth"
   type = "algolia"
 
@@ -66,6 +72,9 @@ resource "algolia_ingestion_authentication" "destination" {
 }
 
 resource "algolia_ingestion_destination" "products" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks write to it.
+  deletion_protection = true
+
   name              = "terraform-example-products-destination"
   type              = "search"
   authentication_id = algolia_ingestion_authentication.destination.authentication_id
@@ -82,6 +91,9 @@ resource "algolia_ingestion_destination" "products" {
 # replacement too, because the API cannot clear a schedule - to pause a task
 # instead, set `enabled = false`.
 resource "algolia_ingestion_task" "csv_to_products" {
+  # Destroying this is not a recoverable step: removing it stops a running pipeline.
+  deletion_protection = true
+
   source_id      = algolia_ingestion_source.products_csv.source_id
   destination_id = algolia_ingestion_destination.products.destination_id
   action         = "replace"
@@ -104,11 +116,17 @@ resource "algolia_ingestion_task" "csv_to_products" {
 # `input` either: records are pushed to it directly rather than pulled on
 # a schedule, so this task is on-demand (no `cron`).
 resource "algolia_ingestion_source" "push" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-push-source"
   type = "push"
 }
 
 resource "algolia_ingestion_task" "push_to_products" {
+  # Destroying this is not a recoverable step: removing it stops a running pipeline.
+  deletion_protection = true
+
   source_id      = algolia_ingestion_source.push.source_id
   destination_id = algolia_ingestion_destination.products.destination_id
   action         = "save"
@@ -131,6 +149,7 @@ resource "algolia_ingestion_task" "push_to_products" {
 
 Changing the schedule updates the task in place. Removing `cron` altogether forces replacement, because the Ingestion API has no way to clear a schedule: an empty expression is rejected as invalid and a null one is ignored, so a task can only become on-demand by being recreated. To stop a scheduled task from running without recreating it, set `enabled = false` instead - that keeps the schedule and is almost always what is wanted.
 - `cursor` (String) Date and time when the last cursor was created, in RFC 3339 format; used to resume a streaming task from a specific point. The Ingestion API's task update endpoint has no way to change this after creation, and its true value advances automatically as the task runs (a runtime concern outside this provider's scope) - so, unlike `input`/`notifications`/`policies`, it is never refreshed from the API on read; the configured value (or null, if omitted) is always preserved as-is. Because it can only be set at creation, changing it forces the task to be replaced. Not recoverable on import.
+- `deletion_protection` (Boolean) When true, prevents accidental deletion of the ingestion task. Must be set to false and applied before destroying.
 - `enabled` (Boolean) Whether the task is enabled. Defaults to true.
 - `failure_threshold` (Number) Maximum accepted percentage of failures for a task run to finish successfully. Computed because the API substitutes its own default when this is omitted.
 - `input` (String) JSON-encoded configuration for the task's input, when its source's type needs one (e.g. `jsonencode({ streams = [...] })` for a Docker-based source). Not every task needs input - a task on a "push" source, for example, has none, so `input` may be omitted. The Ingestion API returns a task's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (key order, array order), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned.

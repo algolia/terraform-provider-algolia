@@ -13,14 +13,15 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // real configured credentials. See the input attribute's schema
 // description for the full rationale.
 type AuthenticationResourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	AuthenticationID types.String `tfsdk:"authentication_id"`
-	Type             types.String `tfsdk:"type"`
-	Name             types.String `tfsdk:"name"`
-	Platform         types.String `tfsdk:"platform"`
-	Input            types.String `tfsdk:"input"`
-	CreatedAt        types.String `tfsdk:"created_at"`
-	UpdatedAt        types.String `tfsdk:"updated_at"`
+	ID                 types.String `tfsdk:"id"`
+	AuthenticationID   types.String `tfsdk:"authentication_id"`
+	Type               types.String `tfsdk:"type"`
+	Name               types.String `tfsdk:"name"`
+	Platform           types.String `tfsdk:"platform"`
+	Input              types.String `tfsdk:"input"`
+	CreatedAt          types.String `tfsdk:"created_at"`
+	UpdatedAt          types.String `tfsdk:"updated_at"`
+	DeletionProtection types.Bool   `tfsdk:"deletion_protection"`
 }
 
 // AuthenticationDataSourceModel describes the algolia_ingestion_authentication

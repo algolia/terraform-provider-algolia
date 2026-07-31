@@ -3,6 +3,8 @@ package ingestion
 import (
 	"strings"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -77,6 +79,7 @@ func destinationResourceSchema() schema.Schema {
 				Description: "Date and time when the resource was last updated, in RFC 3339 format.",
 				Computed:    true,
 			},
+			"deletion_protection": deletionprotection.Attribute("ingestion destination"),
 		},
 	}
 }

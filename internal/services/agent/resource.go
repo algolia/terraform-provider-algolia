@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -175,12 +177,8 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	agentID := state.ID.ValueString()
 
-	if deletionProtectionValue(state.DeletionProtection).ValueBool() {
-		resp.Diagnostics.AddError(
-			"Deletion Protection Enabled",
-			fmt.Sprintf("Cannot delete agent %q because deletion_protection is enabled. "+
-				"Set deletion_protection = false and apply before destroying.", agentID),
-		)
+	if deletionprotection.Enabled(state.DeletionProtection) {
+		resp.Diagnostics.Append(deletionprotection.Refuse(fmt.Sprintf("agent %q", agentID)))
 		return
 	}
 

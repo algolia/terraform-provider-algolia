@@ -31,6 +31,9 @@ provider "algolia" {
 # JSON-encoded configuration matching `type`; see the schema docs for the
 # shape expected by each source type.
 resource "algolia_ingestion_source" "csv" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-csv-source"
   type = "csv"
 
@@ -44,6 +47,9 @@ resource "algolia_ingestion_source" "csv" {
 # Ingestion API's push endpoint) and needs no configuration at all, so
 # `input` is omitted.
 resource "algolia_ingestion_source" "push" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-push-source"
   type = "push"
 }
@@ -57,6 +63,9 @@ variable "shopify_shop_url" {
 # references an algolia_ingestion_authentication resource created with a
 # matching `platform`.
 resource "algolia_ingestion_authentication" "shopify" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name     = "terraform-example-shopify-auth"
   type     = "apiKey"
   platform = "shopify"
@@ -67,6 +76,9 @@ resource "algolia_ingestion_authentication" "shopify" {
 }
 
 resource "algolia_ingestion_source" "shopify" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name              = "terraform-example-shopify-source"
   type              = "shopify"
   authentication_id = algolia_ingestion_authentication.shopify.authentication_id
@@ -88,6 +100,7 @@ resource "algolia_ingestion_source" "shopify" {
 ### Optional
 
 - `authentication_id` (String) Universally unique identifier (UUID) of the `algolia_ingestion_authentication` resource this source uses to connect to its underlying platform, if any.
+- `deletion_protection` (Boolean) When true, prevents accidental deletion of the ingestion source. Must be set to false and applied before destroying.
 - `input` (String, Sensitive) JSON-encoded configuration matching `type` (e.g. `jsonencode({ url = "..." })` for type "csv"). Not every source type requires input - a "push" source, for example, accepts records pushed directly to it and has no `input` shape, so `input` may be omitted. Unlike `algolia_ingestion_authentication`'s `input`, the Ingestion API returns a source's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (key order, array order), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned. Treated as sensitive: several source types carry credentials here - a `docker` source's `configuration` is an arbitrary map holding the connector's secrets, and `csv`/`json` take a `url` that is commonly presigned - and since the API returns `input` unredacted, whatever it contains is persisted in plaintext in Terraform state.
 
 ### Read-Only

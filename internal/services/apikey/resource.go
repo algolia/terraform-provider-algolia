@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
@@ -220,6 +222,14 @@ func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	var state APIKeyResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if deletionprotection.Enabled(state.DeletionProtection) {
+		// Deleting a key is not recoverable in the way most resources are: the value
+		// is the credential, so a replacement is a different secret and every consumer
+		// holding the old one breaks at once.
+		resp.Diagnostics.Append(deletionprotection.Refuse(keyLabel(state.Description)))
 		return
 	}
 

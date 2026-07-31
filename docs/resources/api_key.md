@@ -20,6 +20,11 @@ resource "algolia_api_key" "example" {
   acl         = ["search", "browse"]
   indexes     = ["products"]
 
+  # A destroyed key cannot be brought back: the value is the credential, so the
+  # replacement is a different secret and everything holding the old one breaks at
+  # once. Set this to false and apply before destroying on purpose.
+  deletion_protection = true
+
   max_hits_per_query          = 100
   max_queries_per_ip_per_hour = 10000
 
@@ -43,6 +48,7 @@ output "search_api_key" {
 
 ### Optional
 
+- `deletion_protection` (Boolean) When true, prevents accidental deletion of the API key. Must be set to false and applied before destroying.
 - `description` (String) Description of the API key.
 - `expires_at` (String) RFC3339 timestamp at which the API key expires.
 - `indexes` (Set of String) Index names or patterns the API key can access.
