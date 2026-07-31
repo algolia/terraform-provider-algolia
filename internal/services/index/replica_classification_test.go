@@ -292,8 +292,8 @@ func TestRemoveVirtualReplicaLinkDropsEitherForm(t *testing.T) {
 			var written [][]string
 			client := newRoutedSearchClient(t, map[string]string{testPrimaryName: tc.primaryBody}, &written)
 
-			if err := removeVirtualReplicaLink(context.Background(), client, testPrimaryName, testReplicaName); err != nil {
-				t.Fatalf("removeVirtualReplicaLink() error = %v", err)
+			if err := removeReplicaLink(context.Background(), client, testPrimaryName, testReplicaName); err != nil {
+				t.Fatalf("removeReplicaLink() error = %v", err)
 			}
 
 			if !tc.wantWritten {

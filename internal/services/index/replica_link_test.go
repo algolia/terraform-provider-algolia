@@ -39,69 +39,6 @@ func TestIsVirtualReplicaName(t *testing.T) {
 	}
 }
 
-func TestDroppedVirtualReplicas(t *testing.T) {
-	cases := []struct {
-		name    string
-		current []string
-		planned []string
-		want    []string
-	}{
-		{
-			name:    "virtual entry omitted by the planned list",
-			current: []string{"products_asc", "virtual(products_price_asc)"},
-			planned: []string{"products_asc"},
-			want:    []string{"virtual(products_price_asc)"},
-		},
-		{
-			name:    "virtual entry kept",
-			current: []string{"virtual(products_price_asc)"},
-			planned: []string{"virtual(products_price_asc)"},
-			want:    nil,
-		},
-		{
-			// A standard replica is a real index with its own records, and
-			// algolia_index owns that list outright, so its removal is not the
-			// silent data loss this warning exists for.
-			name:    "standard replica omitted is not reported",
-			current: []string{"products_asc"},
-			planned: []string{},
-			want:    nil,
-		},
-		{
-			name:    "several virtual entries omitted",
-			current: []string{"virtual(a)", "products_asc", "virtual(b)"},
-			planned: []string{"products_asc"},
-			want:    []string{"virtual(a)", "virtual(b)"},
-		},
-		{
-			name:    "empty planned list drops every virtual entry",
-			current: []string{"virtual(a)"},
-			planned: []string{},
-			want:    []string{"virtual(a)"},
-		},
-		{
-			name:    "nothing configured on the index yet",
-			current: nil,
-			planned: []string{"virtual(a)"},
-			want:    nil,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := droppedVirtualReplicas(tc.current, tc.planned)
-			if len(got) != len(tc.want) {
-				t.Fatalf("droppedVirtualReplicas() = %v, want %v", got, tc.want)
-			}
-			for i := range got {
-				if got[i] != tc.want[i] {
-					t.Errorf("droppedVirtualReplicas()[%d] = %q, want %q", i, got[i], tc.want[i])
-				}
-			}
-		})
-	}
-}
-
 // TestLockPrimaryReplicasSerialises is the regression test for concurrent
 // linking: several algolia_virtual_index resources on one primary each
 // read-modify-write its replicas list, and Terraform runs them in parallel.

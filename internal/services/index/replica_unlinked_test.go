@@ -10,7 +10,6 @@ import (
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/call"
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/transport"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -118,74 +117,5 @@ func TestVirtualIndexResourceImportState_failsOnUnlinkedIndex(t *testing.T) {
 	}
 	if got, want := resp.Diagnostics.Errors()[0].Summary(), "Index is not a virtual replica"; got != want {
 		t.Errorf("error summary = %q, want %q", got, want)
-	}
-}
-
-// TestWarnDroppedVirtualReplicas covers the warning end to end, including its
-// read of the index's current replicas.
-func TestWarnDroppedVirtualReplicas(t *testing.T) {
-	cases := []struct {
-		name        string
-		body        string
-		planned     []string
-		wantWarning bool
-	}{
-		{
-			name:        "planned list omits a linked virtual replica",
-			body:        `{"replicas":["virtual(tf-test-asc)"]}`,
-			planned:     []string{},
-			wantWarning: true,
-		},
-		{
-			name:        "planned list keeps it",
-			body:        `{"replicas":["virtual(tf-test-asc)"]}`,
-			planned:     []string{"virtual(tf-test-asc)"},
-			wantWarning: false,
-		},
-		{
-			name: "nothing planned means the field is not written",
-			body: `{"replicas":["virtual(tf-test-asc)"]}`,
-			// nil, not empty: the caller nils this out when replicas is undeclared,
-			// and an unwritten field cannot drop anything.
-			planned:     nil,
-			wantWarning: false,
-		},
-		{
-			name:        "standard replica omitted is not reported",
-			body:        `{"replicas":["tf-test-standard"]}`,
-			planned:     []string{},
-			wantWarning: false,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			client := newSettingsSearchClient(t, tc.body)
-
-			var diags diag.Diagnostics
-			warnDroppedVirtualReplicas(context.Background(), client, "tf-test-primary", tc.planned, &diags)
-
-			if diags.HasError() {
-				t.Fatalf("warnDroppedVirtualReplicas() errored, it must never fail an apply on its own: %v", diags)
-			}
-			if got := diags.WarningsCount() > 0; got != tc.wantWarning {
-				t.Errorf("warning emitted = %v, want %v (diagnostics: %v)", got, tc.wantWarning, diags)
-			}
-		})
-	}
-}
-
-// TestWarnDroppedVirtualReplicasToleratesUnreadableIndex covers the Create case:
-// the index does not exist yet, so there is nothing to compare against and the
-// check must stay silent rather than fail the apply.
-func TestWarnDroppedVirtualReplicasToleratesUnreadableIndex(t *testing.T) {
-	var diags diag.Diagnostics
-	warnDroppedVirtualReplicas(context.Background(), newNotFoundSearchClient(t), "tf-test-absent", []string{}, &diags)
-
-	if diags.HasError() {
-		t.Errorf("warnDroppedVirtualReplicas() errored on an absent index: %v", diags)
-	}
-	if diags.WarningsCount() > 0 {
-		t.Errorf("warnDroppedVirtualReplicas() warned about an index it could not read: %v", diags)
 	}
 }

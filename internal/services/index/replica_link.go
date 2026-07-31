@@ -2,13 +2,17 @@ package index
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -142,26 +146,22 @@ func ensureVirtualReplicaLinked(ctx context.Context, client *search.APIClient, p
 		replicas = append(replicas, virtualName)
 	}
 
-	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
+	return setIndexSettings(ctx, client, primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(replicas),
-	)), search.WithContext(ctx))
-	if err != nil {
-		return err
-	}
-
-	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
+	))
 }
 
-// removeVirtualReplicaLink drops replicaName from primaryIndexName's replicas
-// list, tolerating a primary that no longer exists.
+// removeReplicaLink drops replicaName from primaryIndexName's replicas list,
+// tolerating a primary that no longer exists.
 //
 // Both forms of the entry are removed, not just virtual(...). Algolia refuses
-// `deleteIndex` on an index that is still a replica, so leaving a plain-name entry
-// behind - which is how the primary lists this index once Algolia has converted it
-// to a standard replica - makes the delete that follows fail with a bare
-// "cannot apply the deleteIndex operation on a replica index". The index is going
-// away, so the primary must stop listing it in any form.
-func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
+// `deleteIndex` on an index that is still a replica, so leaving either form behind
+// makes the delete that follows fail with a bare "cannot apply the deleteIndex
+// operation on a replica index". The index is going away, so the primary must stop
+// listing it in any form - and which form it is listed under is not something the
+// resource being deleted can rely on, since Algolia rewrites it when a replica
+// changes kind.
+func removeReplicaLink(ctx context.Context, client *search.APIClient, primaryIndexName, replicaName string) error {
 	defer lockPrimaryReplicas(primaryIndexName)()
 
 	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(primaryIndexName), search.WithContext(ctx))
@@ -187,14 +187,129 @@ func removeVirtualReplicaLink(ctx context.Context, client *search.APIClient, pri
 		return nil
 	}
 
-	setResp, err := client.SetSettings(client.NewApiSetSettingsRequest(primaryIndexName, search.NewIndexSettings(
+	return setIndexSettings(ctx, client, primaryIndexName, search.NewIndexSettings(
 		search.WithIndexSettingsReplicas(filtered),
-	)), search.WithContext(ctx))
+	))
+}
+
+// unlinkFromPrimary stops an index's primary, if it has one, from listing it as a
+// replica.
+//
+// Deleting an index needs this: Algolia refuses `deleteIndex` while the index is
+// listed as a replica, so a destroy would otherwise only succeed when Terraform
+// happens to delete the primary first - which it does only when the configuration
+// references the replica resource from the primary's `advanced.replicas` instead of
+// repeating its name. It applies to a replica of either kind, and to an index managed
+// as a plain algolia_index just as much as to an algolia_virtual_index, so both go
+// through deleteIndexWithUnlink rather than either one unlinking on its own.
+//
+// The primary is read from the live index rather than from Terraform state, because
+// the linkage can change without Terraform writing it: this is the same reason a
+// replica's kind has to be classified on every read.
+func unlinkFromPrimary(ctx context.Context, client *search.APIClient, indexName string) error {
+	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(indexName), search.WithContext(ctx))
 	if err != nil {
+		if algoliaerr.IsNotFound(err) {
+			// Already gone, so there is nothing left to unlink.
+			return nil
+		}
+
 		return err
 	}
 
-	return waitForIndexTask(ctx, client, primaryIndexName, setResp.TaskID)
+	if settings.Primary == nil || *settings.Primary == "" {
+		return nil
+	}
+
+	return removeReplicaLink(ctx, client, *settings.Primary, indexName)
+}
+
+// replicaDeleteAttempts and replicaDeleteInterval bound how long a refused delete
+// is retried before the index is unlinked from its primary. Vars only so a test can
+// shorten the wait.
+var (
+	replicaDeleteAttempts = 4
+	replicaDeleteInterval = 2 * time.Second
+)
+
+// deleteIndexWithUnlink deletes an index, unlinking it from its primary if Algolia
+// refuses because the index is still listed as a replica.
+//
+// Algolia answers 403 "cannot apply the deleteIndex operation on a replica index"
+// while the primary lists the index, and stops the moment the primary is gone - a
+// deleted primary needs no unlinking for its replicas to become deletable. Those two
+// facts are what make the ordering here matter, because unlinking means writing the
+// primary's `replicas`, and a settings write is what creates an index in Algolia.
+// Unlinking first therefore recreates a primary that a concurrent delete has just
+// removed, leaving behind an empty index nothing owns. That is not hypothetical: it
+// is what destroying a primary and its replica in one apply did, twice, since
+// nothing orders the two unless the configuration references one from the other.
+//
+// So the delete is retried before anything is written. A refusal that persists is
+// itself the evidence that the primary is still there, which is what makes the
+// unlink that follows safe; had the primary gone, the retry would have succeeded
+// instead. A destroy of both indexes needs no write at all, and a destroy of the
+// replica alone pays a few seconds of retries before the unlink it does need.
+func deleteIndexWithUnlink(ctx context.Context, client *search.APIClient, indexName string) error {
+	taskID, err := deleteIndexOnce(ctx, client, indexName)
+
+	for attempt := 1; err != nil && refusedAsReplica(err) && attempt < replicaDeleteAttempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(replicaDeleteInterval):
+		}
+
+		tflog.Debug(ctx, "Retrying a delete Algolia refused while the index is a replica", map[string]any{
+			"name":    indexName,
+			"attempt": attempt,
+		})
+
+		taskID, err = deleteIndexOnce(ctx, client, indexName)
+	}
+
+	if err != nil {
+		// Report the refusal itself if the unlink cannot even be attempted: it
+		// describes the actual obstacle, where the unlink error would only describe a
+		// failed attempt to clear it.
+		if unlinkErr := unlinkFromPrimary(ctx, client, indexName); unlinkErr != nil {
+			return err
+		}
+
+		if taskID, err = deleteIndexOnce(ctx, client, indexName); err != nil {
+			return err
+		}
+	}
+
+	if taskID == 0 {
+		// Already gone, so there is no task to wait on.
+		return nil
+	}
+
+	return waitForIndexTask(ctx, client, indexName, taskID)
+}
+
+// deleteIndexOnce deletes an index, reporting an index that has already gone as a
+// zero task ID rather than an error so a repeated destroy stays a no-op.
+func deleteIndexOnce(ctx context.Context, client *search.APIClient, indexName string) (int64, error) {
+	resp, err := client.DeleteIndex(client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
+	if err != nil {
+		if algoliaerr.IsNotFound(err) {
+			return 0, nil
+		}
+
+		return 0, err
+	}
+
+	return resp.TaskID, nil
+}
+
+// refusedAsReplica reports whether err is Algolia declining to delete an index
+// because its primary still lists it as a replica.
+func refusedAsReplica(err error) bool {
+	status, ok := algoliaerr.Status(err)
+
+	return ok && status == http.StatusForbidden
 }
 
 // replicasDeclared reports whether `advanced.replicas` is set in configuration,
@@ -273,76 +388,136 @@ func preserveUndeclaredReplicas(planned types.Object, applied *types.Object) dia
 	return diags
 }
 
-// droppedVirtualReplicas returns the virtual replica entries present in current
-// but missing from planned.
-func droppedVirtualReplicas(current, planned []string) []string {
-	kept := make(map[string]struct{}, len(planned))
-	for _, entry := range planned {
-		kept[entry] = struct{}{}
-	}
-
-	var dropped []string
-	for _, entry := range current {
-		if !isVirtualReplicaName(entry) {
-			continue
-		}
-		if _, ok := kept[entry]; ok {
-			continue
-		}
-		dropped = append(dropped, entry)
-	}
-
-	return dropped
+// standardReplicasOnly is a validator for advanced.replicas rejecting a
+// virtual(...) entry.
+//
+// The primary's replicas list has two owners, split by the kind of entry: this
+// attribute owns standard replicas, and each algolia_virtual_index owns its own
+// virtual(...) entry. The two sets are disjoint, which is what keeps them from
+// overwriting one another - so an entry declared on the wrong side is a category
+// error, caught here rather than becoming a silent tug of war.
+func standardReplicasOnly() validator.List {
+	return listvalidator.ValueStringsAre(virtualReplicaNameRejected{})
 }
 
-// warnDroppedVirtualReplicas reports virtual replica links that a wholesale
-// write of a primary index's replicas list is about to remove.
-//
-// The removal itself is honoured: an explicit `advanced.replicas` list is a
-// complete declaration of what the primary's replicas should be, and quietly
-// merging omitted entries back in would make removing a virtual replica through
-// the primary impossible to express. But it is not allowed to happen silently,
-// because unlinking a virtual replica empties it - a virtual replica is a view
-// over the primary's records, not a copy of them - and the user who wrote the
-// list may not realise another resource is contributing to it.
-//
-// This check never fails an apply on its own: if the primary's settings cannot
-// be read (most often because the index does not exist yet, which is the normal
-// case during Create) there is nothing to warn about.
-func warnDroppedVirtualReplicas(ctx context.Context, client *search.APIClient, indexName string, planned []string, diags *diag.Diagnostics) {
-	if planned == nil {
-		// replicas is not configured, so this write leaves the list alone.
+type virtualReplicaNameRejected struct{}
+
+func (virtualReplicaNameRejected) Description(context.Context) string {
+	return "must be a standard replica name; virtual replicas are declared with algolia_virtual_index"
+}
+
+func (v virtualReplicaNameRejected) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (virtualReplicaNameRejected) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
+
+	name := req.ConfigValue.ValueString()
+	if !isVirtualReplicaName(name) {
+		return
+	}
+
+	resp.Diagnostics.AddAttributeError(
+		req.Path,
+		"Virtual replica declared on the wrong resource",
+		"The entry "+name+" names a virtual replica, and this list owns standard replicas only. "+
+			"Declare it with an algolia_virtual_index resource instead, which manages its own entry in "+
+			"this index's replicas - that is what stops the two from overwriting each other.\n\n"+
+			"Remove this entry; the algolia_virtual_index resource keeps the replica linked on its own.",
+	)
+}
+
+// mergeStandardReplicas builds the replicas list to write for a primary index:
+// the standard replicas its configuration declares, plus the virtual(...) entries
+// Algolia currently reports.
+//
+// Writing only the configured list would unlink every virtual replica, because the
+// API takes this field as the complete set. Preserving the virtual entries is safe
+// precisely because they are not this attribute's to declare - each belongs to an
+// algolia_virtual_index resource, which is also how removing one is expressed, so
+// nothing here is being made unremovable.
+//
+// Reading the primary is what makes this a read-modify-write, so callers hold the
+// per-primary lock around it and the write that follows.
+func mergeStandardReplicas(ctx context.Context, client *search.APIClient, indexName string, configured []string) ([]string, diag.Diagnostics) {
+	var diags diag.Diagnostics
 
 	settings, err := client.GetSettings(client.NewApiGetSettingsRequest(indexName), search.WithContext(ctx))
 	if err != nil {
-		tflog.Debug(ctx, "Could not read current replicas to check for dropped virtual replicas", map[string]any{
-			"name":  indexName,
-			"error": err.Error(),
-		})
+		if algoliaerr.IsNotFound(err) {
+			// The index does not exist yet, so there is nothing to preserve. This is
+			// the ordinary case on Create.
+			return configured, diags
+		}
 
-		return
+		diags.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Read, err))
+
+		return nil, diags
 	}
 
-	dropped := droppedVirtualReplicas(settings.Replicas, planned)
-	if len(dropped) == 0 {
-		return
+	declared := make(map[string]struct{}, len(configured))
+	for _, entry := range configured {
+		declared[entry] = struct{}{}
 	}
 
-	diags.AddWarning(
-		"Virtual replica links removed",
-		// Deliberately "about to write" rather than "configured": replicas is
-		// Optional+Computed, so when it is absent from configuration the plan value
-		// falls back to the last-refreshed state value and gets written back. The
-		// list being sent is then not one the user wrote at all, and blaming their
-		// configuration for it would send them looking for something that is not there.
-		"The replicas list Terraform is about to write to index "+indexName+" omits "+
-			strings.Join(dropped, ", ")+", which Algolia currently reports for it. Writing it "+
-			"unlinks those replicas, and an unlinked virtual replica is empty: it is a view "+
-			"over the primary index's records, not a copy of them.\n\n"+
-			"If they are managed by algolia_virtual_index resources, list them in this index's "+
-			"advanced.replicas as well. Both resources write the same Algolia field, so "+
-			"whichever applies last decides what the primary ends up with.",
-	)
+	merged := append([]string(nil), configured...)
+	for _, entry := range settings.Replicas {
+		if !isVirtualReplicaName(entry) {
+			continue
+		}
+
+		// A configured standard entry whose virtual form is already linked is a
+		// real disagreement, not something to merge: Algolia cannot hold one index
+		// as a replica twice, once in each mode.
+		if _, ok := declared[strings.TrimSuffix(strings.TrimPrefix(entry, "virtual("), ")")]; ok {
+			diags.AddError(
+				"Replica declared as both standard and virtual",
+				"Index "+indexName+" lists "+entry+", so that replica is managed by an "+
+					"algolia_virtual_index resource, but this index's advanced.replicas also declares it "+
+					"as a standard replica. Algolia cannot hold one index as a replica in both modes.\n\n"+
+					"Remove it from advanced.replicas to keep it virtual, or remove the "+
+					"algolia_virtual_index resource to make it standard.",
+			)
+
+			return nil, diags
+		}
+
+		merged = append(merged, entry)
+	}
+
+	tflog.Debug(ctx, "Merged replicas for primary index", map[string]any{
+		"name":       indexName,
+		"configured": configured,
+		"merged":     merged,
+	})
+
+	return merged, diags
+}
+
+// standardReplicasOf keeps only the standard entries of a primary's replicas list.
+//
+// advanced.replicas means "this index's standard replicas", so that is what it must
+// read back as. Surfacing the virtual entries too would put values in state that the
+// attribute's configuration never declares - and since they cannot be declared there,
+// every refresh would plan a change that no apply could settle.
+//
+// Virtual replicas stay observable on their own algolia_virtual_index resources,
+// which is where they are declared.
+func standardReplicasOf(replicas []string) []string {
+	if replicas == nil {
+		return nil
+	}
+
+	standard := make([]string, 0, len(replicas))
+	for _, entry := range replicas {
+		if isVirtualReplicaName(entry) {
+			continue
+		}
+		standard = append(standard, entry)
+	}
+
+	return standard
 }

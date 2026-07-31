@@ -87,15 +87,19 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		settings.Replicas = nil
 	}
 
-	// Hold the primary's replica lock for any write that carries a replicas list,
-	// so it cannot interleave with algolia_virtual_index's read-modify-write of
-	// the same field: without this the check below could pass, a virtual replica
-	// link land, and this write then drop it unreported.
+	// Hold the primary's replica lock across the merge below and the write that
+	// follows: both read the current list, and an algolia_virtual_index linking
+	// itself in between would otherwise be dropped by this write.
 	if settings.Replicas != nil {
 		defer lockPrimaryReplicas(indexName)()
-	}
 
-	warnDroppedVirtualReplicas(ctx, r.client, indexName, settings.Replicas, &resp.Diagnostics)
+		merged, mergeDiags := mergeStandardReplicas(ctx, r.client, indexName, settings.Replicas)
+		resp.Diagnostics.Append(mergeDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		settings.Replicas = merged
+	}
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
@@ -124,7 +128,7 @@ func (r *indexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
+	if err = waitForSettingsWrite(ctx, r.client, indexName, settings, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index creation", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -210,13 +214,17 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		settings.Replicas = nil
 	}
 
-	// See Create: a replicas-carrying write must not interleave with virtual
-	// replica linking.
+	// See Create: the merge and the write share the primary's replica lock.
 	if settings.Replicas != nil {
 		defer lockPrimaryReplicas(indexName)()
-	}
 
-	warnDroppedVirtualReplicas(ctx, r.client, indexName, settings.Replicas, &resp.Diagnostics)
+		merged, mergeDiags := mergeStandardReplicas(ctx, r.client, indexName, settings.Replicas)
+		resp.Diagnostics.Append(mergeDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		settings.Replicas = merged
+	}
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
@@ -230,7 +238,7 @@ func (r *indexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// record the desired settings as achieved without ever confirming them, and
 	// the next plan would then show no diff. Leaving the prior state in place
 	// means the next apply calls SetSettings again, which is idempotent.
-	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
+	if err = waitForSettingsWrite(ctx, r.client, indexName, settings, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for index update", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -279,21 +287,15 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	tflog.Debug(ctx, "Deleting index", map[string]interface{}{"name": indexName})
 
-	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
-	if err != nil {
+	if err := deleteIndexWithUnlink(ctx, r.client, indexName); err != nil {
 		resp.Diagnostics.AddError(algoliaerr.Object(indexKind, indexName).Message(algoliaerr.Delete, err))
-		return
-	}
-
-	if err = waitForIndexTask(ctx, r.client, indexName, delResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for index deletion", "Could not wait for task: "+err.Error())
 		return
 	}
 
 	// A published delete task is not proof the index went away; see
 	// confirmIndexDeleted. Erroring here keeps the resource in state, which is what
 	// makes the next destroy retry it.
-	if err = confirmIndexDeleted(ctx, r.client, indexName); err != nil {
+	if err := confirmIndexDeleted(ctx, r.client, indexName); err != nil {
 		resp.Diagnostics.AddError("Index still exists after deletion", deleteNotConfirmedDetail(indexName, err))
 		return
 	}

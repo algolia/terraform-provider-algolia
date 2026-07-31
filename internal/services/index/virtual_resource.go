@@ -8,6 +8,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -17,6 +18,7 @@ var (
 	_ resource.Resource                = &virtualIndexResource{}
 	_ resource.ResourceWithConfigure   = &virtualIndexResource{}
 	_ resource.ResourceWithImportState = &virtualIndexResource{}
+	_ resource.ResourceWithModifyPlan  = &virtualIndexResource{}
 )
 
 type virtualIndexResource struct {
@@ -87,7 +89,7 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
+	if err = waitForSettingsWrite(ctx, r.client, indexName, settings, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for virtual index creation", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -176,13 +178,15 @@ func (r *virtualIndexResource) Read(ctx context.Context, req resource.ReadReques
 		// forget an index that now holds a full copy of the primary's records.
 		//
 		// Keeping it in state leaves Delete reachable, so deletion_protection still
-		// guards those records, and the warning repeats on every refresh until the
-		// primary's replicas list is corrected.
+		// guards those records, and ModifyPlan turns the conversion into a planned
+		// relink rather than something the operator has to notice and undo by hand.
 		// The primary read back from the API, not the prior state's: reaching this
 		// case means Algolia reported one, and that is the index to name.
 		resp.Diagnostics.AddWarning(
 			"Virtual index is a standard replica",
-			standardReplicaDetail(state.Name.ValueString(), state.PrimaryIndexName.ValueString()),
+			standardReplicaDetail(state.Name.ValueString(), state.PrimaryIndexName.ValueString())+
+				"\n\nThe next apply relinks it as a virtual replica, which Algolia does by dropping "+
+				"the copied records. To keep the copy, manage this index with algolia_index instead.",
 		)
 	}
 
@@ -191,6 +195,69 @@ func (r *virtualIndexResource) Read(ctx context.Context, req resource.ReadReques
 	virtualFromIndexModel(indexRead, &state)
 	restoreVirtualNullBlocks(&state, nullBlocks)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// ModifyPlan plans the repair of a replica Algolia has turned into a standard one.
+//
+// Read keeps such an index in state and only warns, for the reasons set out there:
+// dropping it would plan a create, and the index now holds its own copy of the
+// primary's records, so anything replacement-shaped risks data the resource is
+// documented as merely viewing. The cost of that choice used to be that nothing
+// brought the replica back on its own. The warning repeated on every refresh, and a
+// configuration with no other change had nothing to apply, so the repair waited for
+// an unrelated edit.
+//
+// Planning it here closes that gap: an unchanged configuration still shows an
+// update, and Update relinks the entry in its virtual(...) form. The price is one
+// read of the primary index per plan, on top of the one Read already makes -
+// classifying a replica needs the primary's list, since the replica's own settings
+// report a primary whichever kind it is.
+func (r *virtualIndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Nothing to repair while creating, and a destroy is about to remove the entry
+	// rather than restore it.
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var state VirtualIndexResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	indexName := state.Name.ValueString()
+	primaryIndexName := state.PrimaryIndexName.ValueString()
+	if indexName == "" || primaryIndexName == "" {
+		return
+	}
+
+	linkage, err := classifyReplicaLinkage(ctx, r.client, primaryIndexName, indexName)
+	if err != nil {
+		// A plan must not fail on a read the apply will make again anyway. Say why the
+		// check was skipped instead, so a plan that misses a needed relink is not
+		// silent about it.
+		resp.Diagnostics.AddWarning(
+			"Could not check the replica linkage of "+indexName,
+			"Reading the replicas of primary index "+primaryIndexName+" failed, so this plan cannot "+
+				"tell whether "+indexName+" is still a virtual replica: "+err.Error()+
+				"\n\nPlan again once the API is reachable.",
+		)
+
+		return
+	}
+	if linkage != replicaLinkageStandard {
+		return
+	}
+
+	tflog.Debug(ctx, "Planning a relink of a virtual replica Algolia keeps as a standard one", map[string]any{
+		"name":               indexName,
+		"primary_index_name": primaryIndexName,
+	})
+
+	// updated_at is Computed and the relink writes settings, so leaving it unknown is
+	// both true and enough to turn an otherwise empty plan into an in-place update.
+	// The warning Read raises explains why.
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("updated_at"), types.StringUnknown())...)
 }
 
 func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -221,7 +288,7 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	if err = waitForIndexTask(ctx, r.client, indexName, setResp.TaskID); err != nil {
+	if err = waitForSettingsWrite(ctx, r.client, indexName, settings, setResp.TaskID); err != nil {
 		resp.Diagnostics.AddError("Error waiting for virtual index update", "Could not wait for task: "+err.Error())
 		return
 	}
@@ -269,29 +336,12 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	primaryIndexName := state.PrimaryIndexName.ValueString()
-	if primaryIndexName != "" {
-		if err := removeVirtualReplicaLink(ctx, r.client, primaryIndexName, indexName); err != nil {
-			resp.Diagnostics.AddError("Error unlinking virtual replica", "Could not unlink virtual replica "+indexName+" from primary index "+primaryIndexName+": "+err.Error())
-			return
-		}
-	}
-
-	delResp, err := r.client.DeleteIndex(r.client.NewApiDeleteIndexRequest(indexName), search.WithContext(ctx))
-	if err != nil {
-		if algoliaerr.IsNotFound(err) {
-			return
-		}
+	if err := deleteIndexWithUnlink(ctx, r.client, indexName); err != nil {
 		resp.Diagnostics.AddError(algoliaerr.Object(virtualIndexKind, indexName).Message(algoliaerr.Delete, err))
 		return
 	}
 
-	if err = waitForIndexTask(ctx, r.client, indexName, delResp.TaskID); err != nil {
-		resp.Diagnostics.AddError("Error waiting for virtual index deletion", "Could not wait for task: "+err.Error())
-		return
-	}
-
-	if err = confirmIndexDeleted(ctx, r.client, indexName); err != nil {
+	if err := confirmIndexDeleted(ctx, r.client, indexName); err != nil {
 		resp.Diagnostics.AddError("Index still exists after deletion", deleteNotConfirmedDetail(indexName, err))
 	}
 }
@@ -399,9 +449,10 @@ func standardReplicaDetail(indexName, primaryIndexName string) string {
 		", not a virtual one: the primary lists it as " + indexName + " rather than " +
 		virtualReplicaName(indexName) + ". Algolia copies a primary index's records into a standard " +
 		"replica, so this index now holds its own copy of them instead of being a view over them.\n\n" +
-		"To restore it as a virtual replica, list it as " + virtualReplicaName(indexName) +
-		" in the primary index's replicas. To keep it as a standard replica, manage it with " +
-		"algolia_index rather than algolia_virtual_index."
+		"Restoring it as a virtual replica is this resource's own doing: it relinks its entry on " +
+		"every write, and " + virtualReplicaName(indexName) + " cannot be declared in the primary " +
+		"index's advanced.replicas, which owns standard entries only. To keep this index as a " +
+		"standard replica, manage it with algolia_index rather than algolia_virtual_index."
 }
 
 // unlinkedVirtualIndexDetail explains an index that exists but has stopped
@@ -413,9 +464,9 @@ func unlinkedVirtualIndexDetail(indexName, primaryIndexName string) string {
 		detail += " Its replica link on primary index " + primaryIndexName + " appears to have been removed."
 	}
 
-	return detail + " The usual cause is a wholesale write of the primary index's replicas list - " +
-		"from algolia_index's advanced.replicas, or from outside Terraform - that omitted " +
-		virtualReplicaName(indexName) + "."
+	return detail + " The usual cause is a write to the primary index's replicas list from outside " +
+		"Terraform that omitted " + virtualReplicaName(indexName) + ". A write through " +
+		"algolia_index's advanced.replicas preserves virtual entries, so it is not this."
 }
 
 // readIndexModel populates model from the Algolia API, reporting whether the

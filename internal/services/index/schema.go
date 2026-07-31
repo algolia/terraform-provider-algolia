@@ -633,17 +633,30 @@ func advancedBlockSchema() map[string]schema.Attribute {
 			},
 		},
 		"replicas": schema.ListAttribute{
-			Description: "List of replica index names. Setting this declares the index's complete replica " +
-				"list: any replica Algolia currently reports but this list omits is unlinked. Virtual " +
-				"replicas appear here in their `virtual(<name>)` form, so if you also manage them with " +
-				"`algolia_virtual_index` resources - which add themselves to this same setting - list " +
-				"them here too. Applying a list that omits one unlinks it, and an unlinked virtual " +
-				"replica is empty, since it is a view over this index's records rather than a copy; the " +
-				"provider warns when a write would do that. Leave this unset to keep whatever replicas " +
-				"the index already has.",
+			Description: "Names of this index's **standard** replicas - the ones that hold their own copy " +
+				"of the records. Setting this declares the complete set of them: a standard replica " +
+				"Algolia currently reports but this list omits is unlinked. Leave it unset to keep " +
+				"whatever replicas the index already has.\n\n" +
+				"Virtual replicas do not belong here. Algolia keeps both kinds in this one setting, told " +
+				"apart by a `virtual(<name>)` marker, but each virtual replica belongs to its own " +
+				"`algolia_virtual_index` resource - so naming one here is rejected, and the entries " +
+				"Algolia reports for them are preserved rather than read as missing from this list. That " +
+				"split is what lets both resources write the same setting without overwriting each other: " +
+				"this attribute owns the standard entries, `algolia_virtual_index` owns the virtual ones, " +
+				"and a virtual replica is removed by removing its resource.\n\n" +
+				"When a replica is also managed by its own `algolia_index` resource, prefer referencing it " +
+				"here (`replicas = [algolia_index.example.name]`) over repeating its name. Both the entry " +
+				"and the resource create that index, and Terraform applies resources with no dependency " +
+				"between them concurrently, which Algolia handles by restarting the index's task queue: " +
+				"the provider then has to notice its write went unacknowledged and send it again, adding " +
+				"about half a minute. Referencing the resource orders the two writes so neither the " +
+				"create nor the destroy has to recover from the collision.",
 			Optional:    true,
 			Computed:    true,
 			ElementType: types.StringType,
+			Validators: []validator.List{
+				standardReplicasOnly(),
+			},
 			PlanModifiers: []planmodifier.List{
 				useStateForKnownList(),
 			},

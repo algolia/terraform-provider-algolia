@@ -65,7 +65,7 @@ Read-Only:
 - `mode` (String) The search mode.
 - `re_ranking_apply_filter` (String) Filter for AI Re-Ranking as a JSON-encoded string.
 - `replace_synonyms_in_highlight` (Boolean) Whether to highlight the original word or the synonym.
-- `replicas` (List of String) List of replica index names.
+- `replicas` (List of String) Names of this index's **standard** replicas - the ones holding their own copy of the records. Virtual replicas are excluded, matching what the attribute means on the resource; read one with the `algolia_virtual_index` data source, or list every index with `algolia_indices`.
 - `response_fields` (List of String) Properties to include in the API response.
 - `semantic_search` (String) Semantic search settings as a JSON-encoded string.
 - `separators_to_index` (String) Separators to index.

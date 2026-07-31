@@ -4,7 +4,7 @@ page_title: "algolia_virtual_index Resource - algolia"
 subcategory: ""
 description: |-
   Manages an Algolia virtual replica index and its settings. A virtual replica shares the primary index's records and applies its own custom ranking, so it is a view over the primary rather than a copy of it.
-  This resource adds a virtual(<name>) entry to the primary index's replicas setting. That is the same setting algolia_index's advanced.replicas writes, and algolia_index writes it as a whole list: if you set advanced.replicas on the primary, include virtual(<name>) in it for every virtual replica you declare, or whichever resource applies last will unlink the ones its list omits. Unlinking a virtual replica empties it.
+  This resource owns a virtual(<name>) entry in the primary index's replicas setting. That setting also holds the primary's standard replicas, which algolia_index's advanced.replicas owns - the two are disjoint, so both resources can write it without overwriting each other, and a virtual(...) entry named in advanced.replicas is rejected. Remove this resource to unlink the replica; unlinking empties it.
   The virtual(...) form is also what distinguishes a virtual replica from a standard one: listing a replica under its plain name makes Algolia keep it as a standard replica and copy the primary index's records into it. This resource manages virtual replicas only, so it reports an error for an index Algolia holds as a standard replica - manage that with algolia_index instead.
 ---
 
@@ -12,7 +12,7 @@ description: |-
 
 Manages an Algolia virtual replica index and its settings. A virtual replica shares the primary index's records and applies its own custom ranking, so it is a view over the primary rather than a copy of it.
 
-This resource adds a `virtual(<name>)` entry to the primary index's `replicas` setting. That is the same setting `algolia_index`'s `advanced.replicas` writes, and `algolia_index` writes it as a whole list: if you set `advanced.replicas` on the primary, include `virtual(<name>)` in it for every virtual replica you declare, or whichever resource applies last will unlink the ones its list omits. Unlinking a virtual replica empties it.
+This resource owns a `virtual(<name>)` entry in the primary index's `replicas` setting. That setting also holds the primary's standard replicas, which `algolia_index`'s `advanced.replicas` owns - the two are disjoint, so both resources can write it without overwriting each other, and a `virtual(...)` entry named in `advanced.replicas` is rejected. Remove this resource to unlink the replica; unlinking empties it.
 
 The `virtual(...)` form is also what distinguishes a virtual replica from a standard one: listing a replica under its plain name makes Algolia keep it as a standard replica and copy the primary index's records into it. This resource manages virtual replicas only, so it reports an error for an index Algolia holds as a standard replica - manage that with `algolia_index` instead.
 
@@ -50,18 +50,27 @@ resource "algolia_virtual_index" "price_desc" {
   }
 }
 
-# If you manage the primary's replicas list yourself, list every virtual replica
-# in it too, in the virtual(<name>) form. Both resources write that one Algolia
-# setting, and algolia_index writes it as a complete list: a list omitting a
-# virtual replica unlinks it, which empties it, since a virtual replica is a view
-# over the primary's records rather than a copy. The provider warns while applying
-# such a write, so check apply output rather than relying on the plan to flag it.
+# Standard and virtual replicas share one Algolia setting but are owned
+# separately: advanced.replicas owns the standard ones, and each
+# algolia_virtual_index owns its own virtual(<name>) entry. Declaring both is
+# safe - neither overwrites the other - and naming a virtual replica in
+# advanced.replicas is rejected, because that entry is not this list's to own.
 resource "algolia_index" "catalog" {
   name                = "catalog"
   deletion_protection = false
 
   advanced {
-    replicas = ["virtual(catalog_price_asc)"]
+    # A standard replica: its own copy of the records, with its own settings.
+    replicas = ["catalog_by_name"]
+  }
+}
+
+resource "algolia_index" "catalog_by_name" {
+  name                = "catalog_by_name"
+  deletion_protection = false
+
+  ranking {
+    custom_ranking = ["asc(name)"]
   }
 }
 
@@ -119,7 +128,11 @@ Optional:
 - `mode` (String) The search mode. One of: neuralSearch, keywordSearch.
 - `re_ranking_apply_filter` (String) Filter to apply for AI Re-Ranking, as a JSON-encoded string.
 - `replace_synonyms_in_highlight` (Boolean) Whether to highlight and snippet the original word that matches the synonym or the synonym itself.
-- `replicas` (List of String) List of replica index names. Setting this declares the index's complete replica list: any replica Algolia currently reports but this list omits is unlinked. Virtual replicas appear here in their `virtual(<name>)` form, so if you also manage them with `algolia_virtual_index` resources - which add themselves to this same setting - list them here too. Applying a list that omits one unlinks it, and an unlinked virtual replica is empty, since it is a view over this index's records rather than a copy; the provider warns when a write would do that. Leave this unset to keep whatever replicas the index already has.
+- `replicas` (List of String) Names of this index's **standard** replicas - the ones that hold their own copy of the records. Setting this declares the complete set of them: a standard replica Algolia currently reports but this list omits is unlinked. Leave it unset to keep whatever replicas the index already has.
+
+Virtual replicas do not belong here. Algolia keeps both kinds in this one setting, told apart by a `virtual(<name>)` marker, but each virtual replica belongs to its own `algolia_virtual_index` resource - so naming one here is rejected, and the entries Algolia reports for them are preserved rather than read as missing from this list. That split is what lets both resources write the same setting without overwriting each other: this attribute owns the standard entries, `algolia_virtual_index` owns the virtual ones, and a virtual replica is removed by removing its resource.
+
+When a replica is also managed by its own `algolia_index` resource, prefer referencing it here (`replicas = [algolia_index.example.name]`) over repeating its name. Both the entry and the resource create that index, and Terraform applies resources with no dependency between them concurrently, which Algolia handles by restarting the index's task queue: the provider then has to notice its write went unacknowledged and send it again, adding about half a minute. Referencing the resource orders the two writes so neither the create nor the destroy has to recover from the collision.
 - `response_fields` (List of String) Properties to include in the API response of search and browse requests.
 - `semantic_search` (String) Semantic search settings, as a JSON-encoded string.
 - `separators_to_index` (String) Separators to index as part of the record.

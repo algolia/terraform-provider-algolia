@@ -382,7 +382,7 @@ func flattenAdvancedBlock(ctx context.Context, settings *search.SettingsResponse
 		UserData:                                flattenUserData(settings.UserData),
 		EnableRules:                             flattenNullableBool(settings.EnableRules),
 		EnablePersonalization:                   flattenNullableBool(settings.EnablePersonalization),
-		Replicas:                                flattenStringList(ctx, settings.Replicas),
+		Replicas:                                flattenStringList(ctx, standardReplicasOf(settings.Replicas)),
 		EnableReRanking:                         flattenNullableBool(settings.EnableReRanking),
 		ReRankingApplyFilter:                    flattenReRankingApplyFilter(settings.ReRankingApplyFilter),
 		Mode:                                    flattenMode(settings.Mode),
