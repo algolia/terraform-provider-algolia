@@ -82,6 +82,13 @@ func decodeJSONObject(raw []byte, target any, strict bool) error {
 // replicated here rather than imported, since it's two small, dependency-
 // free functions and importing across service packages isn't worth it for
 // that.
+//
+// This comparison is strict about nulls: a key present with a null value is not
+// the same as an absent key. That matters because expandSourceUpdate uses it to
+// decide whether to send `input` in a PATCH at all, so a difference judged
+// insignificant here is a write that never happens. For the looser comparison
+// used when deciding whether to adopt an API response into state, see
+// jsonEqualIgnoringAPINulls.
 func jsonSemanticallyEqual(a, b string) bool {
 	var va, vb any
 	if err := json.Unmarshal([]byte(a), &va); err != nil {
@@ -91,7 +98,31 @@ func jsonSemanticallyEqual(a, b string) bool {
 		return false
 	}
 
-	return reflect.DeepEqual(normalizeJSON(va), normalizeJSON(vb))
+	return reflect.DeepEqual(normalizeJSON(va, false), normalizeJSON(vb, false))
+}
+
+// jsonEqualIgnoringAPINulls reports whether an API response carries the same
+// configuration as the configured value, tolerating keys the API added with an
+// explicit null. The Ingestion API fills optional fields it was not given that
+// way - a no-code transformation step comes back with a `condition` nobody wrote -
+// and counting that as a change makes the applied value disagree with the plan on
+// every apply.
+//
+// The tolerance is deliberately one-directional. Nulls are dropped from the API
+// value only, never from the configured one, so this cannot be used to argue that
+// two different configurations are the same: `{"a":null}` and `{"b":null}` are
+// still different documents, and a null the operator wrote that the API dropped
+// still reads as drift. It is also deliberately not used to gate any write.
+func jsonEqualIgnoringAPINulls(configured, apiValue string) bool {
+	var vc, va any
+	if err := json.Unmarshal([]byte(configured), &vc); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(apiValue), &va); err != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(normalizeJSON(vc, false), normalizeJSON(va, true))
 }
 
 // normalizeJSON recursively normalizes a decoded JSON value so that
@@ -99,18 +130,23 @@ func jsonSemanticallyEqual(a, b string) bool {
 // (already order-independent as Go maps) are recursed into, and arrays whose
 // elements are all strings or all numbers are sorted. Arrays containing
 // objects or a mix of kinds are left in their original order.
-func normalizeJSON(v any) any {
+// dropNulls omits object keys whose value is null. Only ever true for the side of
+// a comparison that came from the API - see jsonEqualIgnoringAPINulls.
+func normalizeJSON(v any, dropNulls bool) any {
 	switch val := v.(type) {
 	case map[string]any:
 		m := make(map[string]any, len(val))
 		for k, v := range val {
-			m[k] = normalizeJSON(v)
+			if dropNulls && v == nil {
+				continue
+			}
+			m[k] = normalizeJSON(v, dropNulls)
 		}
 		return m
 	case []any:
 		normalized := make([]any, len(val))
 		for i, item := range val {
-			normalized[i] = normalizeJSON(item)
+			normalized[i] = normalizeJSON(item, dropNulls)
 		}
 		sortScalarSlice(normalized)
 		return normalized

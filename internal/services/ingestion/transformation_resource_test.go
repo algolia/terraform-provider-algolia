@@ -56,6 +56,46 @@ func TestAccIngestionTransformationResource_basic(t *testing.T) {
 	})
 }
 
+// TestAccIngestionTransformationResource_switchToLegacyCode covers moving an
+// existing input-based transformation to the legacy `code` attribute while
+// omitting `type`. The API derives a type from `code`, and a provider that stored
+// that derived value replayed it on the next update - sending a type alongside
+// code, which the API rejects with "'input' is required if 'Type' is present".
+// The third step is the proof it converges rather than merely applying once.
+func TestAccIngestionTransformationResource_switchToLegacyCode(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	name := fmt.Sprintf("tf-acc-transformation-switch-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	code := "function transform({ record }) { return record; }"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIngestionTransformationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIngestionTransformationConfig(name, code),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "type", "code"),
+				),
+			},
+			{
+				Config: testAccIngestionTransformationLegacyCodeConfig(name, code),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_ingestion_transformation.test", "code", code),
+					// Null rather than the type the API derived: storing that is what
+					// broke the update.
+					resource.TestCheckNoResourceAttr("algolia_ingestion_transformation.test", "type"),
+					resource.TestCheckNoResourceAttr("algolia_ingestion_transformation.test", "input"),
+				),
+			},
+			{
+				Config:   testAccIngestionTransformationLegacyCodeConfig(name, code),
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
 func TestAccIngestionTransformationDataSource_basic(t *testing.T) {
 	testAccRequireCredentials(t)
 
@@ -98,6 +138,17 @@ func testAccCheckIngestionTransformationDestroy(s *terraform.State) error {
 	}
 
 	return nil
+}
+
+// testAccIngestionTransformationLegacyCodeConfig uses the deprecated top-level
+// `code` attribute with no `type`, which is the only shape the API accepts for it.
+func testAccIngestionTransformationLegacyCodeConfig(name, code string) string {
+	return fmt.Sprintf(`
+resource "algolia_ingestion_transformation" "test" {
+  name = %[1]q
+  code = %[2]q
+}
+`, name, code)
 }
 
 func testAccIngestionTransformationConfig(name, code string) string {

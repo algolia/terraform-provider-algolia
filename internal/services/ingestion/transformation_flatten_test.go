@@ -111,6 +111,99 @@ func TestFlattenTransformation_NoTypeIsNull(t *testing.T) {
 	}
 }
 
+// TestFlattenTransformation_CodeSuppliedDoesNotAdoptDerivedInput covers a
+// transformation whose logic is given through the legacy `code` attribute. The
+// API derives an `input` from it and returns that, and adopting it put a value
+// into state for an attribute the configuration left unset - which Terraform
+// rejects with "Provider produced inconsistent result after apply: .input: was
+// null, but now ...".
+func TestFlattenTransformation_CodeSuppliedDoesNotAdoptDerivedInput(t *testing.T) {
+	code := "function transform({ record }) { return record; }"
+	transformation := &ingestionapi.Transformation{
+		TransformationID: "transformation-code-only",
+		Name:             "my-transformation",
+		Code:             code,
+		Input:            ingestionapi.TransformationCodeAsTransformationInput(ingestionapi.NewTransformationCode(code)),
+		CreatedAt:        "2024-01-01T00:00:00Z",
+		UpdatedAt:        "2024-01-01T00:00:00Z",
+	}
+
+	// What the operator configured: code, no input.
+	model := TransformationResourceModel{Code: types.StringValue(code)}
+
+	diags := flattenTransformation(transformation, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if !model.Input.IsNull() {
+		t.Errorf("input = %#v, want null: the operator configured code instead", model.Input)
+	}
+	// The same rule applies to type, and for a sharper reason: a type adopted here
+	// is replayed on the next update, and sending it alongside `code` is rejected
+	// by the API with "'input' is required if 'Type' is present".
+	if !model.Type.IsNull() {
+		t.Errorf("type = %#v, want null: adopting the derived type breaks the next update", model.Type)
+	}
+}
+
+// TestFlattenTransformation_ExplicitTypeIsKeptAlongsideCode covers an operator
+// who sets `type` themselves while using `code`. Their value is theirs to keep -
+// the rule above only drops a type the API derived.
+func TestFlattenTransformation_ExplicitTypeIsKeptAlongsideCode(t *testing.T) {
+	code := "function transform({ record }) { return record; }"
+	transformationType := ingestionapi.TRANSFORMATION_TYPE_CODE
+	transformation := &ingestionapi.Transformation{
+		TransformationID: "transformation-explicit-type",
+		Name:             "my-transformation",
+		Code:             code,
+		Type:             &transformationType,
+		CreatedAt:        "2024-01-01T00:00:00Z",
+		UpdatedAt:        "2024-01-01T00:00:00Z",
+	}
+
+	model := TransformationResourceModel{
+		Code: types.StringValue(code),
+		Type: types.StringValue("code"),
+	}
+
+	diags := flattenTransformation(transformation, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if model.Type.ValueString() != "code" {
+		t.Errorf("type = %#v, want the configured value to survive", model.Type)
+	}
+}
+
+// TestFlattenTransformation_ImportAdoptsDerivedInput is the other side of the
+// same rule: an import has no configured code to defer to, so the API's input is
+// the only thing that can populate state.
+func TestFlattenTransformation_ImportAdoptsDerivedInput(t *testing.T) {
+	code := "function transform({ record }) { return record; }"
+	transformation := &ingestionapi.Transformation{
+		TransformationID: "transformation-import",
+		Name:             "my-transformation",
+		Code:             code,
+		Input:            ingestionapi.TransformationCodeAsTransformationInput(ingestionapi.NewTransformationCode(code)),
+		CreatedAt:        "2024-01-01T00:00:00Z",
+		UpdatedAt:        "2024-01-01T00:00:00Z",
+	}
+
+	// An import starts from an empty model: nothing configured at all.
+	var model TransformationResourceModel
+
+	diags := flattenTransformation(transformation, &model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	if model.Input.IsNull() {
+		t.Error("input = null after import, want the value the API returned")
+	}
+}
+
 func TestFlattenTransformation_NoAuthenticationIDsIsNull(t *testing.T) {
 	transformation := &ingestionapi.Transformation{
 		TransformationID: "transformation-4",

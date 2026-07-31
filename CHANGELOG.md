@@ -48,6 +48,49 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- `algolia_ingestion_task`: **removing `cron` from a task no longer fails the apply.** Task updates are
+  a `PATCH` and the client models `cron` as a pointer with `omitempty`, so dropping the attribute sent
+  nothing at all; the server kept the schedule, the read-back restored it, and Terraform rejected the
+  result with `Provider produced inconsistent result after apply: .cron: was null, but now
+  cty.StringVal(...)`. Verified against the live API: the endpoint has no way to clear a schedule -
+  an empty expression is rejected as invalid, and an explicit null returns 200 while changing nothing -
+  so removing `cron` now forces the task to be replaced, which is the only operation that converges.
+  Changing a schedule is still an in-place update. To stop a scheduled task without recreating it, set
+  `enabled = false`, which keeps the schedule.
+- `algolia_ingestion_transformation`: **a transformation defined through the legacy `code` attribute
+  now applies, and can be switched to.** The API derives an `input` and a `type` from `code` and
+  returns both, and the provider wrote them into state for attributes the configuration had left unset,
+  failing the apply twice over with `Provider produced inconsistent result after apply`. Both derived
+  values are now dropped when the logic came from `code`: `input` because it is mutually exclusive with
+  `code` and carries nothing new, and `type` because a stored type is sent back on the next update -
+  which is how moving an existing `input`-based transformation to `code` came to fail with
+  `'input' is required if 'Type' is present`. A `type` set explicitly in configuration is untouched,
+  and an import, having neither configured, still adopts what the API returns.
+- `algolia_ingestion_transformation`: **a no-code transformation no longer fails on every apply.** The
+  API echoes optional fields it was not given back as explicit nulls - a step comes back carrying a
+  `condition` that was never configured - and the JSON comparison counted that as a change, so the
+  applied value never matched the plan. A key present with a null value is now treated as absent, which
+  is what the API means by it. A null against a real value is still a difference.
+- `algolia_ingestion_task`: **removing `subscription_action` is now refused with an error instead of
+  silently doing nothing.** It shares `cron`'s request shape but not its read shape - the prior value
+  is kept when the API omits it - so the apply succeeded while state recorded null and the server kept
+  its value, and no later refresh ever noticed. It is deliberately *not* replaced automatically the way
+  `cron` is: a task carrying a subscription action sits on a platform source the API validates when a
+  task is created, Terraform destroys before it creates, and this resource has no deletion protection,
+  so an automatic replacement could destroy the task and then fail to recreate it. Run
+  `terraform apply -replace=...` to ask for that explicitly. Existing state that already went through
+  the old silent removal still records null while the server holds a value; re-import those tasks to
+  reconcile them.
+- `algolia_ingestion_task`: `cron` now rejects an empty string at plan time. It was sent to the API
+  verbatim and came back as a 400; omit the attribute instead.
+- `algolia_ingestion_transformation`: setting `code` together with `type` is now rejected at plan time
+  rather than by the API, which refuses that combination with `'input' is required if 'Type' is
+  present`.
+- `algolia_virtual_index`: **destroying a replica that Algolia holds as a standard one now succeeds.**
+  Unlinking matched only the `virtual(...)` form of the entry in the primary index's `replicas` list,
+  so a replica listed under its plain name stayed linked and the delete that followed was refused with
+  `403 cannot apply the deleteIndex operation on a replica index`. Either form is now removed before
+  the index is deleted.
 - `algolia_virtual_index`: **an unlinked virtual replica no longer wedges Terraform.** When an index
   still existed but had stopped being a virtual replica - which is what a wholesale write of the
   primary's `replicas` list causes - `Read` raised an error. That error surfaced on every operation

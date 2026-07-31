@@ -54,6 +54,14 @@ func TestTransformationResourceSchema_TypeIsOptionalWithoutReplace(t *testing.T)
 	if len(typeAttr.PlanModifiers) != 0 {
 		t.Fatal("expected type to have no RequiresReplace plan modifier: UpdateTransformation accepts a `type` field")
 	}
+	// Deliberately not Computed. Computed requires UseStateForUnknown to avoid
+	// planning as "known after apply" forever, and that combination replays the
+	// prior type on an update - so switching an input-based transformation to
+	// `code` while omitting `type` sent the old type alongside the new code, which
+	// the API rejects. The derived value is dropped on read instead.
+	if typeAttr.Computed {
+		t.Fatal("expected type to not be computed: a computed type is replayed on update and contradicts a code-only transformation")
+	}
 }
 
 func TestTransformationResourceSchema_InputIsOptionalAndNotSensitive(t *testing.T) {

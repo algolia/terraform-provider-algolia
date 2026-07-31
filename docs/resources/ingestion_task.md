@@ -27,21 +27,48 @@ provider "algolia" {
   analytics_region = "us"
 }
 
+variable "algolia_app_id" {
+  description = "Algolia application ID. A destination's authentication must point at the same application the provider is configured with."
+  type        = string
+}
+
+variable "algolia_api_key" {
+  description = "API key the ingestion pipeline writes with. Keep it out of source control (use TF_VAR_algolia_api_key or a secrets manager)."
+  type        = string
+  sensitive   = true
+}
+
 # A task ties a source and a destination together: it reads from the
 # source, optionally transforms records, and writes them to the
 # destination using `action`.
-resource "algolia_ingestion_source" "shopify" {
-  name = "terraform-example-shopify-source"
-  type = "shopify"
+#
+# Only a pull-based source can be scheduled - the API rejects a `cron` on a
+# "push" source with "a source of type 'push' isn't able to schedule tasks".
+resource "algolia_ingestion_source" "products_csv" {
+  name = "terraform-example-csv-source"
+  type = "csv"
 
   input = jsonencode({
-    shop = "my-shop"
+    url            = "https://example.com/products.csv"
+    uniqueIDColumn = "id"
+  })
+}
+
+# A "search" destination requires an authentication of type "algolia".
+resource "algolia_ingestion_authentication" "destination" {
+  name = "terraform-example-task-destination-auth"
+  type = "algolia"
+
+  input = jsonencode({
+    appID  = var.algolia_app_id
+    apiKey = var.algolia_api_key
   })
 }
 
 resource "algolia_ingestion_destination" "products" {
-  name = "terraform-example-products-destination"
-  type = "search"
+  name              = "terraform-example-products-destination"
+  type              = "search"
+  authentication_id = algolia_ingestion_authentication.destination.authentication_id
 
   input = jsonencode({
     indexName = "products"
@@ -51,9 +78,11 @@ resource "algolia_ingestion_destination" "products" {
 # `cron` schedules the task to run automatically; omit it for an on-demand
 # task that only runs when triggered manually. `action` and `source_id`
 # force replacement if changed: the Ingestion API's task update endpoint
-# has no way to change either after creation.
-resource "algolia_ingestion_task" "shopify_to_products" {
-  source_id      = algolia_ingestion_source.shopify.source_id
+# has no way to change either after creation. Removing `cron` later forces
+# replacement too, because the API cannot clear a schedule - to pause a task
+# instead, set `enabled = false`.
+resource "algolia_ingestion_task" "csv_to_products" {
+  source_id      = algolia_ingestion_source.products_csv.source_id
   destination_id = algolia_ingestion_destination.products.destination_id
   action         = "replace"
   cron           = "0 0 * * *"
@@ -67,7 +96,7 @@ resource "algolia_ingestion_task" "shopify_to_products" {
   })
 
   policies = jsonencode({
-    criticalThreshold = 50
+    criticalThreshold = 5
   })
 }
 
@@ -99,13 +128,15 @@ resource "algolia_ingestion_task" "push_to_products" {
 ### Optional
 
 - `cron` (String) Cron expression for the task's schedule (e.g. `0 0 * * *` for daily). Omit for an on-demand task that only runs when triggered manually.
+
+Changing the schedule updates the task in place. Removing `cron` altogether forces replacement, because the Ingestion API has no way to clear a schedule: an empty expression is rejected as invalid and a null one is ignored, so a task can only become on-demand by being recreated. To stop a scheduled task from running without recreating it, set `enabled = false` instead - that keeps the schedule and is almost always what is wanted.
 - `cursor` (String) Date and time when the last cursor was created, in RFC 3339 format; used to resume a streaming task from a specific point. The Ingestion API's task update endpoint has no way to change this after creation, and its true value advances automatically as the task runs (a runtime concern outside this provider's scope) - so, unlike `input`/`notifications`/`policies`, it is never refreshed from the API on read; the configured value (or null, if omitted) is always preserved as-is. Because it can only be set at creation, changing it forces the task to be replaced. Not recoverable on import.
 - `enabled` (Boolean) Whether the task is enabled. Defaults to true.
 - `failure_threshold` (Number) Maximum accepted percentage of failures for a task run to finish successfully. Computed because the API substitutes its own default when this is omitted.
 - `input` (String) JSON-encoded configuration for the task's input, when its source's type needs one (e.g. `jsonencode({ streams = [...] })` for a Docker-based source). Not every task needs input - a task on a "push" source, for example, has none, so `input` may be omitted. The Ingestion API returns a task's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (key order, array order), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned.
 - `notifications` (String) JSON-encoded notification settings, e.g. `jsonencode({ email = { enabled = true } })`. Refreshed on read using the same semantic-equality preservation as `input`. Computed because the API substitutes its own defaults when this is omitted.
-- `policies` (String) JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 50 })`. Refreshed on read using the same semantic-equality preservation as `input`. Computed because the API substitutes its own defaults when this is omitted.
-- `subscription_action` (String) Action to perform on the destination index for records ingested through a streaming/subscription-based source. One of: replace, save, partial, partialNoCreate, append.
+- `policies` (String) JSON-encoded task policies, e.g. `jsonencode({ criticalThreshold = 5 })`. The API caps `criticalThreshold` at 10 and rejects anything higher. Refreshed on read using the same semantic-equality preservation as `input`. Computed because the API substitutes its own defaults when this is omitted.
+- `subscription_action` (String) Action to perform on the destination index for records ingested through a streaming/subscription-based source. One of: replace, save, partial, partialNoCreate, append. Changing the value updates the task in place. Removing the attribute is refused with an error, because the Ingestion API can set and change this field but has no way to clear it: the task has to be recreated, and recreating it is not something the provider will do on its own here. A task that accepts a `subscription_action` sits on a platform source the API validates when the task is created, so a replacement destroys the task first and can then fail to recreate it, leaving nothing behind. Run `terraform apply -replace=...` to say that is what you want.
 
 ### Read-Only
 

@@ -49,6 +49,10 @@ func transformationResourceSchema() schema.Schema {
 				Computed: true,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.MatchRoot("input")),
+					// The API rejects a payload carrying `type` with a top-level
+					// `code` and no `input`: "'input' is required if 'Type' is
+					// present". Caught at plan time rather than as an opaque 400.
+					stringvalidator.ConflictsWith(path.MatchRoot("type")),
 				},
 				// Deliberately no UseStateForUnknown: the API re-derives `code`
 				// whenever `input` changes, so pinning the prior value would
@@ -59,11 +63,24 @@ func transformationResourceSchema() schema.Schema {
 					". The Ingestion API's transformation update endpoint accepts the same body as create " +
 					"(including `type`), so changing this does not force replacement - unlike " +
 					"`algolia_ingestion_source`/`algolia_ingestion_destination`, whose update endpoints have no " +
-					"`type` field at all.",
+					"`type` field at all.\n\n" +
+					"Leave it unset when supplying the logic through the legacy `code` attribute: the API " +
+					"derives a type in that case, and this attribute stays null rather than adopting the " +
+					"derived value, so that switching between the two forms does not send a type that " +
+					"contradicts the logic.",
 				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(allowedTransformationTypeStrings()...),
 				},
+				// Deliberately neither Computed nor UseStateForUnknown. Both were
+				// tried: making `type` Computed lets the API's derived value be
+				// stored, but UseStateForUnknown is then needed to stop it planning
+				// as "known after apply" forever - and that combination replays the
+				// prior type on an update. Switching an input-based transformation
+				// to `code` while omitting `type` then sent the old type alongside
+				// the new code, which the API rejects with "'input' is required if
+				// 'Type' is present". The derived value is dropped on read instead;
+				// see flattenTransformation.
 			},
 			"input": schema.StringAttribute{
 				Description: "JSON-encoded configuration matching `type` (e.g. `jsonencode({ steps = [...] })` " +
