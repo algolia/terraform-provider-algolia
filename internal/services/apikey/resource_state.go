@@ -6,6 +6,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -189,6 +191,12 @@ func hydrateAPIKeyModel(resp *search.GetApiKeyResponse, preserved *APIKeyResourc
 	for _, acl := range resp.GetAcl() {
 		aclValues = append(aclValues, types.StringValue(string(acl)))
 	}
+
+	// Algolia does not store this flag, so it is carried from whatever state or plan
+	// was handed in - and resolved, so legacy state and a fresh import both end up
+	// protected rather than null. Every path that writes this model comes through
+	// here, which is why one call covers create, read, update and import alike.
+	preserved.DeletionProtection = deletionprotection.Value(preserved.DeletionProtection)
 
 	preserved.ID = types.StringValue(resp.GetValue())
 	preserved.ACL = types.SetValueMust(types.StringType, aclValues)

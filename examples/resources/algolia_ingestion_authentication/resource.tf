@@ -27,6 +27,9 @@ variable "destination_api_key" {
 # write into another Algolia application (e.g. push connectors, or
 # source/destination pairs that live in different apps).
 resource "algolia_ingestion_authentication" "algolia_destination" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-algolia-auth"
   type = "algolia"
 
@@ -52,6 +55,9 @@ variable "shopify_api_key" {
 # does not support changing it, so changing it in configuration forces
 # replacement.
 resource "algolia_ingestion_authentication" "shopify_source" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name     = "terraform-example-shopify-auth"
   type     = "apiKey"
   platform = "shopify"

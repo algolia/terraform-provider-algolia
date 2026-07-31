@@ -14,14 +14,15 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // value already in state; otherwise it keeps the existing string as-is.
 // See flattenSource/flattenSourceInput.
 type SourceResourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	SourceID         types.String `tfsdk:"source_id"`
-	Type             types.String `tfsdk:"type"`
-	Name             types.String `tfsdk:"name"`
-	Input            types.String `tfsdk:"input"`
-	AuthenticationID types.String `tfsdk:"authentication_id"`
-	CreatedAt        types.String `tfsdk:"created_at"`
-	UpdatedAt        types.String `tfsdk:"updated_at"`
+	ID                 types.String `tfsdk:"id"`
+	SourceID           types.String `tfsdk:"source_id"`
+	Type               types.String `tfsdk:"type"`
+	Name               types.String `tfsdk:"name"`
+	Input              types.String `tfsdk:"input"`
+	AuthenticationID   types.String `tfsdk:"authentication_id"`
+	CreatedAt          types.String `tfsdk:"created_at"`
+	UpdatedAt          types.String `tfsdk:"updated_at"`
+	DeletionProtection types.Bool   `tfsdk:"deletion_protection"`
 }
 
 // SourceDataSourceModel describes the algolia_ingestion_source data source.

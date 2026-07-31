@@ -73,6 +73,11 @@ resource "algolia_synonym" "tv" {
 # A search-only key scoped to the products index - safe to embed in browser
 # and mobile clients (it cannot read or mutate anything else).
 resource "algolia_api_key" "frontend_search" {
+  # Destroying this is not a recoverable step: the value is the credential, so a
+  # replacement is a different secret. This example is meant to be torn down
+  # again, so the guard is off.
+  deletion_protection = false
+
   description = "Public search-only key for storefront clients"
   acl         = ["search", "browse"]
   indexes     = [algolia_index.products.name]

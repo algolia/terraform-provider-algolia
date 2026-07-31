@@ -47,6 +47,11 @@ func TestAccIngestionSourceResource_basic(t *testing.T) {
 				ResourceName:      "algolia_ingestion_source.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+				// deletion_protection is not represented in the Algolia API, so an import
+				// cannot read it back and seeds the protected default instead. A fixture
+				// that turns protection off therefore differs from the imported value by
+				// design, which is the fail-safe working rather than a mismatch.
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
 			},
 		},
 	})
@@ -99,8 +104,9 @@ func testAccCheckIngestionSourceDestroy(s *terraform.State) error {
 func testAccIngestionSourceConfig(name string) string {
 	return fmt.Sprintf(`
 resource "algolia_ingestion_source" "test" {
-  name = %[1]q
-  type = "push"
+  deletion_protection = false
+  name                = %[1]q
+  type                = "push"
 }
 `, name)
 }

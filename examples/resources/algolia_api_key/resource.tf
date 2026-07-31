@@ -5,6 +5,11 @@ resource "algolia_api_key" "example" {
   acl         = ["search", "browse"]
   indexes     = ["products"]
 
+  # A destroyed key cannot be brought back: the value is the credential, so the
+  # replacement is a different secret and everything holding the old one breaks at
+  # once. Set this to false and apply before destroying on purpose.
+  deletion_protection = true
+
   max_hits_per_query          = 100
   max_queries_per_ip_per_hour = 10000
 

@@ -45,6 +45,7 @@ type TaskResourceModel struct {
 	UpdatedAt          types.String `tfsdk:"updated_at"`
 	LastRun            types.String `tfsdk:"last_run"`
 	NextRun            types.String `tfsdk:"next_run"`
+	DeletionProtection types.Bool   `tfsdk:"deletion_protection"`
 }
 
 // TaskDataSourceModel describes the algolia_ingestion_task data source.

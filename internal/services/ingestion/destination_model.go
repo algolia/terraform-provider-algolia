@@ -16,15 +16,16 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // differences (key order, array order). See
 // flattenDestination/flattenDestinationInput.
 type DestinationResourceModel struct {
-	ID                types.String `tfsdk:"id"`
-	DestinationID     types.String `tfsdk:"destination_id"`
-	Type              types.String `tfsdk:"type"`
-	Name              types.String `tfsdk:"name"`
-	Input             types.String `tfsdk:"input"`
-	AuthenticationID  types.String `tfsdk:"authentication_id"`
-	TransformationIDs types.List   `tfsdk:"transformation_ids"`
-	CreatedAt         types.String `tfsdk:"created_at"`
-	UpdatedAt         types.String `tfsdk:"updated_at"`
+	ID                 types.String `tfsdk:"id"`
+	DestinationID      types.String `tfsdk:"destination_id"`
+	Type               types.String `tfsdk:"type"`
+	Name               types.String `tfsdk:"name"`
+	Input              types.String `tfsdk:"input"`
+	AuthenticationID   types.String `tfsdk:"authentication_id"`
+	TransformationIDs  types.List   `tfsdk:"transformation_ids"`
+	CreatedAt          types.String `tfsdk:"created_at"`
+	UpdatedAt          types.String `tfsdk:"updated_at"`
+	DeletionProtection types.Bool   `tfsdk:"deletion_protection"`
 }
 
 // DestinationDataSourceModel describes the algolia_ingestion_destination

@@ -3,6 +3,8 @@ package ingestion
 import (
 	"encoding/json"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -18,6 +20,11 @@ import (
 // rather than forced to null, so an explicitly configured `code = ""` doesn't
 // perpetually diff against a null state; an unset `code` stays null.
 func flattenTransformation(transformation *ingestionapi.Transformation, model *TransformationResourceModel) diag.Diagnostics {
+	// Algolia does not store this flag, so it survives only by being carried through
+	// every rebuild of the model. Resolving it here also seeds an import, which
+	// arrives with no value at all.
+	model.DeletionProtection = deletionprotection.Value(model.DeletionProtection)
+
 	var diags diag.Diagnostics
 
 	model.ID = types.StringValue(transformation.TransformationID)

@@ -65,7 +65,11 @@ func TestAccIngestionTaskResource_basic(t *testing.T) {
 				// never touched - so it is write-only in practice and cannot be
 				// recovered on import. Read preserves the prior value, but an
 				// import has no prior to preserve.
-				ImportStateVerifyIgnore: []string{"action"},
+				//
+				// deletion_protection is absent from the API for the same reason, and an
+				// import seeds the protected default rather than the fixture's false. That
+				// difference is the fail-safe working, not a mismatch.
+				ImportStateVerifyIgnore: []string{"action", "deletion_protection"},
 			},
 		},
 	})
@@ -205,35 +209,39 @@ func testAccIngestionTaskConfig(sourceName, destinationName, indexName string, e
 
 	return fmt.Sprintf(`
 resource "algolia_ingestion_source" "test" {
-  name = %[1]q
-  type = "push"
+  deletion_protection = false
+  name                = %[1]q
+  type                = "push"
 }
 
 resource "algolia_ingestion_authentication" "test" {
-  name = "%[2]s-auth"
-  type = "algolia"
+  deletion_protection = false
+  name                = "%[2]s-auth"
+  type                = "algolia"
 
-  input = jsonencode({
+  input               = jsonencode({
     appID  = %[6]q
     apiKey = %[7]q
   })
 }
 
 resource "algolia_ingestion_destination" "test" {
-  name              = %[2]q
-  type              = "search"
-  authentication_id = algolia_ingestion_authentication.test.authentication_id
+  deletion_protection = false
+  name                = %[2]q
+  type                = "search"
+  authentication_id   = algolia_ingestion_authentication.test.authentication_id
 
-  input = jsonencode({
+  input               = jsonencode({
     indexName = %[3]q
   })
 }
 
 resource "algolia_ingestion_task" "test" {
-  source_id      = algolia_ingestion_source.test.source_id
-  destination_id = algolia_ingestion_destination.test.destination_id
-  action         = "replace"
-  enabled        = %[4]t
+  deletion_protection = false
+  source_id           = algolia_ingestion_source.test.source_id
+  destination_id      = algolia_ingestion_destination.test.destination_id
+  action              = "replace"
+  enabled             = %[4]t
   %[5]s
 }
 `, sourceName, destinationName, indexName, enabled, cronAttr, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
@@ -252,39 +260,43 @@ func testAccIngestionTaskCronConfig(sourceName, destinationName, indexName, cron
 
 	return fmt.Sprintf(`
 resource "algolia_ingestion_source" "test" {
-  name = %[1]q
-  type = "csv"
+  deletion_protection = false
+  name                = %[1]q
+  type                = "csv"
 
-  input = jsonencode({
+  input               = jsonencode({
     url            = "https://example.com/products.csv"
     uniqueIDColumn = "id"
   })
 }
 
 resource "algolia_ingestion_authentication" "test" {
-  name = "%[2]s-auth"
-  type = "algolia"
+  deletion_protection = false
+  name                = "%[2]s-auth"
+  type                = "algolia"
 
-  input = jsonencode({
+  input               = jsonencode({
     appID  = %[5]q
     apiKey = %[6]q
   })
 }
 
 resource "algolia_ingestion_destination" "test" {
-  name              = %[2]q
-  type              = "search"
-  authentication_id = algolia_ingestion_authentication.test.authentication_id
+  deletion_protection = false
+  name                = %[2]q
+  type                = "search"
+  authentication_id   = algolia_ingestion_authentication.test.authentication_id
 
-  input = jsonencode({
+  input               = jsonencode({
     indexName = %[3]q
   })
 }
 
 resource "algolia_ingestion_task" "test" {
-  source_id      = algolia_ingestion_source.test.source_id
-  destination_id = algolia_ingestion_destination.test.destination_id
-  action         = "replace"
+  deletion_protection = false
+  source_id           = algolia_ingestion_source.test.source_id
+  destination_id      = algolia_ingestion_destination.test.destination_id
+  action              = "replace"
   %[4]s
 }
 `, sourceName, destinationName, indexName, cronAttr, os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))

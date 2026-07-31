@@ -80,6 +80,11 @@ resource "algolia_synonym" "scifi" {
 # A search-only key scoped to the titles index - safe to embed in web and
 # TV/streaming app clients (it cannot read or mutate anything else).
 resource "algolia_api_key" "app_search" {
+  # Destroying this is not a recoverable step: the value is the credential, so a
+  # replacement is a different secret. This example is meant to be torn down
+  # again, so the guard is off.
+  deletion_protection = false
+
   description = "Public search-only key for streaming app clients"
   acl         = ["search", "browse"]
   indexes     = [algolia_index.titles.name]

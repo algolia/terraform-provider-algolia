@@ -13,4 +13,5 @@ type APIKeyResourceModel struct {
 	MaxQueriesPerIPPerHour types.Int64  `tfsdk:"max_queries_per_ip_per_hour"`
 	QueryParameters        types.String `tfsdk:"query_parameters"`
 	CreatedAt              types.String `tfsdk:"created_at"`
+	DeletionProtection     types.Bool   `tfsdk:"deletion_protection"`
 }

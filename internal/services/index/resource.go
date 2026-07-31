@@ -10,6 +10,7 @@ import (
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliawait"
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -272,16 +273,8 @@ func (r *indexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	indexName := state.Name.ValueString()
 
-	// Fail safe on an absent value. The schema defaults deletion_protection to true,
-	// so null should not occur after a normal apply; when it does (legacy state, or a
-	// state written before import seeded the default) treating it as "unprotected"
-	// would delete a production index. Require an explicit false to proceed.
-	if state.DeletionProtection.IsNull() || state.DeletionProtection.ValueBool() {
-		resp.Diagnostics.AddError(
-			"Deletion Protection Enabled",
-			fmt.Sprintf("Cannot delete index %q because deletion_protection is enabled. "+
-				"Set deletion_protection = false and apply before destroying.", indexName),
-		)
+	if deletionprotection.Enabled(state.DeletionProtection) {
+		resp.Diagnostics.Append(deletionprotection.Refuse(fmt.Sprintf("index %q", indexName)))
 		return
 	}
 

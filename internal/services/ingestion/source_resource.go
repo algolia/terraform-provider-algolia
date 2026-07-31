@@ -2,6 +2,9 @@ package ingestion
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
 
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
@@ -214,6 +217,11 @@ func (r *sourceResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	var state SourceResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if deletionprotection.Enabled(state.DeletionProtection) {
+		resp.Diagnostics.Append(deletionprotection.Refuse(fmt.Sprintf("ingestion source %q", state.SourceID.ValueString())))
 		return
 	}
 

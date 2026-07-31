@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
+
 	ingestionapi "github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -21,6 +23,11 @@ import (
 // as-is when it is semantically equal to what the API returned, and only
 // adopts the API's encoding when it actually differs.
 func flattenSource(source *ingestionapi.Source, model *SourceResourceModel) diag.Diagnostics {
+	// Algolia does not store this flag, so it survives only by being carried through
+	// every rebuild of the model. Resolving it here also seeds an import, which
+	// arrives with no value at all.
+	model.DeletionProtection = deletionprotection.Value(model.DeletionProtection)
+
 	var diags diag.Diagnostics
 
 	model.ID = types.StringValue(source.SourceID)

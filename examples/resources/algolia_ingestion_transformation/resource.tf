@@ -17,6 +17,9 @@ provider "algolia" {
 # payload carrying `type` without `input` is rejected with "'input' is required
 # if 'Type' is present".
 resource "algolia_ingestion_transformation" "code" {
+  # Destroying this is not a recoverable step: removing it changes what every task using it writes.
+  deletion_protection = true
+
   name = "terraform-example-code-transformation"
   type = "code"
 
@@ -33,6 +36,9 @@ resource "algolia_ingestion_transformation" "code" {
 # The deprecated `code` attribute still works on its own, without `type`. It
 # conflicts with `input`, so set one or the other.
 resource "algolia_ingestion_transformation" "legacy_code" {
+  # Destroying this is not a recoverable step: removing it changes what every task using it writes.
+  deletion_protection = true
+
   name = "terraform-example-legacy-code-transformation"
 
   code = <<-EOT
@@ -53,6 +59,9 @@ resource "algolia_ingestion_transformation" "legacy_code" {
 # Note `enabled` defaults to false: a step is authored but inert until you set
 # it, which is easy to miss.
 resource "algolia_ingestion_transformation" "no_code" {
+  # Destroying this is not a recoverable step: removing it changes what every task using it writes.
+  deletion_protection = true
+
   name        = "terraform-example-no-code-transformation"
   type        = "noCode"
   description = "Adds a static attribute to every record"
@@ -81,6 +90,9 @@ resource "algolia_ingestion_transformation" "no_code" {
 # Each key becomes available to the transformation code at run time, which is
 # how it reaches an external API without the credential appearing in the code.
 resource "algolia_ingestion_authentication" "enrichment_api" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-enrichment-secrets"
   type = "secrets"
 
@@ -92,6 +104,9 @@ resource "algolia_ingestion_authentication" "enrichment_api" {
 # `authentication_ids` associates the algolia_ingestion_authentication
 # resources this transformation needs.
 resource "algolia_ingestion_transformation" "with_authentication" {
+  # Destroying this is not a recoverable step: removing it changes what every task using it writes.
+  deletion_protection = true
+
   name = "terraform-example-transformation-with-auth"
   type = "code"
 

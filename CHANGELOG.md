@@ -7,6 +7,17 @@ FEATURES:
 
 BREAKING CHANGES:
 
+- `algolia_api_key`, `algolia_ingestion_authentication`, `algolia_ingestion_source`,
+  `algolia_ingestion_destination`, `algolia_ingestion_transformation`, `algolia_ingestion_task`: these
+  now carry `deletion_protection`, defaulting to `true`, so `terraform destroy` refuses until it is set
+  to `false` and applied. Previously only `algolia_index`, `algolia_virtual_index` and `algolia_agent`
+  had the guard, which left it off exactly where a delete cannot be undone: an API key's id *is* the
+  credential, so a replacement is a different secret and every consumer holding the old one breaks at
+  once, and deleting an Ingestion task stops a running pipeline. Resources whose configuration fully
+  describes them, such as rules and synonyms, deliberately remain unguarded, since re-applying restores
+  them. As with the resources that already had the attribute, state written before this version carries
+  no value for it, and an absent value reads as protected - so destroying such a resource takes one
+  apply first.
 - `algolia_index`, `algolia_virtual_index`: a settings write whose Algolia task never reports as
   published is now sent again rather than waited out. Algolia restarts an index's task queue when
   another write turns that index into a replica, which voids the task ID the provider is waiting on

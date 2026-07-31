@@ -45,6 +45,9 @@ variable "destination_api_key" {
 # write into another Algolia application (e.g. push connectors, or
 # source/destination pairs that live in different apps).
 resource "algolia_ingestion_authentication" "algolia_destination" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-algolia-auth"
   type = "algolia"
 
@@ -70,6 +73,9 @@ variable "shopify_api_key" {
 # does not support changing it, so changing it in configuration forces
 # replacement.
 resource "algolia_ingestion_authentication" "shopify_source" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name     = "terraform-example-shopify-auth"
   type     = "apiKey"
   platform = "shopify"
@@ -91,6 +97,7 @@ resource "algolia_ingestion_authentication" "shopify_source" {
 
 ### Optional
 
+- `deletion_protection` (Boolean) When true, prevents accidental deletion of the ingestion authentication. Must be set to false and applied before destroying.
 - `platform` (String) Name of an ecommerce platform to authenticate with, one of: bigcommerce, commercetools, shopify. Determines which authentication types are selectable for that platform. The Ingestion API's update endpoint does not support changing platform after creation, so changing this forces replacement.
 
 ### Read-Only

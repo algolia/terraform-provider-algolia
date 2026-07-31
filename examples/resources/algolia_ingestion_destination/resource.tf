@@ -27,6 +27,9 @@ variable "algolia_api_key" {
 # destination's type - the API rejects any other pairing. A "search"
 # destination requires type "algolia".
 resource "algolia_ingestion_authentication" "search" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-search-auth"
   type = "algolia"
 
@@ -40,6 +43,9 @@ resource "algolia_ingestion_authentication" "search" {
 # algolia_ingestion_source, `input` is required: every destination needs an
 # `indexName` to write to.
 resource "algolia_ingestion_destination" "search" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks write to it.
+  deletion_protection = true
+
   name              = "terraform-example-search-destination"
   type              = "search"
   authentication_id = algolia_ingestion_authentication.search.authentication_id
@@ -53,6 +59,9 @@ resource "algolia_ingestion_destination" "search" {
 # instead of writing to a search index, and takes its own authentication type:
 # "algoliaInsights", not "algolia".
 resource "algolia_ingestion_authentication" "insights" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name = "terraform-example-insights-auth"
   type = "algoliaInsights"
 
@@ -63,6 +72,9 @@ resource "algolia_ingestion_authentication" "insights" {
 }
 
 resource "algolia_ingestion_destination" "insights" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks write to it.
+  deletion_protection = true
+
   name              = "terraform-example-insights-destination"
   type              = "insights"
   authentication_id = algolia_ingestion_authentication.insights.authentication_id
@@ -73,6 +85,9 @@ resource "algolia_ingestion_destination" "insights" {
 }
 
 resource "algolia_ingestion_transformation" "drop_internal_notes" {
+  # Destroying this is not a recoverable step: removing it changes what every task using it writes.
+  deletion_protection = true
+
   name = "terraform-example-drop-internal-notes"
   type = "code"
 
@@ -90,6 +105,9 @@ resource "algolia_ingestion_transformation" "drop_internal_notes" {
 # applied to records on their way into this destination. Reference the
 # resources rather than pasting IDs, so Terraform creates them first.
 resource "algolia_ingestion_destination" "with_transformation" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks write to it.
+  deletion_protection = true
+
   name              = "terraform-example-destination-with-transformation"
   type              = "search"
   authentication_id = algolia_ingestion_authentication.search.authentication_id

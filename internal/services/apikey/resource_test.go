@@ -3,6 +3,7 @@ package apikey_test
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -46,10 +47,14 @@ func TestAccAPIKeyResource_basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            "algolia_api_key.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"expires_at"},
+				ResourceName:      "algolia_api_key.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// deletion_protection is not represented in the Algolia API, so an import
+				// cannot read it back and seeds the protected default instead. A fixture
+				// that turns protection off therefore differs from the imported value by
+				// design, which is the fail-safe working rather than a mismatch.
+				ImportStateVerifyIgnore: []string{"expires_at", "deletion_protection"},
 			},
 			{
 				Config: testAccAPIKeyResourceConfig(updatedDescription, 200),
@@ -116,10 +121,14 @@ func TestAccAPIKeyResource_queryParameters(t *testing.T) {
 			{
 				// Before the fix there was no attribute for import to fill, so
 				// state had no record of the restriction at all.
-				ResourceName:            "algolia_api_key.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"expires_at"},
+				ResourceName:      "algolia_api_key.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// deletion_protection is not represented in the Algolia API, so an import
+				// cannot read it back and seeds the protected default instead. A fixture
+				// that turns protection off therefore differs from the imported value by
+				// design, which is the fail-safe working rather than a mismatch.
+				ImportStateVerifyIgnore: []string{"expires_at", "deletion_protection"},
 			},
 			{
 				// Changing the restriction is an ordinary update. This stays a
@@ -170,10 +179,14 @@ func TestAccAPIKeyResource_optionalRestrictionsPlanTheirRemoval(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            "algolia_api_key.test",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"expires_at"},
+				ResourceName:      "algolia_api_key.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// deletion_protection is not represented in the Algolia API, so an import
+				// cannot read it back and seeds the protected default instead. A fixture
+				// that turns protection off therefore differs from the imported value by
+				// design, which is the fail-safe working rather than a mismatch.
+				ImportStateVerifyIgnore: []string{"expires_at", "deletion_protection"},
 			},
 			{
 				Config:             testAccAPIKeyNoRestrictionsConfig(description),
@@ -320,8 +333,9 @@ func testAccCheckAPIKeyQueryParameters(resourceName, want string) resource.TestC
 func testAccAPIKeyQueryParametersConfig(description, queryParameters string) string {
 	return fmt.Sprintf(`
 resource "algolia_api_key" "test" {
-  acl         = ["search"]
-  description = %[1]q
+  deletion_protection = false
+  acl                 = ["search"]
+  description         = %[1]q
   %[2]s
 }
 `, description, queryParameters)
@@ -330,6 +344,7 @@ resource "algolia_api_key" "test" {
 func testAccAPIKeyRestrictionsConfig(description string) string {
 	return fmt.Sprintf(`
 resource "algolia_api_key" "test" {
+  deletion_protection         = false
   acl                         = ["search"]
   description                 = %[1]q
   indexes                     = ["products_*"]
@@ -344,8 +359,9 @@ resource "algolia_api_key" "test" {
 func testAccAPIKeyNoRestrictionsConfig(description string) string {
 	return fmt.Sprintf(`
 resource "algolia_api_key" "test" {
-  acl         = ["search"]
-  description = %[1]q
+  deletion_protection = false
+  acl                 = ["search"]
+  description         = %[1]q
 }
 `, description)
 }
@@ -353,6 +369,7 @@ resource "algolia_api_key" "test" {
 func testAccAPIKeyResourceConfig(description string, maxHits int) string {
 	return fmt.Sprintf(`
 resource "algolia_api_key" "test" {
+  deletion_protection         = false
   acl                         = ["search", "browse"]
   description                 = %[1]q
   expires_at                  = "2030-01-01T00:00:00Z"
@@ -362,4 +379,44 @@ resource "algolia_api_key" "test" {
   max_queries_per_ip_per_hour = 1000
 }
 `, description, maxHits)
+}
+
+// TestAccAPIKeyResource_deletionProtection covers the guard end to end. An API key is
+// the case the flag exists for: the id is the credential, so a destroyed key cannot
+// be restored and every consumer holding it breaks at once.
+func TestAccAPIKeyResource_deletionProtection(t *testing.T) {
+	testAccRequireCredentials(t)
+
+	description := fmt.Sprintf("tf-test-protected-%s", acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAPIKeyProtectedConfig(description),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_api_key.test", "deletion_protection", "true"),
+				),
+			},
+			{
+				Config:      testAccAPIKeyProtectedConfig(description),
+				Destroy:     true,
+				ExpectError: regexp.MustCompile("Deletion Protection Enabled"),
+			},
+			{
+				// Turn it off so the framework's own destroy can clean the key up.
+				Config: testAccAPIKeyNoRestrictionsConfig(description),
+			},
+		},
+	})
+}
+
+func testAccAPIKeyProtectedConfig(description string) string {
+	return fmt.Sprintf(`
+resource "algolia_api_key" "test" {
+  acl                 = ["search"]
+  description         = %[1]q
+  deletion_protection = true
+}
+`, description)
 }

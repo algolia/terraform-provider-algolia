@@ -74,3 +74,43 @@ The index package follows a clear separation:
 3. Register in `internal/provider/provider.go` (Resources/DataSources methods)
 4. Use `*providertypes.ProviderData` from `internal/types/` to access the Algolia client
 5. If the API is region-routed, use `internal/analyticsregion` plus `ProviderData.AnalyticsRegion` instead of embedding per-resource region config
+6. If destroying the resource loses something a re-apply cannot restore, add
+   `deletion_protection` from `internal/deletionprotection` - see below
+7. Run `go test ./internal/provider/ -update` to accept the new schema into the snapshot
+
+### Deletion protection
+
+`internal/deletionprotection` provides the `deletion_protection` attribute, and the
+rule that an **absent value means protected**. Algolia does not store the flag, so
+state written before the attribute existed carries no value, and reading that as
+"unprotected" would destroy exactly what the attribute was added to guard.
+
+Apply it where a destroy cannot be undone by re-applying: `algolia_api_key`, whose
+id *is* the credential, and the `algolia_ingestion_*` resources, which carry live
+pipelines. Do **not** apply it to resources the configuration fully describes, such
+as rules, synonyms or dictionary entries - re-applying restores those, so a guard
+only adds friction.
+
+Two things are easy to miss. Every path that rebuilds the model from an API response
+must run the stored value through `deletionprotection.Value`, or a read turns it null
+and silently unprotects the resource; putting that call in the resource's single
+flatten or hydrate function covers create, read, update and import at once. And every
+acceptance fixture for a guarded resource needs `deletion_protection = false`, or the
+framework's own destroy step fails - which only a live acceptance run reveals.
+
+### Schema changes and state compatibility
+
+Terraform reads stored state against the schema version that wrote it. Removing an
+attribute, renaming one, or changing its type therefore breaks anyone holding older
+state unless the resource's schema `Version` is raised and `UpgradeState` is
+implemented. No resource declares a version yet, which is correct: every schema is at
+version 0 and nothing has been published, so breaking changes are still free.
+
+That changes at the first tagged release. From then on, a schema change of that kind
+needs a version bump and an upgrader in the same commit. `TestSchemaSnapshot` in
+`internal/provider` exists to make the moment visible: it pins the shape of every
+schema in `internal/provider/testdata/schema.txt` and fails on any change, so
+accepting one is a deliberate act rather than something noticed after release. Accept
+an intended change with `go test ./internal/provider/ -update` and read the resulting
+diff as carefully as the code. Descriptions are excluded from the snapshot on purpose,
+so prose edits do not train anyone to re-approve it without looking.

@@ -6,6 +6,7 @@ import (
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
+	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -326,13 +327,8 @@ func (r *virtualIndexResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	indexName := state.Name.ValueString()
-	// Fail safe on an absent value: treating null as "unprotected" would delete a
-	// production index. Require an explicit false to proceed.
-	if state.DeletionProtection.IsNull() || state.DeletionProtection.ValueBool() {
-		resp.Diagnostics.AddError(
-			"Deletion Protection Enabled",
-			fmt.Sprintf("Cannot delete virtual index %q because deletion_protection is enabled. Set deletion_protection = false and apply before destroying.", indexName),
-		)
+	if deletionprotection.Enabled(state.DeletionProtection) {
+		resp.Diagnostics.Append(deletionprotection.Refuse(fmt.Sprintf("virtual index %q", indexName)))
 		return
 	}
 

@@ -16,6 +16,9 @@ provider "algolia" {
 # JSON-encoded configuration matching `type`; see the schema docs for the
 # shape expected by each source type.
 resource "algolia_ingestion_source" "csv" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-csv-source"
   type = "csv"
 
@@ -29,6 +32,9 @@ resource "algolia_ingestion_source" "csv" {
 # Ingestion API's push endpoint) and needs no configuration at all, so
 # `input` is omitted.
 resource "algolia_ingestion_source" "push" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name = "terraform-example-push-source"
   type = "push"
 }
@@ -42,6 +48,9 @@ variable "shopify_shop_url" {
 # references an algolia_ingestion_authentication resource created with a
 # matching `platform`.
 resource "algolia_ingestion_authentication" "shopify" {
+  # Destroying this is not a recoverable step: removing it breaks every source and task that authenticates with it.
+  deletion_protection = true
+
   name     = "terraform-example-shopify-auth"
   type     = "apiKey"
   platform = "shopify"
@@ -52,6 +61,9 @@ resource "algolia_ingestion_authentication" "shopify" {
 }
 
 resource "algolia_ingestion_source" "shopify" {
+  # Destroying this is not a recoverable step: removing it stops whatever tasks read from it.
+  deletion_protection = true
+
   name              = "terraform-example-shopify-source"
   type              = "shopify"
   authentication_id = algolia_ingestion_authentication.shopify.authentication_id
