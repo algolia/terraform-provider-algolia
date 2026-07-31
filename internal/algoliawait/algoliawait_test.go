@@ -103,7 +103,7 @@ func TestUntil_TimeoutErrorNamesTheSubject(t *testing.T) {
 
 	// The timeout message is built from the subject, so assert its shape directly.
 	want := "task 42 on index \"products\" did not complete within 30m0s"
-	got := timeoutError("task 42 on index \"products\"").Error()
+	got := timeoutError("task 42 on index \"products\"", Timeout).Error()
 	if got != want {
 		t.Errorf("timeout error = %q, want %q", got, want)
 	}
