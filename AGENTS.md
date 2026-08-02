@@ -6,8 +6,9 @@ This file provides guidance to AI coding agents working with code in this reposi
 
 ```bash
 make build                    # compile the provider
-make test                     # run unit tests only (no Algolia credentials needed)
-make testacc                  # run acceptance tests (requires ALGOLIA_APP_ID & ALGOLIA_API_KEY; some resources also require ALGOLIA_ANALYTICS_REGION)
+make test                     # no credentials needed; acceptance tests skip themselves without TF_ACC
+make testacc                  # acceptance tests (needs ALGOLIA_APP_ID & ALGOLIA_API_KEY; some suites also need ALGOLIA_ANALYTICS_REGION)
+make e2e                      # end-to-end tests against a real application (build tag `e2e`, see below)
 make lint                     # run golangci-lint
 make generate                 # regenerate docs via tfplugindocs
 
@@ -18,14 +19,68 @@ go test ./internal/services/index/ -run TestExpandTypoTolerance -v
 go test ./... -v -timeout 120m
 ```
 
+There are three test tiers, and knowing which one covers a change decides how much
+you can conclude from a green run:
+
+- **Unit tests** run everywhere with no credentials. Where an HTTP fake is needed they
+  build one with `httptest` plus `search.NewClientWithConfig`; see
+  `internal/services/index/delete_unlink_test.go` for the pattern.
+- **Acceptance tests** (`TestAcc*`, `TF_ACC=1`) drive real Terraform plans against a
+  real application through the plugin-testing framework.
+- **End-to-end tests** (`internal/e2e/`, build tag `e2e`, `make e2e`) drive whole
+  configurations through create, drift, reconcile, update and destroy, asserting
+  Algolia's own view at each stage rather than only Terraform state.
+
+**In CI, the acceptance and e2e jobs run only on a push to `main`, never on a pull
+request.** They execute repository code with the admin `ALGOLIA_API_KEY`, so running
+them on a PR would hand that key to anyone who can open one. A PR therefore goes green
+on build, lint and unit tests alone: if a change touches behaviour the unit tests
+cannot reach, run the relevant acceptance suite locally and say so in the PR.
+
+### Why an acceptance suite skipped
+
+Acceptance tests need `TF_ACC=1` plus `ALGOLIA_APP_ID` and `ALGOLIA_API_KEY`. Beyond
+that, several suites skip **silently** without something extra, so a green run does not
+by itself mean the code was exercised. Check this list before concluding anything from
+one:
+
+- **Region-routed services** (Query Suggestions, Personalization, A/B Testing, Ingestion)
+  need `ALGOLIA_ANALYTICS_REGION` set to `us` or `eu`.
+- **Personalization** also needs `ALGOLIA_RUN_PERSONALIZATION_ACC=1`, because the API
+  enforces a daily strategy-save quota.
+- **A/B Testing** also needs `ALGOLIA_RUN_ABTESTING_ACC=1`, because creating a test has
+  cost and quota implications for the target application.
+- **MCM** also needs `ALGOLIA_RUN_MCM_ACC=1`, because `algolia_clusters` and
+  `algolia_user_ids` error on applications that are not on a multi-cluster plan, which is
+  most of them.
+- **Allowed Sources** also needs `ALGOLIA_RUN_ALLOWEDSOURCES_ACC=1`, because the endpoint
+  requires the Vault feature (HTTP 402 without it).
+- **Compositions** also needs `ALGOLIA_RUN_COMPOSITION_ACC=1`, because the API is not
+  enabled on most applications (HTTP 404 without it).
+- **Agent** needs `OPENAI_API_KEY` for its published-agent tests, and **Agent Provider**
+  needs `OPENAI_API_KEY` and `GOOGLE_GENAI_API_KEY` for the OpenAI and Google suites.
+  The CI acceptance job supplies neither, so those suites skip on every main-branch run.
+  A key is also not sufficient on its own: these tests create a real provider, which
+  Algolia validates by calling the vendor, so an account with an exhausted credit
+  balance makes them fail rather than skip (`429 credit_balance_exhausted`).
+
+Compositions, Allowed Sources and MCM cannot be made to pass by configuration alone;
+they need an application provisioned for those features.
+
+**Recommend** needs nothing beyond `TF_ACC` and credentials. It was once gated behind
+`ALGOLIA_RUN_RECOMMEND_ACC=1` for an upstream bug, `algoliasearch-client-go` v4 failing to
+decode the API's numeric `_metadata.lastUpdate` into its `*string` field. That is worked
+around by `getRecommendRule` in `internal/services/recommend/get_rule.go`, which strips
+`_metadata` before decoding, and the gate is gone.
+
+### Lint and toolchain pinning
+
 Lint configuration lives in `.golangci.yml`. `gofmt`/`goimports` are registered there as
 **formatters**, which is what makes `golangci-lint run` fail on unformatted files (in
 golangci-lint v2 formatters are inert unless listed). The linter version is pinned in both
 `.tool-versions` and `.github/workflows/test.yml`; keep the two in sync so a lint failure
 reproduces locally. The Go toolchain version is likewise pinned in both `.tool-versions` and
 the `go` directive in `go.mod` - a mismatch is a hard failure under `GOTOOLCHAIN=local`.
-
-Acceptance tests require `TF_ACC=1` and valid `ALGOLIA_APP_ID`/`ALGOLIA_API_KEY` environment variables. Region-routed services - Query Suggestions, Personalization, A/B Testing, and Ingestion - also require `ALGOLIA_ANALYTICS_REGION` (`us` or `eu`); their acceptance tests skip silently without it. Personalization acceptance tests are additionally gated behind `ALGOLIA_RUN_PERSONALIZATION_ACC=1` because the API enforces a daily strategy-save quota. A/B Testing acceptance tests are additionally gated behind `ALGOLIA_RUN_ABTESTING_ACC=1` because creating an A/B test has cost/quota implications for the target application. MCM (Multi-Cluster Management) acceptance tests are additionally gated behind `ALGOLIA_RUN_MCM_ACC=1` because the MCM endpoints (`algolia_clusters`/`algolia_user_ids`) return an error on applications that aren't on a multi-cluster plan, which is most applications. Allowed Sources acceptance tests are additionally gated behind `ALGOLIA_RUN_ALLOWEDSOURCES_ACC=1` because the endpoint requires the Vault feature, which is not enabled on most applications (HTTP 402 otherwise). Compositions acceptance tests are additionally gated behind `ALGOLIA_RUN_COMPOSITION_ACC=1` because the Compositions API is not enabled on most applications (HTTP 404 otherwise). Recommend rule acceptance tests need nothing beyond `TF_ACC` and credentials. They were once gated behind `ALGOLIA_RUN_RECOMMEND_ACC=1` because of an upstream bug - `algoliasearch-client-go` v4 failing to decode the API's numeric `_metadata.lastUpdate` into its `*string` field - which is worked around by `getRecommendRule` in `internal/services/recommend/get_rule.go`, stripping `_metadata` before decoding. That gate has been removed and the suite passes against the live API. Without the required environment variables, tests are skipped automatically.
 
 ## Architecture
 
@@ -35,23 +90,49 @@ This is a Terraform provider built on the **Terraform Plugin Framework** (not th
 
 ### Package Layout
 
-- `main.go` — Entry point, serves the provider via `providerserver.Serve`
-- `internal/provider/` — Provider definition (schema, configure, resource/datasource registration)
-- `internal/types/` — Shared `ProviderData` struct (extracted to break import cycle between provider and services)
-- `internal/analyticsregion/` — Shared helpers for region-routed Algolia APIs such as Query Suggestions and Personalization
-- `internal/services/` — Service packages by API surface, including `index`, `agent`, `agentprovider`, `apikey`, `personalization`, `querysuggestions`, `rule`, and `synonym`
+- `main.go` - entry point, serves the provider via `providerserver.Serve`
+- `internal/provider/` - provider definition (schema, configure, resource and data source registration)
+- `internal/services/` - one package per API surface, sixteen of them today
 
-### Index Service Files (internal/services/index/)
+Five shared packages carry conventions rather than API surface, and a new resource
+should reach for them instead of re-implementing:
 
-The index package follows a clear separation:
+- `internal/types/` - the `ProviderData` struct every resource reads its client from,
+  extracted to break an import cycle between provider and services
+- `internal/algoliaerr/` - status inspection (`IsNotFound`, `IsRetryable`), the
+  house diagnostic wording via `Object(kind, id).Message(op, err)`, and `Explain`,
+  which appends the field-level detail Algolia hides inside an error's extra properties
+- `internal/algoliawait/` - the bounded, cancellable poll loop for Algolia's queued
+  writes. Its own comment records that this loop was hand-copied into six packages
+  before extraction, one of them with an uncancellable `time.Sleep`; do not make it seven
+- `internal/deletionprotection/` - the `deletion_protection` attribute and its fail-safe
+- `internal/analyticsregion/` - routing for region-routed APIs (Query Suggestions,
+  Personalization, A/B Testing, Ingestion)
 
-- **model.go** — Terraform model structs (`IndexResourceModel` + 10 block models like `AttributesModel`, `RankingModel`, etc.) with `tfsdk` tags
-- **schema.go** — Resource schema definition with 10 `SingleNestedBlock`s and validators
-- **data_source_schema.go** — Data source schema (mirrors resource but all attributes are Computed-only)
-- **model_expand.go** — Terraform model → Algolia `*search.IndexSettings` (the "expand" direction)
-- **model_flatten.go** — Algolia `*search.SettingsResponse` → Terraform model (the "flatten" direction)
-- **resource.go** — CRUD operations (Create/Read/Update/Delete/Import)
-- **data_source.go** — Read-only data source
+### File naming inside a service package
+
+Files split along concerns rather than a fixed list of names: the model structs, the
+schema, the two mapping directions (**expand** is Terraform model to Algolia request,
+**flatten** is Algolia response to Terraform model), and the resource and data source
+implementations.
+
+Which of those exist, and what they are called, varies by package, so **read the package
+you are working in rather than assuming a rule**. Three reasons it varies: a read-only
+package has no expand and no resource at all; some packages map inline or through a
+`resource_state.go` hydrate function instead of a separate expand or flatten file; and a
+package covering several resource concepts prefixes each set with the concept, while a
+package covering one usually does not. `index` does both, since it holds the index, the
+virtual index and the indices data source.
+
+This is one place not to generalise from a single example. Three earlier attempts to write
+a single naming rule here were each wrong in a different way, because the variation is
+real. Copy the layout of the package you are extending, or of the nearest existing package
+with a comparable shape.
+
+Three files in `index` hold rules rather than plumbing, and are worth reading before
+touching replicas or deletes: `replica_link.go` (ownership of the primary's `replicas`
+list, and the delete path), `settings_write.go` (why a settings write is re-sent), and
+`delete_confirm.go` (why a published delete task is not proof of deletion).
 
 ### Key Design Patterns
 
@@ -63,9 +144,62 @@ The index package follows a clear separation:
 
 **JSON-encoded fields:** Complex nested types (`decompounded_attributes`, `custom_normalization`, `user_data`, `semantic_search`, `re_ranking_apply_filter`) are stored as JSON-encoded `types.String` in Terraform state.
 
-**Deletion protection:** Indexes default to `deletion_protection = true`. The Delete operation checks this before calling the API.
+**Deletion protection:** nine resources carry `deletion_protection`, defaulting to true.
+See the dedicated section below for which resources get it and why the others do not.
 
-**Settings-as-index:** Algolia auto-creates an index on first `SetSettings` call—there's no separate "create index" API. The resource's Create simply calls `SetSettings` + `WaitForTask`.
+**Settings-as-index:** Algolia auto-creates an index on the first `SetSettings` call;
+there is no separate "create index" API. Two consequences worth holding on to. Writing
+settings to an index that has just been deleted **recreates it**, which is how an
+overeager unlink resurrected a primary that the same destroy had removed. And the wait
+after a write is `waitForSettingsWrite`, not a plain task wait: Algolia restarts an
+index's task queue when another write turns that index into a replica, which voids the
+task ID even though the write landed, so a wait that stops progressing re-sends the
+write rather than burning its whole budget. Both behaviours look like complexity worth
+tidying away. They are not.
+
+**Deleting an index:** goes through `deleteIndexWithUnlink` plus `confirmIndexDeleted`.
+Algolia refuses `deleteIndex` while a primary still lists the index as a replica, and it
+stops refusing the moment that primary is gone, so the delete is retried *before*
+anything is written to the primary. A published delete task is also not proof the index
+went away, which is what `confirmIndexDeleted` re-checks.
+
+### Replica ownership
+
+This is the subtlest invariant in the codebase and the one most easily broken by a
+change that looks local. A primary index's `replicas` setting holds **both** kinds of
+replica, told apart only by a `virtual(...)` marker, and **two resources write that one
+field**: `algolia_index` through `advanced.replicas`, and every `algolia_virtual_index`
+through its own entry. Before the split, whichever applied last unlinked the other's
+replicas.
+
+Ownership is divided by the kind of entry, and all three halves have to hold together:
+
+- **Plan time:** `advanced.replicas` rejects a `virtual(...)` entry. A virtual replica is
+  declared by its own resource, never by naming it here.
+- **Write:** `mergeStandardReplicas` re-reads the live list and keeps the virtual entries
+  Algolia reports, because the API takes this field as the complete set. Writing only the
+  configured names would unlink every virtual replica.
+- **Read:** `standardReplicasOf` filters the virtual entries out, so state holds only what
+  the attribute can declare. Surfacing them would put values in state that no
+  configuration can produce, and every refresh would plan a change no apply could settle.
+
+There is a fourth rule about the field being written at all. `advanced.replicas` is
+Optional+Computed, so when a configuration says nothing about it the plan value falls
+back to the last refreshed state rather than staying null. Expanding that plan yields a
+list for an index whose configuration never mentioned replicas, and writing it makes
+Terraform an authoritative writer of a field nobody declared, silently unlinking any
+virtual replica added since that refresh. So the list is written **only when the
+configuration actually declares it** (`replicasDeclared`, which inspects config rather
+than plan), and when it does not, the planned value is kept in the applied state
+(`preserveUndeclaredReplicas`) because the read-back would otherwise return more entries
+than the plan promised and Terraform rejects that as an inconsistent apply result.
+
+Two smaller rules complete it. Concurrent writes to one primary are serialised by
+`lockPrimaryReplicas`, since Terraform applies resources in parallel and a
+read-modify-write of a shared field otherwise loses entries. And a replica's own settings
+report a `primary` whichever kind it is, so **classifying a replica requires reading the
+primary's list** (`classifyReplicaLinkage`); the difference matters because Algolia copies
+records into a standard replica and a virtual one holds none.
 
 ### Adding a New Resource
 
@@ -74,9 +208,14 @@ The index package follows a clear separation:
 3. Register in `internal/provider/provider.go` (Resources/DataSources methods)
 4. Use `*providertypes.ProviderData` from `internal/types/` to access the Algolia client
 5. If the API is region-routed, use `internal/analyticsregion` plus `ProviderData.AnalyticsRegion` instead of embedding per-resource region config
-6. If destroying the resource loses something a re-apply cannot restore, add
+6. Raise diagnostics through `internal/algoliaerr` and wait for queued writes through
+   `internal/algoliawait`, rather than formatting errors or writing a poll loop by hand
+7. If destroying the resource loses something a re-apply cannot restore, add
    `deletion_protection` from `internal/deletionprotection` - see below
-7. Run `go test ./internal/provider/ -update` to accept the new schema into the snapshot
+8. Add an example under `examples/resources/algolia_<name>/resource.tf`; it is published
+   to the registry, so it has to be a configuration that actually applies
+9. Run `make generate` to render the docs, and `go test ./internal/provider/ -update` to
+   accept the new schema into the snapshot
 
 ### Deletion protection
 
@@ -85,11 +224,19 @@ rule that an **absent value means protected**. Algolia does not store the flag, 
 state written before the attribute existed carries no value, and reading that as
 "unprotected" would destroy exactly what the attribute was added to guard.
 
-Apply it where a destroy cannot be undone by re-applying: `algolia_api_key`, whose
-id *is* the credential, and the `algolia_ingestion_*` resources, which carry live
-pipelines. Do **not** apply it to resources the configuration fully describes, such
-as rules, synonyms or dictionary entries - re-applying restores those, so a guard
-only adds friction.
+Nine resources carry it today, for three different reasons:
+
+- `algolia_api_key`, because its id *is* the credential, so a replacement is a different
+  secret and everything holding the old one breaks at once.
+- The five `algolia_ingestion_*` resources, because they carry live pipelines and a
+  destroyed task stops moving data.
+- `algolia_index`, `algolia_virtual_index` and `algolia_agent`, because the records or
+  configuration behind them are not reconstructible from the Terraform configuration
+  alone.
+
+Do **not** apply it to resources the configuration fully describes, such as rules,
+synonyms or dictionary entries: re-applying restores those, so a guard there only adds
+friction to every configuration while protecting nothing.
 
 Two things are easy to miss. Every path that rebuilds the model from an API response
 must run the stored value through `deletionprotection.Value`, or a read turns it null
@@ -98,17 +245,59 @@ flatten or hydrate function covers create, read, update and import at once. And 
 acceptance fixture for a guarded resource needs `deletion_protection = false`, or the
 framework's own destroy step fails - which only a live acceptance run reveals.
 
+### Secrets in state, diagnostics and logs
+
+Mark any attribute holding a credential `Sensitive`, which is what governs how Terraform
+renders it in plan output and state. It does **not** govern diagnostics or `TF_LOG`
+output, and that gap is a real one: `algolia_api_key`'s `id` *is* the key, so a
+diagnostic that interpolates it leaks a live credential into a terminal and a CI log.
+
+The `apikey` package carries the pattern for that case, and any resource whose
+identifier is itself a secret should follow it: `keyLabel` builds a non-secret way to
+refer to the key (its operator-supplied description), `redactKey` strips the value out of
+an API error before it reaches a diagnostic, and `maskKeyValue` puts it in the logging
+context so `tflog` cannot print it. `resource_secret_test.go` exists to keep that honest.
+
+The other side is CI, covered above: the acceptance and e2e jobs hold the admin API key
+and therefore run only on a push to `main`. Do not widen those triggers to pull requests.
+
+### Commits, pull requests and the CHANGELOG
+
+- Commits follow Conventional Commits with a scope naming the service, for example
+  `fix(index): confirm a deleted index is actually gone`. Commits are signed; do not
+  work around a signing failure with `--no-gpg-sign`.
+- Every user-visible change gets a `CHANGELOG.md` entry under `FEATURES:`,
+  `BREAKING CHANGES:`, `BUG FIXES:` or `NOTES:`. Breaking entries say what an operator
+  has to do differently, not just what changed. Breaking changes are acceptable at this
+  stage because distribution is internal, but a pre-release exists and has users, so see
+  the state-compatibility section below before breaking anything state-shaped.
+- Docs under `docs/` are generated by `tfplugindocs` and committed, so a schema or
+  description edit needs `make generate` in the same commit.
+- Keep PR descriptions short. Say what was wrong, what now happens, and what an operator
+  has to change; leave the rest to the diff.
+
 ### Schema changes and state compatibility
 
 Terraform reads stored state against the schema version that wrote it. Removing an
 attribute, renaming one, or changing its type therefore breaks anyone holding older
 state unless the resource's schema `Version` is raised and `UpgradeState` is
-implemented. No resource declares a version yet, which is correct: every schema is at
-version 0 and nothing has been published, so breaking changes are still free.
+implemented. No resource declares a version yet, and every schema is at version 0.
 
-That changes at the first tagged release. From then on, a schema change of that kind
-needs a version bump and an upgrader in the same commit. `TestSchemaSnapshot` in
-`internal/provider` exists to make the moment visible: it pins the shape of every
+**A pre-release already exists.** `v0.1.0-beta.1` is tagged and published to GitHub
+Releases, and the README tells internal developers to install it pinned to that exact
+version, so state written by a released build is already out there. Breaking changes are
+still acceptable at this stage because distribution is internal and the audience is
+reachable, but that is now a decision each time rather than something the absence of a
+release makes free.
+
+Default to a schema `Version` bump plus an `UpgradeState`. Note that a bare re-apply is
+*not* a recovery path for a removed, renamed or retyped attribute: the provider decodes
+stored state against the current schema, so it can fail before an apply gets the chance
+to fix anything. If you break beta state deliberately, the CHANGELOG entry has to give
+the actual procedure, which means `terraform state rm` followed by `terraform import`, or
+recreating the resource.
+
+`TestSchemaSnapshot` in `internal/provider` exists to make the moment visible: it pins the shape of every
 schema in `internal/provider/testdata/schema.txt` and fails on any change, so
 accepting one is a deliberate act rather than something noticed after release. Accept
 an intended change with `go test ./internal/provider/ -update` and read the resulting
