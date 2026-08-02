@@ -92,7 +92,12 @@ This is a Terraform provider built on the **Terraform Plugin Framework** (not th
 
 - `main.go` - entry point, serves the provider via `providerserver.Serve`
 - `internal/provider/` - provider definition (schema, configure, resource and data source registration)
-- `internal/services/` - one package per API surface, sixteen of them today
+- `internal/services/` - one package per API surface, sixteen of them today. Fifteen
+  expose Terraform resources or data sources; `crawler` holds only an HTTP client,
+  because the crawler was descoped on 2026-07-18 and no crawler resource is planned. The
+  provider's `crawler_user_id` and `crawler_api_key` attributes are deprecated and
+  configure nothing, which `internal/provider/provider.go` says at the point of
+  declaration. Do not build on them.
 
 Five shared packages carry conventions rather than API surface, and a new resource
 should reach for them instead of re-implementing:
@@ -117,12 +122,13 @@ schema, the two mapping directions (**expand** is Terraform model to Algolia req
 implementations.
 
 Which of those exist, and what they are called, varies by package, so **read the package
-you are working in rather than assuming a rule**. Three reasons it varies: a read-only
-package has no expand and no resource at all; some packages map inline or through a
-`resource_state.go` hydrate function instead of a separate expand or flatten file; and a
+you are working in rather than assuming a rule**. Reasons it varies: a read-only package
+has no expand and no resource at all; some packages map inline or through a
+`resource_state.go` hydrate function instead of a separate expand or flatten file; a
 package covering several resource concepts prefixes each set with the concept, while a
-package covering one usually does not. `index` does both, since it holds the index, the
-virtual index and the indices data source.
+package covering one usually does not; and `crawler` has none of these files, being a
+client with no Terraform surface. `index` combines several of those, since it holds the
+index, the virtual index and the indices data source.
 
 This is one place not to generalise from a single example. Three earlier attempts to write
 a single naming rule here were each wrong in a different way, because the variation is
