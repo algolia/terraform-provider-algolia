@@ -1,10 +1,14 @@
 ## 0.1.0 (August 3, 2026)
 
+First release, distributed internally. There is no earlier version to upgrade from, so this
+entry describes what the provider does and how it behaves rather than what changed. The
+development history, including the unadopted pre-release `v0.1.0-beta.1`, is in the git log
+and in the pull requests.
+
 FEATURES:
 
-First release distributed company-wide. 21 resources and 26 data sources across sixteen
-Algolia API surfaces. Every resource supports `terraform import`; see `docs/` for each
-one's arguments and attributes.
+21 resources and 26 data sources across fifteen Algolia API surfaces. Every resource
+supports `terraform import`; see `docs/` for each one's arguments and attributes.
 
 - **Search:** `algolia_index`, `algolia_virtual_index`, `algolia_rule`, `algolia_synonym`,
   `algolia_api_key`, `algolia_dictionary_entry`, `algolia_dictionary_settings`
@@ -20,355 +24,70 @@ one's arguments and attributes.
   `algolia_indices`, `algolia_api_keys`, `algolia_agent_provider_models`,
   `algolia_clusters`, `algolia_user_ids`
 
-`deletion_protection` guards the nine resources whose deletion a re-apply cannot undo:
-`algolia_index`, `algolia_virtual_index`, `algolia_agent`, `algolia_api_key` and the five
-`algolia_ingestion_*` resources. It defaults to `true`, so destroying one of them takes an
-explicit `deletion_protection = false` and an apply first.
-
-BREAKING CHANGES:
-
-- `algolia_api_key`, `algolia_ingestion_authentication`, `algolia_ingestion_source`,
-  `algolia_ingestion_destination`, `algolia_ingestion_transformation`, `algolia_ingestion_task`: these
-  now carry `deletion_protection`, defaulting to `true`, so `terraform destroy` refuses until it is set
-  to `false` and applied. Previously only `algolia_index`, `algolia_virtual_index` and `algolia_agent`
-  had the guard, which left it off exactly where a delete cannot be undone: an API key's id *is* the
-  credential, so a replacement is a different secret and every consumer holding the old one breaks at
-  once, and deleting an Ingestion task stops a running pipeline. Resources whose configuration fully
-  describes them, such as rules and synonyms, deliberately remain unguarded, since re-applying restores
-  them. As with the resources that already had the attribute, state written before this version carries
-  no value for it, and an absent value reads as protected - so destroying such a resource takes one
-  apply first.
-- `algolia_index`, `algolia_virtual_index`: a settings write whose Algolia task never reports as
-  published is now sent again rather than waited out. Algolia restarts an index's task queue when
-  another write turns that index into a replica, which voids the task ID the provider is waiting on
-  even though the write itself landed - so an `algolia_index` for an index that another index's
-  `replicas` list also creates used to hang for the full 30-minute budget and then fail a create that
-  had in fact succeeded. Such a write now costs about half a minute instead. Settings writes are
-  idempotent, so the only cost of re-sending one unnecessarily is the write itself, capped at two.
-- `algolia_index`: `terraform destroy` now removes an index that its primary still lists as a
-  replica, instead of failing with Algolia's bare "cannot apply the deleteIndex operation on a
-  replica index". The delete is retried first and the primary is only written to if the refusal
-  persists, because unlinking means writing the primary's settings and a settings write is what
-  creates an index: unlinking unconditionally recreated a primary that the same destroy had just
-  deleted, leaving an empty index behind. `algolia_virtual_index` deletes go through the same path,
-  so they no longer write to the primary when the delete would have succeeded anyway.
-- `algolia_virtual_index`: a replica Algolia has turned into a *standard* one is now repaired by the
-  next plan, which shows an in-place update even for an unchanged configuration. Previously the
-  conversion only produced a warning on every refresh and the relink waited for an unrelated edit to
-  the resource. Note what the repair does: Algolia drops the records it copied into the replica when
-  it becomes a view again, so an index that should keep them must be managed with `algolia_index`
-  instead. This costs one extra read of the primary index per plan of a virtual index.
-- `algolia_index`: **`advanced.replicas` now owns standard replicas only, and rejects a
-  `virtual(...)` entry.** Algolia keeps both kinds of replica in that one setting, and both this
-  attribute and `algolia_virtual_index` write it - so whichever applied last unlinked the other's
-  replicas, and unlinking a virtual replica empties it. Ownership is now split by kind: this attribute
-  owns the standard entries, each `algolia_virtual_index` owns its own virtual entry, and the two sets
-  are disjoint. A write here preserves the virtual entries Algolia reports instead of treating them as
-  absent, so the previous advice to list `virtual(<name>)` here is not only unnecessary but refused at
-  plan time. Remove those entries; the `algolia_virtual_index` resources keep their replicas linked on
-  their own. Declaring the same replica as standard here while an `algolia_virtual_index` holds it as
-  virtual is also refused, since Algolia cannot hold one index as a replica in both modes.
-- `algolia_virtual_index`: an index that Algolia keeps as a *standard* replica is no longer accepted
-  as a virtual one. A replica's own settings report a primary index whichever kind it is, so the
-  provider used to treat any replica as virtual; only the primary's `replicas` list distinguishes
-  them, via the `virtual(...)` form. `terraform import` and any apply now fail for such an index,
-  where they previously produced or refreshed state as though it were virtual, and `terraform plan`
-  warns on every refresh until the primary's list is corrected. This matters because Algolia copies
-  the primary's records into a standard replica: the previous behaviour silently placed a
-  record-bearing index under a resource documented as managing a view, with `deletion_protection`
-  guarding what its owner had every reason to believe was empty. Classifying a replica costs one
-  extra read of the primary index per refresh.
-- `algolia_virtual_index`: linking a replica whose plain name already appears in the primary's
-  `replicas` list now replaces that entry with the `virtual(...)` form instead of adding the virtual
-  form alongside it. A primary listing one index as a replica twice, once in each mode, is not a
-  state Algolia can honour.
-- `algolia_index`, `algolia_virtual_index`: `terraform destroy` is now refused when
-  `deletion_protection` is absent from state, instead of proceeding as if it were `false`. State
-  written by an earlier version's `terraform import` has no value for it, so destroying such a
-  resource now requires setting `deletion_protection = false` and running one `terraform apply`
-  first. This is deliberate: the previous behaviour deleted indexes the configuration had marked as
-  protected.
-- `algolia_ingestion_authentication`, `algolia_ingestion_source`: the `input` attribute is now
-  decoded strictly against the credential shape implied by `type`. Keys that do not belong to that
-  shape are rejected instead of being silently discarded. A configuration relying on the previous
-  behaviour was already sending incomplete credentials to Algolia, so this surfaces a pre-existing
-  fault rather than introducing one.
-
-- `algolia_ingestion_source`: `input` is now marked sensitive, on both the resource and the data
-  source, because several source types carry credentials in it - a `docker` source's `configuration`
-  is an arbitrary map holding the connector's own secrets, and `csv`/`json` take a `url` that is
-  commonly presigned - and the Ingestion API returns `input` unredacted. A configuration that passes
-  the value onward, for example `output "x" { value = algolia_ingestion_source.s.input }`, now fails
-  until the consumer is also marked `sensitive`. The value is still stored in plaintext in state;
-  marking it sensitive only stops it rendering in plan output and logs.
-
-- data source `algolia_index`: the `deletion_protection` attribute is removed. It is a provider-side
-  guard on `terraform destroy` with no representation in the Algolia API, so a read-only data source
-  had nothing to populate it from and it always returned null. A configuration referencing
-  `data.algolia_index.x.deletion_protection` now fails to plan instead of silently reading null.
-
-BUG FIXES:
-
-- `algolia_index`, `algolia_virtual_index`: **`terraform destroy` no longer reports success for an
-  index that is still there.** Delete waited for Algolia to report its delete task as published and
-  stopped, but a published task is not proof the index went away: Algolia refuses to delete an index
-  that is a destination of an A/B test, and that association can outlive the test that created it,
-  leaving a delete that is accepted, queued, published and has no effect. Terraform then dropped the
-  resource from state and the index kept existing, kept costing money and kept answering queries with
-  nothing tracking it. Delete now confirms the index is actually gone and fails with the likely cause
-  if it is not, keeping the resource in state so the next destroy retries it. The confirmation costs
-  one extra read: measured against the live API, a deleted index reads as absent the moment its task
-  publishes.
-- **Ingestion diagnostics now name the field the API rejected.** The Ingestion API answers an invalid
-  request with a summary plus a list of exactly what was wrong, and the provider reported only the
-  summary - so a rejected apply said `Invalid payload, see error.details` and left the operator with no
-  way to see those details. All five ingestion resources and their data sources now append them, as
-  `policies.criticalThreshold: 'criticalThreshold' must be lower or equal to '10'`. Errors carrying
-  nothing structured, and errors from other Algolia APIs, read exactly as before.
-- `algolia_ingestion_task`: **removing `cron` from a task no longer fails the apply.** Task updates are
-  a `PATCH` and the client models `cron` as a pointer with `omitempty`, so dropping the attribute sent
-  nothing at all; the server kept the schedule, the read-back restored it, and Terraform rejected the
-  result with `Provider produced inconsistent result after apply: .cron: was null, but now
-  cty.StringVal(...)`. Verified against the live API: the endpoint has no way to clear a schedule -
-  an empty expression is rejected as invalid, and an explicit null returns 200 while changing nothing -
-  so removing `cron` now forces the task to be replaced, which is the only operation that converges.
-  Changing a schedule is still an in-place update. To stop a scheduled task without recreating it, set
-  `enabled = false`, which keeps the schedule.
-- `algolia_ingestion_transformation`: **a transformation defined through the legacy `code` attribute
-  now applies, and can be switched to.** The API derives an `input` and a `type` from `code` and
-  returns both, and the provider wrote them into state for attributes the configuration had left unset,
-  failing the apply twice over with `Provider produced inconsistent result after apply`. Both derived
-  values are now dropped when the logic came from `code`: `input` because it is mutually exclusive with
-  `code` and carries nothing new, and `type` because a stored type is sent back on the next update -
-  which is how moving an existing `input`-based transformation to `code` came to fail with
-  `'input' is required if 'Type' is present`. A `type` set explicitly in configuration is untouched,
-  and an import, having neither configured, still adopts what the API returns.
-- `algolia_ingestion_transformation`: **a no-code transformation no longer fails on every apply.** The
-  API echoes optional fields it was not given back as explicit nulls - a step comes back carrying a
-  `condition` that was never configured - and the JSON comparison counted that as a change, so the
-  applied value never matched the plan. A key present with a null value is now treated as absent, which
-  is what the API means by it. A null against a real value is still a difference.
-- `algolia_ingestion_task`: **removing `subscription_action` is now refused with an error instead of
-  silently doing nothing.** It shares `cron`'s request shape but not its read shape - the prior value
-  is kept when the API omits it - so the apply succeeded while state recorded null and the server kept
-  its value, and no later refresh ever noticed. It is deliberately *not* replaced automatically the way
-  `cron` is: a task carrying a subscription action sits on a platform source the API validates when a
-  task is created, Terraform destroys before it creates, and this resource has no deletion protection,
-  so an automatic replacement could destroy the task and then fail to recreate it. Run
-  `terraform apply -replace=...` to ask for that explicitly. Existing state that already went through
-  the old silent removal still records null while the server holds a value; re-import those tasks to
-  reconcile them.
-- `algolia_ingestion_task`: `cron` now rejects an empty string at plan time. It was sent to the API
-  verbatim and came back as a 400; omit the attribute instead.
-- `algolia_ingestion_transformation`: setting `code` together with `type` is now rejected at plan time
-  rather than by the API, which refuses that combination with `'input' is required if 'Type' is
-  present`.
-- `algolia_virtual_index`: **destroying a replica that Algolia holds as a standard one now succeeds.**
-  Unlinking matched only the `virtual(...)` form of the entry in the primary index's `replicas` list,
-  so a replica listed under its plain name stayed linked and the delete that followed was refused with
-  `403 cannot apply the deleteIndex operation on a replica index`. Either form is now removed before
-  the index is deleted.
-- `algolia_virtual_index`: **an unlinked virtual replica no longer wedges Terraform.** When an index
-  still existed but had stopped being a virtual replica - which is what a wholesale write of the
-  primary's `replicas` list causes - `Read` raised an error. That error surfaced on every operation
-  that refreshes, so plan, apply and `terraform destroy` all failed together and `terraform state rm`
-  was the only way out. The resource is now dropped from state with a warning naming the likely
-  cause, so the next apply re-links the replica in place. Import still fails loudly on an index that
-  is not a virtual replica, since that is a mistaken import command rather than drift.
-- `algolia_virtual_index`: **several virtual replicas on one primary no longer lose each other's
-  links within one apply.** Each of them adds its own `virtual(...)` entry to the primary's single
-  `replicas` setting, and Terraform applies resources concurrently, so the writes interleaved and the
-  later ones dropped the earlier ones' entries. These read-modify-write cycles are now serialised per
-  primary index, within one provider process - which covers a single `terraform apply`. Concurrent
-  applies against the same primary from separate processes remain racy, as does the residual window
-  left by Algolia's writes being asynchronous and its reads eventually consistent.
-- `algolia_index`: **an `advanced.replicas` list that configuration never declared is no longer written
-  back.** The attribute is Optional+Computed, so when configuration omits it Terraform fills the plan
-  value from the last refresh - and expanding that plan sent the remembered list to Algolia on every
-  update. Any virtual replica linked since that refresh was silently unlinked, and unlinking empties
-  it. The list is now written only when configuration declares one, which is what Optional+Computed is
-  meant to express; otherwise the field is omitted and Algolia keeps what the index already has.
-- `algolia_index`: **a write to `advanced.replicas` no longer races virtual replica linking.** The
-  write is now taken under the same per-primary lock that serialises `algolia_virtual_index`, so a
-  replica link cannot land between the check below and the write that would drop it.
-- `algolia_index`: **a write to `advanced.replicas` that unlinks a virtual replica now warns.**
-  `advanced.replicas` and `algolia_virtual_index` write the same Algolia setting, so a list omitting
-  a `virtual(...)` entry silently unlinked it - which empties that replica, since it is a view over
-  the primary's records rather than a copy. The removal is still honoured, because an explicit list
-  is a complete declaration and merging omitted entries back in would make removal impossible to
-  express; it is no longer silent. Both schemas document the ownership rule.
-- `algolia_ab_test`: **fixed `terraform destroy` failing and leaving indexes behind.** Every write on
-  the A/B Testing API returns a task ID and only queues the work, which the client's own model spells
-  out: "A successful API response means that a task was added to a queue. It might not run
-  immediately." The provider ignored that task entirely, so destroying a test together with the
-  indexes it referenced raced: the test was already gone from the API while Algolia still rejected
-  deleting its indexes with `403 cannot delete with an index under AB testing index as destination`,
-  failing the destroy and leaving the indexes for the operator to clean up. Reproduced, then
-  confirmed by hand: the very same deletes succeeded once the queued task had run. Create and delete
-  now wait for it.
-- `algolia_ab_test`: **`terraform import` no longer proposes destroying a running experiment.**
-  Import used to store the enriched read response, which matches no reasonable configuration, and
-  left `metrics` null - and since `variants`, `metrics` and `configuration` are all Required or
-  `RequiresReplace`, the first plan after importing proposed a replace, discarding the statistics the
-  test had gathered. Import now reconstructs all three in the shape the create endpoint accepts:
-  `variants` keeps only the keys that endpoint reads and drops the runtime enrichment, and `metrics`
-  is rebuilt from the per-variant results, which carry each metric's `name` and `dimension`. A
-  difference in formatting or key order alone no longer forces a replace either.
-  One limit, verified against the API rather than assumed: metric results only exist once a test has
-  gathered data, so importing a test created moments ago still cannot recover `metrics`. Importing one
-  that has been running does.
-- `algolia_ab_test`: `configuration` is now `Optional+Computed`, because Algolia substitutes its own
-  when a test is created without one. State previously claimed a test had no configuration while the
-  API had applied an `errorCorrection` and an `isOutlier` filter, so an imported test could never
-  match one created from a configuration that omitted the attribute. A configured document is still
-  kept verbatim; only an absent one is filled from the response.
-- `algolia_ab_test`: `created_at`, `updated_at` and `stopped_at` are now exposed on the resource, not
-  just the data source.
-- `algolia_query_suggestions`: added `all_languages`, so the boolean arm of the API's `languages`
-  union is expressible. `languages` accepts either a list of language codes or `true` meaning every
-  supported language, and only the list was reachable. The two arms are mutually exclusive and
-  validated at plan time.
-- `algolia_api_key`: **fixed a `terraform apply` silently removing a key's tenant restriction.**
-  `queryParameters` - the field that scopes a search key to specific filters or sources - had no
-  attribute, and because `UpdateApiKey` resets what it is not sent, changing any unrelated field
-  stripped it. Reproduced end to end: a key restricted to `filters=tenant%3Aacme` was imported, only
-  its `description` was edited, the plan showed just that edit, and after the apply the restriction
-  was gone. The field is now exposed as `query_parameters`, so it is recorded in state and any
-  removal appears in the plan. `indexes`, `referers`, `max_hits_per_query` and
-  `max_queries_per_ip_per_hour` are reset by the same endpoint but were already read back into state,
-  so their removal was always visible; that is now covered by a test.
-- `algolia_api_key`: **fixed an expiring key silently becoming permanent.** `terraform import` left
-  `expires_at` null, and since a validity is only sent when `expires_at` is known, the next apply
-  reset the key to never expire with nothing in state or plan to show it. `expires_at` is now derived
-  from the key's remaining validity, and a configured timestamp is kept verbatim when it denotes the
-  same instant, so an unchanged key does not churn while a life shortened out of band shows as drift.
-- `algolia_api_key`: `created_at` reported January 1970 for every key. The value is in seconds, but
-  the generated client documents it as milliseconds and the provider read it that way.
-- `algolia_api_key`: the wait for a new or deleted key to propagate is now interruptible. It polls
-  through the client's own `WaitForApiKey`, which was called without a context and so ignored a
-  cancelled `plan` or `apply` for up to several minutes; the update and delete calls likewise had no
-  context.
-- `algolia_agent`: **fixed four attributes that made an apply fail or silently lost data.**
-  `tool_client_side.input_schema` was round-tripped through a client struct modelling only `type`,
-  `properties` and `required`, so every other JSON Schema keyword was dropped before the request was
-  sent; `tool_algolia_search.index.search_parameters` lost any parameter the vendored client does not
-  model yet, from the request as well as from state. Both are now spliced into the request as the
-  user's own bytes. Separately, Algolia does not return these documents as they were written - it
-  strips schema keywords it does not model, expands search parameters into the full schema with every
-  unset field explicitly null, and merges its own defaults into `config` - so for `input_schema`,
-  `search_parameters` and `config` the configured document is what state records, and the API's is
-  used only where there is none, on import and data source reads. As with
-  `ranking.relevancy_strictness` on `algolia_index`, that means out-of-band drift on these attributes
-  is not reported; the API does not say what it stored, so there is nothing to compare against.
-  `config` and `tool_algolia_recommend.predefined_recommend_parameters` additionally turned a
-  configured `jsonencode({})` into null.
-- `algolia_rule`: `consequence.user_data` was re-encoded from the decoded response, so a configured
-  document came back with its keys reordered and its whitespace gone, and an integer above 2^53 came
-  back with different digits - a silent change to the value in state, not just a rejected apply. The
-  configured document is now kept whenever it carries the same data.
-- `algolia_rule`: `validity.from` and `validity.until` were rewritten as UTC whole seconds, so a
-  window written as `2030-01-01T00:00:00+02:00` applied as `2029-12-31T22:00:00Z` and fractional
-  seconds were dropped, either of which Terraform rejects as an inconsistent result. The configured
-  string is now kept when it denotes the instant the API returned.
-- `algolia_allowed_sources`: a `source` entry whose `description` was set to the empty string applied
-  as null and aborted the apply, which a `description = each.value.description` resolving to `""`
-  would hit. The applied state also no longer comes from a read-back: `ReplaceSources` has already
-  accepted the planned set, so refreshing could only agree with it or write a value Terraform
-  rejects, and a failed read-back used to abandon a change that had already been made remotely.
-- data source `algolia_index`: `entries`, `data_size`, `created_at` and `updated_at` are now
-  populated. The data source only called `GetSettings`, which does not return them, so all four were
-  permanently null - an index holding 10,000 records reported `entries = null`. They come from the
-  index listing, the same way the `algolia_index` resource has always read them.
-- `algolia_index`, `algolia_virtual_index`, and the `algolia_ingestion_*` resources: the request
-  context is now passed to every Algolia API call, so a cancelled `terraform plan` or `apply`
-  (Ctrl-C) stops the in-flight request instead of running to completion. `algolia_virtual_index` had
-  no context on any of its nine call sites, and the ingestion resources passed one on their read-back
-  call but not on the update or delete that preceded it. Reading index metadata now also pages
-  through the whole index listing rather than its first page, so an application with more indexes
-  than fit on one page no longer reports zeroes for a listed index.
-- `algolia_recommend_rule`: an unrecognised error response body is now flattened, truncated and
-  UTF-8 sanitised before it reaches a diagnostic, instead of being interpolated whole. A `200 null`
-  response is now an error rather than a rule with an empty `object_id`.
-- `algolia_ingestion_source`: `input` is omitted from an update request when it has not changed,
-  so a source whose type has no update variant in the Algolia client (`bigcommerce`) can still have
-  its other fields changed. Only an actual attempt to change such a source's `input` is refused. The
-  comparison is semantic and treats an array of scalars as unordered, so a change that only reorders
-  such an array is not sent to the API.
-- `algolia_index`: **fixed silent deletion of protected indexes.** `terraform import` left
-  `deletion_protection` unset, and the delete guard read that absent value as `false`, so an
-  `import` followed by `destroy` permanently deleted the index and its records even with
-  `deletion_protection = true` in the configuration. Import now seeds the documented default
-  (`true`), and both `algolia_index` and `algolia_virtual_index` refuse to delete on an absent value.
-- `algolia_index`: **`terraform import` now imports index settings.** Import previously produced a
-  state containing only the index name and timestamps: all ten settings blocks were read from the
-  API and then discarded, so existing indexes could not be adopted. Imported state populates every
-  settings block while an applied state leaves blocks absent from the configuration null, so the
-  first plan after importing an index whose configuration omits blocks proposes removing them; it
-  converges on one apply. `ranking.relevancy_strictness` remains unimportable: Algolia accepts it on
-  write but never returns it from `GetSettings`.
-  `performance.allow_compression_of_integer_array` is returned when it is `true` and omitted when it
-  is `false`, so importing an index that has it disabled cannot tell that apart from the setting
-  being unset - harmless, since `false` is also the default.
-- `algolia_api_key`: fixed `Provider produced inconsistent result after apply` on `referers` and
-  `indexes` when either is omitted. The resource could not be created with an ordinary
-  configuration, and because the failed apply tainted the resource, every subsequent apply destroyed
-  and recreated the key, rotating its value while never converging.
-- `algolia_rule`: fixed the same failure on `consequence.hide` when omitted.
-- `algolia_composition_rule`: fixed the mirror-image failure on `tags`, where an explicitly
-  configured `tags = []` was flattened to null and aborted the apply.
-- `algolia_ingestion_authentication`, `algolia_ingestion_source`: **fixed credentials being replaced
-  with empty values.** The Algolia client's `AuthInput` and `SourceInput` unions carry no
-  discriminator, so every variant decoded successfully and re-marshalling emitted the wrong one:
-  `basic`, `oauth` and `googleServiceAccount` credentials were all sent to the API as
-  `{"apiKey":"","appID":""}`. The variant is now selected from the declared `type`, and an
-  unrecognised type is a loud error rather than a silent substitution.
-- `algolia_agent_provider`: fixed `azure_openai` being unusable. `azure_endpoint`,
-  `azure_deployment` and `api_version` were dropped by the same union defect, so every apply failed
-  and orphaned a provider.
-- `algolia_recommend_rule`: **fixed the resource being entirely non-functional.** Every non-delete
-  code path called `GetRecommendRule`, which cannot decode the API's numeric `_metadata.lastUpdate`
-  into the client's `*string` field, so create, read, update, plan and import all failed, while
-  create still left a rule behind in Algolia that Terraform had no record of. Responses are now
-  decoded defensively, and create persists the rule's identity before waiting on the task so a later
-  failure cannot orphan it.
+Built on the Terraform Plugin Framework, using the Algolia Go client v4.
 
 NOTES:
 
-- Waiting for an Algolia operation to be applied now goes through one shared loop,
-  `internal/algoliawait`. The bounded deadline, backoff and interruptible sleep had been hand-copied
-  into six resources, which is how one of them ended up with a bare `time.Sleep` that made a
-  30-minute wait uncancellable. Seven call sites share it now. Three waiters that poll for a *state*
-  rather than a task keep their own shorter budgets, since they are a different shape.
-- The diagnostics a resource raises when an Algolia call fails are now built by
-  `internal/algoliaerr` rather than re-templated in each resource. The wording is unchanged; the
-  point is that a fix to one resource's error handling reaches its siblings, which this repository's
-  history repeatedly did not. `algolia_api_key` is deliberately excluded: its object ID is a secret
-  and its diagnostics route through dedicated redaction.
-- **Known issue, found while testing the above and not yet fixed:** `terraform destroy` can report
-  success while an index survives. Deleting an index that is or recently was part of an A/B test is
-  accepted by Algolia, the deletion task reaches `published`, and the index is still there.
-  `algolia_index` waits for that task and the wait behaves correctly, so nothing anywhere reports a
-  problem. Deleting the index again later succeeds once nothing references it.
-  This is reachable on an ordinary `terraform destroy` of an A/B test declared alongside its indexes,
-  not only in some edge case: it was observed on repeated acceptance runs, each leaving its indexes
-  behind while reporting success. Before the task-wait fix above, the same situation surfaced loudly
-  as `403 cannot delete with an index under AB testing index as destination` and failed the destroy;
-  now the destroy succeeds and the index quietly remains, which is a better outcome for the A/B test
-  and a worse one for the index. It is also why an opt-in "stop instead of delete" option for
-  `algolia_ab_test` was prepared and then withheld, since that option would make the window wider.
-- The provider's `crawler_user_id` and `crawler_api_key` arguments are deprecated. No crawler
-  resource or data source exists and none is planned (descoped 2026-07-18), so both configure
-  nothing. They are deprecated rather than removed so that a configuration already setting them keeps
-  planning.
-- 404 detection now goes through the shared `internal/algoliaerr` package at every call site. It was
-  introduced for that purpose but adopted in only three files, leaving 36 hand-written `errors.As`
-  checks across 17 others; a fix applied to one copy did not reach the rest.
-- `ROADMAP.md` understated the provider as 12 resources and 15 data sources; it has 21 and 26. Its
-  `agent-studio` row also claimed the surface was complete while allowed domains and secret keys have
-  full client CRUD and no provider surface at all, so a Terraform-published agent is not reachable
-  from any origin without an out-of-band step. Both are corrected there.
-- Recommend rule acceptance tests are no longer gated behind `ALGOLIA_RUN_RECOMMEND_ACC`. The gate had
-  already been removed, but three comments and `AGENTS.md` still described it as active.
-- Initial release of the Algolia Terraform provider
-- Built on the Terraform Plugin Framework (not SDK v2)
-- Uses Algolia Go client v4
+Behaviour worth knowing before writing a configuration. Most of it exists because Algolia's
+API does something a Terraform user would not predict.
+
+- **`deletion_protection` defaults to `true` on nine resources**, and `terraform destroy`
+  refuses until it is set to `false` and applied. It covers `algolia_index`,
+  `algolia_virtual_index`, `algolia_agent`, `algolia_api_key` and the five
+  `algolia_ingestion_*` resources: those whose deletion a re-apply cannot undo. An API key's
+  id *is* the credential, so a replacement is a different secret and everything holding the
+  old one breaks at once; an ingestion task is a running pipeline. Resources the
+  configuration fully describes, such as rules and synonyms, are deliberately unguarded,
+  since re-applying restores them. Algolia does not store the flag, so a value missing from
+  state reads as protected rather than unprotected.
+
+- **A primary index's replicas are owned by two resources, split by kind.**
+  `algolia_index`'s `advanced.replicas` owns the standard replicas and rejects a
+  `virtual(...)` entry at plan time; each virtual replica is declared by its own
+  `algolia_virtual_index`, which maintains its own entry in the same Algolia field. Writing
+  the list preserves the virtual entries Algolia reports, and reading it back reports only
+  the standard ones.
+
+- **A standard replica is not accepted as a virtual one.** Algolia reports a primary index
+  for both kinds, but it copies the records into a standard replica while a virtual one is
+  only a view. Adopting one as the other would put a record-bearing index under a resource
+  documented as managing a view, with `deletion_protection` guarding what its owner had
+  reason to believe was empty. Import and apply refuse; a refresh warns, and the next plan
+  proposes the repair.
+
+- **Reference a replica resource rather than repeating its name.** Where an index is managed
+  by its own `algolia_index` and also named in another index's `advanced.replicas`, write
+  `replicas = [algolia_index.example.name]`. Both writes create the same index, and with no
+  dependency between them Terraform runs them concurrently, which Algolia handles by
+  restarting that index's task queue. The provider recovers by re-sending the write, costing
+  about half a minute; the reference avoids the collision and also orders the destroy
+  correctly.
+
+- **Destroying an index that is, or recently was, part of an A/B test can fail on the first
+  attempt.** Algolia accepts the delete and publishes the task while the index survives, so
+  the provider re-checks and raises `Index still exists after deletion` rather than
+  reporting a success that did not happen. Destroying it again succeeds once nothing
+  references it.
+
+- **Several complex settings are JSON-encoded strings** rather than nested blocks:
+  `decompounded_attributes`, `custom_normalization`, `user_data`, `semantic_search` and
+  `re_ranking_apply_filter`. Algolia's union types are flattened as well: `typo_tolerance`
+  is a string taking `"true"`, `"false"`, `"min"` or `"strict"`, and `distinct` is an
+  integer where 0 disables it, 1 means one result per value, and 2 or more sets a group
+  size.
+
+- **Attributes that can carry credentials are marked sensitive.** `input` on
+  `algolia_ingestion_source` is sensitive on the resource and on the data source, because
+  the API returns it unredacted and several source types carry secrets in it;
+  `algolia_ingestion_authentication`'s `input` is sensitive on the resource, and its data
+  source does not expose the attribute at all. `algolia_api_key`'s `id` is the key value
+  itself and is likewise sensitive.
+
+- **`crawler_user_id` and `crawler_api_key` on the provider are deprecated and configure
+  nothing.** No crawler resource or data source exists and none is planned; they remain so
+  that a configuration already setting them keeps planning.
+
+- **Schemas are all at version 0 and no resource implements `UpgradeState`.** Removing,
+  renaming or retyping an attribute in a later version will need a schema version bump and
+  an upgrader. `TestSchemaSnapshot` fails on any schema change, so that moment is visible
+  rather than discovered after a release.
