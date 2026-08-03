@@ -94,15 +94,9 @@ then check the archive against it:
 shasum -a 256 -c terraform-provider-algolia_0.1.1_SHA256SUMS 2>&1 | grep OK
 ```
 
-Note what that does and does not establish. It confirms the archive matches the checksum file,
-which is the artifact the release signs: GoReleaser signs `SHA256SUMS`, not each individual
-archive. It does not establish where the checksum file came from.
-
-Going further means checking the detached signature, `SHA256SUMS.sig`, with
-`gpg --verify SHA256SUMS.sig SHA256SUMS`. That needs the signing public key already in your
-keyring, or gpg reports `No public key`, and a good signature only proves the file was signed
-by whoever holds that key. Treat it as meaningful only if you obtained the key and its
-fingerprint through a channel you trust.
+`SHA256SUMS` is also signed, as `SHA256SUMS.sig`. The signing key is published on
+`keys.openpgp.org` as `contact@algolia.com`, fingerprint
+`8A8D 9994 9300 9BEF 83F4  A167 13B6 FAB5 E0DB AF30`.
 
 ## Pin the version you installed
 
