@@ -1,9 +1,29 @@
-## 0.1.0 (Unreleased)
+## 0.1.0 (August 3, 2026)
 
 FEATURES:
 
-- **New Resource:** `algolia_index` - Manage Algolia index settings
-- **New Data Source:** `algolia_index` - Read Algolia index settings
+First release distributed company-wide. 21 resources and 26 data sources across sixteen
+Algolia API surfaces. Every resource supports `terraform import`; see `docs/` for each
+one's arguments and attributes.
+
+- **Search:** `algolia_index`, `algolia_virtual_index`, `algolia_rule`, `algolia_synonym`,
+  `algolia_api_key`, `algolia_dictionary_entry`, `algolia_dictionary_settings`
+- **Ingestion:** `algolia_ingestion_source`, `algolia_ingestion_destination`,
+  `algolia_ingestion_task`, `algolia_ingestion_transformation`,
+  `algolia_ingestion_authentication`
+- **Agent Studio:** `algolia_agent`, `algolia_agent_provider`
+- **Relevance and personalization:** `algolia_query_suggestions`, `algolia_recommend_rule`,
+  `algolia_personalization_strategy`, `algolia_ab_test`
+- **Compositions:** `algolia_composition`, `algolia_composition_rule`
+- **Security:** `algolia_allowed_sources`
+- **Read-only data sources** additionally cover listing and multi-cluster inspection:
+  `algolia_indices`, `algolia_api_keys`, `algolia_agent_provider_models`,
+  `algolia_clusters`, `algolia_user_ids`
+
+`deletion_protection` guards the nine resources whose deletion a re-apply cannot undo:
+`algolia_index`, `algolia_virtual_index`, `algolia_agent`, `algolia_api_key` and the five
+`algolia_ingestion_*` resources. It defaults to `true`, so destroying one of them takes an
+explicit `deletion_protection = false` and an apply first.
 
 BREAKING CHANGES:
 
