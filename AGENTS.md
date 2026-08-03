@@ -340,6 +340,11 @@ default, so a document still naming the previous version sends a reader straight
    `terraform init` plus an `apply` against a disposable application, because the release
    artifact is the one thing no test in this repo exercises.
 
+GoReleaser signs each release's `SHA256SUMS`, not the individual archives, with the key in the
+`GPG_PRIVATE_KEY` and `PASSPHRASE` secrets; `INSTALL.md` records its fingerprint. When rotating
+it, publish the new public half to a keyserver *before* the release that uses it, or the
+signature it ships cannot be checked by anyone.
+
 ### Schema changes and state compatibility
 
 Terraform reads stored state against the schema version that wrote it. Removing an
