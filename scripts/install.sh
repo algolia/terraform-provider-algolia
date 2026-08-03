@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# install.sh - install the Algolia Terraform provider from internal GitHub releases.
+# install.sh - install the Algolia Terraform provider from its GitHub releases.
 #
-# While the provider is internal-only (not on the public Terraform Registry),
-# this script fetches the signed release artifact with the GitHub CLI (gh) and
-# wires up your Terraform CLI config so `terraform` can find it.
+# The provider is not published to the Terraform Registry, so this script fetches
+# the signed release artifact with the GitHub CLI (gh) and wires up your Terraform
+# CLI config so `terraform` can find it.
 #
 #   Default mode  : filesystem mirror. Behaves like a normal provider - you pin
 #                   a version and run `terraform init`.
@@ -32,7 +32,7 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 
 usage() {
   cat <<'EOF'
-install.sh - install the Algolia Terraform provider from internal GitHub releases.
+install.sh - install the Algolia Terraform provider from its GitHub releases.
 
 Usage:
   scripts/install.sh [--tag vX.Y.Z] [--dev-overrides] [options]

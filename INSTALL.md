@@ -18,9 +18,12 @@ gh api -H "Accept: application/vnd.github.raw" \
   repos/algolia/terraform-provider-algolia/contents/scripts/install.sh | bash
 ```
 
-That resolves the latest release, verifies its checksum, populates the mirror, and writes a
-`provider_installation` block to `~/.terraformrc`. It prints the version to pin when it
-finishes.
+That resolves the most recent release, verifies its checksum, populates the mirror, and
+writes a `provider_installation` block to `~/.terraformrc`. It prints the version to pin when
+it finishes.
+
+"Most recent" includes pre-releases, so pass `--tag` when you want a specific version rather
+than whatever was published last.
 
 ## From a checkout
 
