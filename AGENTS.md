@@ -326,11 +326,12 @@ default, so a document still naming the previous version sends a reader straight
 `no available releases match the given constraints`. Before tagging:
 
 1. Date the `CHANGELOG.md` heading, replacing `(Unreleased)`.
-2. Update every version reference: `README.md` (the `required_providers` snippet plus the
-   archive filenames in the manual-install appendix), `examples/provider/provider.tf`,
-   `examples/ecommerce-search/versions.tf`, `examples/ingestion-pipeline/versions.tf`, and
-   this file's state-compatibility section. Find them with
-   `grep -rn '<previous-version>' --include='*.md' --include='*.tf' .`
+2. Update every version reference: `README.md`, `INSTALL.md` (the `--tag` example, the two
+   archive filenames, and the pin), `examples/provider/provider.tf`,
+   `examples/ecommerce-search/versions.tf`, `examples/ingestion-pipeline/versions.tf`,
+   `skills/algolia-terraform-provider/SKILL.md` plus the schema note at the top of its
+   `references/attribute-shapes.md`, and this file's state-compatibility section. Find them
+   with `grep -rn '<previous-version>' --include='*.md' --include='*.tf' .`
 3. Run `make generate`. `docs/index.md` takes its snippet from
    `examples/provider/provider.tf`, so it follows rather than being edited.
 4. Confirm the Tests workflow is green for the commit you are about to tag: the release
@@ -346,9 +347,9 @@ attribute, renaming one, or changing its type therefore breaks anyone holding ol
 state unless the resource's schema `Version` is raised and `UpgradeState` is
 implemented. No resource declares a version yet, and every schema is at version 0.
 
-**`0.1.0` is published**, superseding `v0.1.0-beta.1`. Because it carries no pre-release
-marker, range constraints such as `~> 0.1` resolve against it where they could never match
-a `-beta` build, so a configuration can now float within `0.1.x`.
+**`0.1.1` is published**, superseding `0.1.0` and `v0.1.0-beta.1`. Because these carry no
+pre-release marker, range constraints such as `~> 0.1` resolve against them where they could
+never match a `-beta` build, so a configuration can now float within `0.1.x`.
 
 Whether a state-shaped change is free therefore depends on whether any stored state was
 written by a published version. That is not something this file can settle, because it

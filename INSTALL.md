@@ -32,7 +32,7 @@ before installing anyway. Verify by hand if you need the guarantee.
 
 ```bash
 scripts/install.sh                 # latest release
-scripts/install.sh --tag v0.1.0    # a specific release
+scripts/install.sh --tag v0.1.1    # a specific release
 ```
 
 Useful options: `--config PATH` and `--mirror-dir PATH` to write somewhere other than
@@ -62,7 +62,7 @@ The script automates exactly these steps.
 
 ```bash
 mkdir -p ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia
-mv ~/Downloads/terraform-provider-algolia_0.1.0_darwin_arm64.zip \
+mv ~/Downloads/terraform-provider-algolia_0.1.1_darwin_arm64.zip \
    ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia/
 ```
 
@@ -91,7 +91,7 @@ filesystem-mirror installs, so verify by hand if you want the assurance. Downloa
 then check the archive against it:
 
 ```bash
-shasum -a 256 -c terraform-provider-algolia_0.1.0_SHA256SUMS 2>&1 | grep OK
+shasum -a 256 -c terraform-provider-algolia_0.1.1_SHA256SUMS 2>&1 | grep OK
 ```
 
 Note what that does and does not establish. It confirms the archive matches the checksum file,
@@ -111,7 +111,7 @@ terraform {
   required_providers {
     algolia = {
       source  = "algolia/algolia"
-      version = "0.1.0"
+      version = "0.1.1"
     }
   }
 }
