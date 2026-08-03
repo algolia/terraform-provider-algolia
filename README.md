@@ -29,7 +29,7 @@ documentation for each is in [`docs/`](docs/): [resources](docs/resources/),
 | Compositions | `algolia_composition`, `algolia_composition_rule` |
 | Security | `algolia_allowed_sources` |
 
-Which Algolia APIs are covered, planned, or deliberately out of scope is tracked in
+Which Algolia APIs are covered, and which are deliberately out of scope, is tracked in
 [ROADMAP.md](ROADMAP.md#coverage-matrix).
 
 ## Requirements
