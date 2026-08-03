@@ -90,8 +90,17 @@ Two behaviours worth knowing before your first apply: `deletion_protection` defa
 `true` on the resources whose deletion cannot be undone, so `terraform destroy` refuses
 until you set it to `false` and apply; and a primary index's replicas are split across two
 resources, standard ones in `algolia_index`'s `advanced.replicas` and each virtual one in
-its own `algolia_virtual_index`. The [CHANGELOG](CHANGELOG.md) notes cover both, and
-[`.claude/skills/`](.claude/skills/) has a skill that teaches a coding agent the same.
+its own `algolia_virtual_index`. The [CHANGELOG](CHANGELOG.md) notes cover both.
+
+## Using it with a coding agent
+
+[`skills/algolia-terraform-provider`](skills/algolia-terraform-provider/) is an agent skill
+covering installation and the attribute shapes that make a plausible-looking configuration
+fail. Install it into whichever agent you use:
+
+```bash
+npx skills add algolia/terraform-provider-algolia
+```
 
 ## Contributing
 
