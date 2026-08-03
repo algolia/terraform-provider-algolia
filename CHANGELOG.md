@@ -1,8 +1,8 @@
 ## 0.1.0 (August 3, 2026)
 
-First release, distributed internally. There is no earlier version to upgrade from, so this
+First release. There is no earlier version to upgrade from, so this
 entry describes what the provider does and how it behaves rather than what changed. The
-development history, including the unadopted pre-release `v0.1.0-beta.1`, is in the git log
+development history, including the earlier `v0.1.0-beta.1` pre-release, is in the git log
 and in the pull requests.
 
 FEATURES:

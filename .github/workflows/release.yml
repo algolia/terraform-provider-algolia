@@ -35,11 +35,40 @@ jobs:
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
-          conclusion="$(gh run list --workflow=test.yml --commit "$SHA" --limit 1 --json conclusion --jq '.[0].conclusion')"
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::Tests workflow for $SHA concluded '${conclusion:-<no run found>}'. Push the commit to main, let Tests pass, then re-tag."
-            exit 1
-          fi
+          # Wait rather than fail on a run still going. A tag push does not trigger Tests,
+          # so this looks for the run started by the push to main that the tag points at,
+          # and tagging right after merging is the normal case: on main that run also
+          # executes acceptance and e2e, which take about ten minutes. Failing immediately
+          # made every timely tag look like a broken release, and the old message blamed a
+          # missing run because an in-progress run reports an empty conclusion.
+          deadline=$(( SECONDS + 25 * 60 ))
+          while :; do
+            read -r status conclusion <<<"$(gh run list --workflow=test.yml --commit "$SHA" \
+              --limit 1 --json status,conclusion \
+              --jq '.[0] | "\(.status // "none") \(.conclusion // "")"')"
+            status="${status:-none}"
+
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "Tests for $SHA passed."
+                exit 0
+              fi
+              echo "::error::Tests for $SHA concluded '$conclusion'. Fix main, then move the tag."
+              exit 1
+            fi
+
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              if [ "$status" = "none" ]; then
+                echo "::error::No Tests run for $SHA after 25 minutes. Is the tagged commit pushed to main?"
+              else
+                echo "::error::Tests for $SHA still '$status' after 25 minutes. Re-run this workflow when it finishes."
+              fi
+              exit 1
+            fi
+
+            echo "Tests for $SHA is '$status'; waiting 30s."
+            sleep 30
+          done
       - run: go mod download
       - run: go build -v ./...
       - run: go vet ./...
