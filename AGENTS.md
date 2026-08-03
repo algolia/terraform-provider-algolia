@@ -37,6 +37,27 @@ them on a PR would hand that key to anyone who can open one. A PR therefore goes
 on build, lint and unit tests alone: if a change touches behaviour the unit tests
 cannot reach, run the relevant acceptance suite locally and say so in the PR.
 
+### Debugging with delve
+
+Install it if you need it (`go install github.com/go-delve/delve/cmd/dlv@latest`); it is
+deliberately not pinned in `.tool-versions`, since CI has no use for it.
+
+`main.go` accepts `-debug`, the flag providers use to be driven under a debugger, for
+when you are running `terraform` by hand. For an acceptance test there is a shorter path:
+the framework serves the provider from the *test* process and points the `terraform` CLI
+at it by reattach, so `TF_ACC=1 dlv test ./internal/services/index/ --
+-test.run TestAccIndexResource_basic` breaks straight into `Create`, `Read` or
+`ModifyPlan` with no reattach details to pass by hand.
+
+Driving it from a script rather than a terminal needs
+`--allow-non-terminal-interactive=true`, or delve refuses with "Stdin is not a terminal".
+
+Worth it for one kind of question: what the framework actually handed the provider, where
+Config, Plan and State differ in ways `tflog` makes tedious to compare. Printing a value
+shows the distinction directly, as in
+`basetypes.BoolValue {state: ValueStateKnown (2), value: false}`. When the question is
+what Algolia did instead, a `curl` probe against the API answers it faster.
+
 ### Why an acceptance suite skipped
 
 Acceptance tests need `TF_ACC=1` plus `ALGOLIA_APP_ID` and `ALGOLIA_API_KEY`. Beyond
