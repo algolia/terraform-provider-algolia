@@ -54,3 +54,9 @@ dist/
 
 # Internal / local-only docs (not for distribution)
 SECURITY-REVIEW-HANDOFF.md
+
+# .claude/skills ships with the provider: it teaches a coding agent to install and
+# use it. A global ignore of .claude/ would otherwise drop it from the repository.
+!.claude/
+!.claude/skills/
+!.claude/skills/**
