@@ -9,11 +9,13 @@ import (
 	"testing"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/algolia/terraform-provider-algolia/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -419,4 +421,151 @@ resource "algolia_agent" "test" {
   deletion_protection = true
 }
 `, name)
+}
+
+// The two tests below reach past Terraform to the API to force drift, which nothing in
+// this package did before: every other agent test only ever drives Terraform, so an
+// agent edited or deleted in the dashboard was untested. Both work on an *unpublished*
+// agent and therefore need no OPENAI_API_KEY, because Algolia only validates against
+// the vendor when an agent is published.
+
+// TestAccAgentResource_recoversFromOutOfBandDeletion covers an agent deleted in the
+// dashboard. Read has to drop it from state so the next plan recreates it. Raising an
+// error there would fail refresh, and with it plan, apply and destroy together, leaving
+// `terraform state rm` as the only way out. algolia_index has this same test for the
+// same reason.
+func TestAccAgentResource_recoversFromOutOfBandDeletion(t *testing.T) {
+	agentName := fmt.Sprintf("tf-test-gone-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	var agentID string
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAgentResourceConfig_basic(agentName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "name", agentName),
+					// The API addresses an agent by a generated id, so capture it here:
+					// PreConfig below runs before any state is available to it.
+					testAccCaptureAgentID("algolia_agent.test", &agentID),
+				),
+			},
+			{
+				PreConfig: func() {
+					client := testAccAgentStudioClient(t)
+					if err := client.DeleteAgent(client.NewApiDeleteAgentRequest(agentID)); err != nil {
+						t.Fatalf("deleting agent %s out of band: %v", agentID, err)
+					}
+				},
+				Config: testAccAgentResourceConfig_basic(agentName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						// A create, not an error and not an empty plan.
+						plancheck.ExpectResourceAction("algolia_agent.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "name", agentName),
+				),
+			},
+		},
+	})
+}
+
+// TestAccAgentResource_drift covers an agent edited in the dashboard: the refresh has to
+// notice, and the plan has to put the configured value back rather than adopting the
+// change silently.
+func TestAccAgentResource_drift(t *testing.T) {
+	agentName := fmt.Sprintf("tf-test-drift-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	const configured = "You are a helpful test agent."
+
+	var agentID string
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAgentResourceConfig_basic(agentName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "instructions", configured),
+					testAccCaptureAgentID("algolia_agent.test", &agentID),
+				),
+			},
+			{
+				PreConfig: func() {
+					client := testAccAgentStudioClient(t)
+					update := &agentStudio.AgentConfigUpdate{
+						Instructions: *utils.NewNullable(utils.ToPtr("Drifted outside Terraform.")),
+					}
+					if _, err := client.UpdateAgent(client.NewApiUpdateAgentRequest(agentID, update)); err != nil {
+						t.Fatalf("mutating agent %s out of band: %v", agentID, err)
+					}
+				},
+				Config: testAccAgentResourceConfig_basic(agentName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("algolia_agent.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("algolia_agent.test", "instructions", configured),
+					// Assert Algolia's own view too, not just state: the point of driving
+					// drift through the API is that state alone could agree while the
+					// remote value stayed wrong.
+					testAccCheckAgentInstructions(&agentID, configured),
+				),
+			},
+		},
+	})
+}
+
+func testAccAgentStudioClient(t *testing.T) *agentStudio.APIClient {
+	t.Helper()
+
+	client, err := agentStudio.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+	if err != nil {
+		t.Fatalf("creating agent studio client: %v", err)
+	}
+
+	return client
+}
+
+// testAccCaptureAgentID records the generated agent id so a later step's PreConfig, which
+// receives no state, can address the agent through the API.
+func testAccCaptureAgentID(resourceName string, into *string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("%s not found in state", resourceName)
+		}
+		if rs.Primary.ID == "" {
+			return fmt.Errorf("%s has an empty id in state", resourceName)
+		}
+		*into = rs.Primary.ID
+
+		return nil
+	}
+}
+
+func testAccCheckAgentInstructions(agentID *string, want string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		client, err := agentStudio.NewClient(os.Getenv("ALGOLIA_APP_ID"), os.Getenv("ALGOLIA_API_KEY"))
+		if err != nil {
+			return fmt.Errorf("creating agent studio client: %w", err)
+		}
+
+		doc, err := client.GetAgent(client.NewApiGetAgentRequest(*agentID))
+		if err != nil {
+			return fmt.Errorf("reading agent %s from the API: %w", *agentID, err)
+		}
+		if got := doc.GetInstructions(); got != want {
+			return fmt.Errorf("agent %s instructions = %q, want %q", *agentID, got, want)
+		}
+
+		return nil
+	}
 }

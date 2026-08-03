@@ -31,11 +31,23 @@ you can conclude from a green run:
   configurations through create, drift, reconcile, update and destroy, asserting
   Algolia's own view at each stage rather than only Terraform state.
 
-**In CI, the acceptance and e2e jobs run only on a push to `main`, never on a pull
-request.** They execute repository code with the admin `ALGOLIA_API_KEY`, so running
-them on a PR would hand that key to anyone who can open one. A PR therefore goes green
-on build, lint and unit tests alone: if a change touches behaviour the unit tests
-cannot reach, run the relevant acceptance suite locally and say so in the PR.
+**In CI, the acceptance and e2e jobs run on a push to `main`, and on a pull request only
+when a maintainer applies the `acceptance` or `e2e` label.** They execute repository code
+with the admin `ALGOLIA_API_KEY`, so they must never run unprompted on a pull request,
+which would hand that key to anyone who can open one. The label changes who can start the
+run, not whose code runs, so two things in the guard are load-bearing: the run is
+restricted to pull requests from this repository, because GitHub withholds secrets from
+fork pull requests and such a run would otherwise go green having skipped everything; and
+the trigger stays `pull_request`, never `pull_request_target`, which *would* expose the
+key to a fork.
+
+Removing the label stops it again, since `unlabeled` is in the trigger's `types`. Note
+that `synchronize` is too, so every new commit on a labelled pull request re-runs the live
+suites: remove the label once you have the answer.
+
+Without a label a pull request goes green on build, lint and unit tests alone. If a change
+touches behaviour the unit tests cannot reach, either label the PR or run the relevant
+suite locally, and say which in the PR.
 
 ### Debugging with delve
 
