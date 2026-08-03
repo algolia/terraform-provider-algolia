@@ -18,12 +18,15 @@ gh api -H "Accept: application/vnd.github.raw" \
   repos/algolia/terraform-provider-algolia/contents/scripts/install.sh | bash
 ```
 
-That resolves the most recent release, verifies its checksum, populates the mirror, and
-writes a `provider_installation` block to `~/.terraformrc`. It prints the version to pin when
-it finishes.
+That resolves the most recent release, populates the mirror, and writes a
+`provider_installation` block to `~/.terraformrc`. It prints the version to pin when it
+finishes.
 
-"Most recent" includes pre-releases, so pass `--tag` when you want a specific version rather
-than whatever was published last.
+Two things it does not promise. "Most recent" includes pre-releases, so pass `--tag` when you
+want a specific version rather than whatever was published last. And the checksum step is
+best-effort: it verifies the archive against the published `SHA256SUMS` when it can, but a
+missing checksum asset or checksum tool is tolerated silently, and a mismatch only warns
+before installing anyway. Verify by hand if you need the guarantee.
 
 ## From a checkout
 
@@ -33,13 +36,17 @@ scripts/install.sh --tag v0.1.0    # a specific release
 ```
 
 Useful options: `--config PATH` and `--mirror-dir PATH` to write somewhere other than
-`~/.terraformrc` and `~/.terraform.d/plugins`, and `--dev-overrides` to install a locally
-built binary through `dev_overrides` instead of a mirror. `--dev-overrides` skips version
-pinning and `terraform init` entirely, which suits a quick look at a resource and does not
-suit anything holding state.
+`~/.terraformrc` and `~/.terraform.d/plugins`, `--bin-dir PATH` for the `dev_overrides`
+binary, and `--dev-overrides` to wire the provider up through `dev_overrides` instead of a
+mirror. `--dev-overrides` still installs the released binary, downloading and unpacking the
+same archive; what it changes is that it skips version pinning and `terraform init` entirely,
+which suits a quick look at a resource and does not suit anything holding state. To run a
+binary you built yourself, point `dev_overrides` at it directly rather than using this script.
 
-The script will not overwrite an existing `provider_installation` block, since Terraform
-allows only one. If you already have one it prints the entries to merge and changes nothing.
+The script never edits an existing `provider_installation` block, since Terraform allows only
+one. What it does depends on what is already there: if the config already mentions the Algolia
+provider it leaves the file untouched and says so, and if there is a `provider_installation`
+block that does not mention Algolia it prints the entries for you to merge in by hand.
 
 ## By hand
 
@@ -78,13 +85,19 @@ provider_installation {
 }
 ```
 
-**4. Optionally verify the download.** Each release ships a GPG-signed `SHA256SUMS` and
-`SHA256SUMS.sig`. Terraform does not check signatures for filesystem-mirror installs, so
-verify by hand if you want the assurance:
+**4. Optionally verify the download.** Terraform does not check signatures for
+filesystem-mirror installs, so verify by hand if you want the assurance. Download
+`terraform-provider-algolia_<version>_SHA256SUMS` from the same release, next to the archive,
+then check the archive against it:
 
 ```bash
 shasum -a 256 -c terraform-provider-algolia_0.1.0_SHA256SUMS 2>&1 | grep OK
 ```
+
+Note what that does and does not establish. It confirms the archive matches the checksum file,
+which is the artifact the release signs: GoReleaser signs `SHA256SUMS`, not each individual
+archive. To establish that the checksums themselves are Algolia's, also download
+`SHA256SUMS.sig` and verify it with `gpg --verify`.
 
 ## Pin the version you installed
 

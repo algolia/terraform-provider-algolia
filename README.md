@@ -16,13 +16,14 @@ replicas, API keys, rules, synonyms, dictionaries, Query Suggestions, Personaliz
 A/B tests, Recommend rules, Compositions, Agent Studio agents, and the whole Ingestion
 pipeline.
 
-**21 resources and 26 data sources**, every one importable. Reference documentation for
-each is in [`docs/`](docs/): [resources](docs/resources/), [data sources](docs/data-sources/).
+**21 resources and 26 data sources.** Every resource supports `terraform import`. Reference
+documentation for each is in [`docs/`](docs/): [resources](docs/resources/),
+[data sources](docs/data-sources/).
 
 | Area | Resources |
 | --- | --- |
 | Search | `algolia_index`, `algolia_virtual_index`, `algolia_rule`, `algolia_synonym`, `algolia_api_key`, `algolia_dictionary_entry`, `algolia_dictionary_settings` |
-| Ingestion | `algolia_ingestion_source`, `_destination`, `_task`, `_transformation`, `_authentication` |
+| Ingestion | `algolia_ingestion_source`, `algolia_ingestion_destination`, `algolia_ingestion_task`, `algolia_ingestion_transformation`, `algolia_ingestion_authentication` |
 | Agent Studio | `algolia_agent`, `algolia_agent_provider` |
 | Relevance | `algolia_query_suggestions`, `algolia_recommend_rule`, `algolia_personalization_strategy`, `algolia_ab_test` |
 | Compositions | `algolia_composition`, `algolia_composition_rule` |

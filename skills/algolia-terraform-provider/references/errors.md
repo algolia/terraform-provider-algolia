@@ -9,13 +9,18 @@
 | `Index is a standard replica` | Algolia holds the index as a standard replica, which carries a copy of the records, so `algolia_virtual_index` will not adopt it. |
 | `Index still exists after deletion` | Algolia accepted the delete and the index survived, usually because an A/B test still references it. Destroy again once nothing does. |
 | `cannot apply the deleteIndex operation on a replica index` | The index is still listed as a replica of a primary that is not itself going away. |
-| `401 The log processing region does not match` | `ALGOLIA_ANALYTICS_REGION` is wrong for the application. |
+| A `401` from Query Suggestions, Personalization, A/B testing or Ingestion complaining about the region | `ALGOLIA_ANALYTICS_REGION` is unset or wrong for the application. These four APIs are region-routed; the message comes from Algolia, not the provider, so its exact wording can change. |
 
 ## A plan that never settles
 
 If a second `terraform plan` after a successful apply still proposes changes, the
 configuration and Algolia disagree about a value and applying again will not converge. Look
 for a JSON-encoded attribute whose formatting or key order differs from what Algolia returns,
-or a setting written into the wrong block. `algolia_ab_test` is the documented exception:
-`variants`, `metrics` and `configuration` are never refreshed from the API, because the read
-endpoint returns an enriched shape that would otherwise cause a perpetual diff.
+or a setting written into the wrong block.
+
+Not every attribute is refreshed from Algolia, so a few are exempt from that reasoning. On
+`algolia_ab_test`, `variants` and `metrics` are never refreshed, because the read endpoint
+returns an enriched shape that would otherwise cause a perpetual diff; `configuration` is
+filled from the response only when the configuration does not set it, and a value you did set
+is kept verbatim. `algolia_ingestion_authentication`'s `input` is not refreshed either, since
+Algolia redacts it. Each resource's docs page states its own exceptions.

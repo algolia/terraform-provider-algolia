@@ -42,8 +42,9 @@ JSON-encoded attributes, by resource:
 | `algolia_composition_rule` | `conditions`, `consequence`, `validity` |
 | `algolia_ab_test` | `variants`, `metrics`, `configuration` |
 | `algolia_ingestion_task` | `input`, `notifications`, `policies` |
-| `algolia_ingestion_source`, `_destination`, `_authentication`, `_transformation` | `input` |
-| `algolia_agent` | `config`, `input_schema`, `search_parameters` |
+| `algolia_ingestion_source`, `algolia_ingestion_destination`, `algolia_ingestion_authentication`, `algolia_ingestion_transformation` | `input` |
+| `algolia_agent` | `config`, `input_schema`, `search_parameters`, and `predefined_recommend_parameters` inside the `tool_algolia_recommend` block |
+| `algolia_composition` | `behavior` (**required**), `sorting_strategy` |
 
 `input` on `algolia_synonym` is *not* JSON: it is the base word of a one-way synonym.
 

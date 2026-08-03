@@ -97,8 +97,10 @@ tasks, agents or index settings.
 
 ## Checking your work
 
-Run `terraform plan` again after an apply. It must report no changes: this provider reads
-every setting back from Algolia, so a second plan that still proposes changes means the
+Run `terraform plan` again after an apply. It must report no changes: this provider reads most
+settings back from Algolia, so a second plan that still proposes changes usually means the
 configuration and Algolia disagree, and applying repeatedly will not settle it. That is the
 cheapest signal that something is wrong, and it catches more than `terraform validate` does.
+A few attributes are deliberately not refreshed, because Algolia redacts, enriches or cannot
+return them; `references/errors.md` lists them.
 `references/errors.md` covers what the common failures mean.
