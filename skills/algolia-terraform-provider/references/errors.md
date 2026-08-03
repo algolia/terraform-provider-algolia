@@ -18,9 +18,21 @@ configuration and Algolia disagree about a value and applying again will not con
 for a JSON-encoded attribute whose formatting or key order differs from what Algolia returns,
 or a setting written into the wrong block.
 
-Not every attribute is refreshed from Algolia, so a few are exempt from that reasoning. On
-`algolia_ab_test`, `variants` and `metrics` are never refreshed, because the read endpoint
-returns an enriched shape that would otherwise cause a perpetual diff; `configuration` is
-filled from the response only when the configuration does not set it, and a value you did set
-is kept verbatim. `algolia_ingestion_authentication`'s `input` is not refreshed either, since
-Algolia redacts it. Each resource's docs page states its own exceptions.
+Not every attribute is refreshed from Algolia, so some are exempt from that reasoning, and
+drift in them is not reported. This is not an exhaustive list; each resource's docs page states
+its own exceptions.
+
+- `algolia_ab_test`: `variants` and `metrics` are never refreshed, because the read endpoint
+  returns an enriched shape that would otherwise cause a perpetual diff. `configuration` is
+  filled from the response only when the configuration does not set it; a value you did set is
+  kept verbatim.
+- `algolia_ingestion_authentication`: `input` is not refreshed, since Algolia redacts it.
+- `algolia_ingestion_task`: `cursor` is never refreshed, because it advances on its own as the
+  task runs.
+- `algolia_agent`: a configured `config`, `search_parameters` or `input_schema` wins over what
+  the API returns, because Agent Studio does not hand those documents back the way they were
+  written.
+- `algolia_agent_provider`: a provider block's `api_key` is preserved rather than read back.
+- `algolia_index`, `algolia_virtual_index`: `ranking.relevancy_strictness` and
+  `performance.allow_compression_of_integer_array` are kept from the plan, because Algolia
+  accepts them on write but omits them from `GetSettings`.

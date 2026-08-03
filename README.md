@@ -78,8 +78,9 @@ resource "algolia_index" "products" {
 ```
 
 `terraform import algolia_index.products products` brings an existing index under
-management. Import IDs for index-scoped resources are `<index>/<object_id>`, as in
-`terraform import algolia_rule.promo products/my-rule`.
+management. The import ID differs per resource: rules and synonyms take
+`<index>/<object_id>`, Recommend rules add the model (`<index>/<model>/<object_id>`), and
+agents and Ingestion resources take a UUID. Each resource's docs page has a worked example.
 
 | Provider argument | Environment variable | Notes |
 | --- | --- | --- |

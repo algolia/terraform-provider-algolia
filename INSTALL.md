@@ -19,8 +19,8 @@ gh api -H "Accept: application/vnd.github.raw" \
 ```
 
 That resolves the most recent release, populates the mirror, and writes a
-`provider_installation` block to `~/.terraformrc`. It prints the version to pin when it
-finishes.
+`provider_installation` block to `~/.terraformrc` unless one is already there. It prints the
+version to pin when it finishes.
 
 Two things it does not promise. "Most recent" includes pre-releases, so pass `--tag` when you
 want a specific version rather than whatever was published last. And the checksum step is
@@ -96,8 +96,13 @@ shasum -a 256 -c terraform-provider-algolia_0.1.0_SHA256SUMS 2>&1 | grep OK
 
 Note what that does and does not establish. It confirms the archive matches the checksum file,
 which is the artifact the release signs: GoReleaser signs `SHA256SUMS`, not each individual
-archive. To establish that the checksums themselves are Algolia's, also download
-`SHA256SUMS.sig` and verify it with `gpg --verify`.
+archive. It does not establish where the checksum file came from.
+
+Going further means checking the detached signature, `SHA256SUMS.sig`, with
+`gpg --verify SHA256SUMS.sig SHA256SUMS`. That needs the signing public key already in your
+keyring, or gpg reports `No public key`, and a good signature only proves the file was signed
+by whoever holds that key. Treat it as meaningful only if you obtained the key and its
+fingerprint through a channel you trust.
 
 ## Pin the version you installed
 

@@ -35,7 +35,8 @@ gh api -H "Accept: application/vnd.github.raw" \
 ```
 
 This puts the release archive in a filesystem mirror, writes a `provider_installation` block
-to `~/.terraformrc`, and prints the version to pin.
+to `~/.terraformrc` unless the file already has one, and prints the version to pin. If it
+finds an existing block it changes nothing and prints what to merge in by hand.
 [INSTALL.md](https://github.com/algolia/terraform-provider-algolia/blob/main/INSTALL.md)
 covers doing it by hand and what to check when `terraform init` cannot find the provider.
 
@@ -101,6 +102,6 @@ Run `terraform plan` again after an apply. It must report no changes: this provi
 settings back from Algolia, so a second plan that still proposes changes usually means the
 configuration and Algolia disagree, and applying repeatedly will not settle it. That is the
 cheapest signal that something is wrong, and it catches more than `terraform validate` does.
-A few attributes are deliberately not refreshed, because Algolia redacts, enriches or cannot
-return them; `references/errors.md` lists them.
-`references/errors.md` covers what the common failures mean.
+Some attributes are deliberately not refreshed, because Algolia redacts, enriches or cannot
+return them, so drift in those is not reported at all. `references/errors.md` covers the main
+ones, and what the common failures mean.

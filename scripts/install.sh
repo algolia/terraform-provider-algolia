@@ -4,7 +4,9 @@
 #
 # The provider is not published to the Terraform Registry, so this script fetches
 # the release archive with the GitHub CLI (gh) and wires up your Terraform CLI
-# config so `terraform` can find it. The archive is checked against the release's
+# config so `terraform` can find it, unless that config already has a
+# provider_installation block, in which case it prints what to merge and leaves
+# the file alone. The archive is checked against the release's
 # SHA256SUMS on a best-effort basis; the release signs that checksum file rather
 # than each archive, and this script does not verify the signature.
 #

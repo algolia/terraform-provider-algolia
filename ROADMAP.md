@@ -30,7 +30,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **search**: synonyms | resource + data source | ✅ `algolia_synonym` |
 | **search**: dictionaries, custom entries | resource + data source | ✅ `algolia_dictionary_entry` |
 | **search**: dictionaries, settings (`disableStandardEntries`) | resource + data source | ✅ `algolia_dictionary_settings` |
-| **search**: allowed sources (IP allowlist) | resource | ✅ `algolia_allowed_sources` |
+| **search**: allowed sources (IP allowlist) | resource + data source | ✅ `algolia_allowed_sources` |
 | **search**: MCM clusters / user IDs | data source (clusters, user IDs); user-id assignment is operational | ✅ `algolia_clusters`, `algolia_user_ids` |
 | **search**: records/objects, search, browse, secured keys | out of scope (data-plane) | not planned |
 | **query-suggestions** | resource + data source | ✅ `algolia_query_suggestions` |
@@ -44,7 +44,7 @@ A Terraform provider manages **declarative, persistent configuration** with a cr
 | **ingestion**: transformations | resource + data source | ✅ `algolia_ingestion_transformation` |
 | **ingestion**: tasks | resource + data source | ✅ `algolia_ingestion_task` |
 | **ingestion**: runs, events, push | out of scope (runtime) | not planned |
-| **abtesting** / **abtesting-v3** | resource | ✅ `algolia_ab_test` |
+| **abtesting** / **abtesting-v3** | resource + data source | ✅ `algolia_ab_test` |
 | **recommend**: recommend rules | resource + data source | ✅ `algolia_recommend_rule` |
 | **recommend**: get recommendations | out of scope (data-plane) | not planned |
 | **composition**: compositions + composition rules | resource + data source | ✅ `algolia_composition`, `algolia_composition_rule` |
