@@ -49,9 +49,14 @@ at it by reattach, so `TF_ACC=1 dlv test ./internal/services/index/ --
 -test.run TestAccIndexResource_basic` breaks straight into `Create`, `Read` or
 `ModifyPlan` with no reattach details to pass by hand.
 
+Driving it from a script rather than a terminal needs
+`--allow-non-terminal-interactive=true`, or delve refuses with "Stdin is not a terminal".
+
 Worth it for one kind of question: what the framework actually handed the provider, where
-Config, Plan and State differ in ways `tflog` makes tedious to compare. When the question
-is what Algolia did instead, a `curl` probe against the API answers it faster.
+Config, Plan and State differ in ways `tflog` makes tedious to compare. Printing a value
+shows the distinction directly, as in
+`basetypes.BoolValue {state: ValueStateKnown (2), value: false}`. When the question is
+what Algolia did instead, a `curl` probe against the API answers it faster.
 
 ### Why an acceptance suite skipped
 
