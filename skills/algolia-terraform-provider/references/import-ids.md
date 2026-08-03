@@ -1,8 +1,9 @@
 # Import IDs
 
 **Import IDs differ per resource, and no single rule covers all of them.** Every resource
-has an `## Import` section in its `docs/resources/<name>.md` page with a worked example;
-read that rather than inferring the form from a neighbouring resource.
+has an `## Import` section with a worked example in its page under
+[docs/resources](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/resources); read that rather than inferring the form
+from a neighbouring resource.
 
 The shapes in use:
 

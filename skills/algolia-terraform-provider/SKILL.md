@@ -5,13 +5,17 @@ description: Use when installing the Algolia Terraform provider or writing Terra
 
 # Algolia Terraform provider
 
-For writing Terraform that *uses* this provider. If you are changing the provider's own Go
-code, read `AGENTS.md` in the provider repository instead.
+For writing Terraform that *uses* this provider.
 
-The authoritative reference for every argument and attribute is the provider's `docs/`
-directory: `docs/resources/<name>.md` and `docs/data-sources/<name>.md`. Read the page for a
-resource before writing a configuration for it, because several attributes do not match the
-Algolia API's own field names.
+The authoritative reference for every argument and attribute is the provider's generated
+documentation. It is not on the Terraform Registry, so read it in the repository:
+
+- [Resources](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/resources)
+- [Data sources](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/data-sources)
+
+Read the page for a resource before writing a configuration for it, because several
+attributes do not match the Algolia API's own field names. From a checkout of the provider
+the same pages are under `docs/`.
 
 Reference files in this skill, to read when the topic comes up:
 
@@ -31,8 +35,9 @@ gh api -H "Accept: application/vnd.github.raw" \
 ```
 
 This puts the release archive in a filesystem mirror, writes a `provider_installation` block
-to `~/.terraformrc`, and prints the version to pin. `INSTALL.md` in the repository covers
-doing it by hand and what to check when `terraform init` cannot find the provider.
+to `~/.terraformrc`, and prints the version to pin.
+[INSTALL.md](https://github.com/algolia/terraform-provider-algolia/blob/main/INSTALL.md)
+covers doing it by hand and what to check when `terraform init` cannot find the provider.
 
 Then pin that exact version. A mirror holds only what has been put in it, so a constraint
 matching nothing fails rather than downloading:

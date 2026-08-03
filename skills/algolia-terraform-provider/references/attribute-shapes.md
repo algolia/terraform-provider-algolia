@@ -1,7 +1,8 @@
 # Attribute shapes
 
 The shapes that differ from what Algolia's own API reference shows. Verified against the
-v0.1.0 schema; `docs/resources/<name>.md` in the provider repository is authoritative.
+v0.1.0 schema; the [generated resource docs](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/resources) are
+authoritative.
 
 ## JSON strings and nested blocks
 
@@ -61,7 +62,8 @@ reference shows.
 ## Index settings live inside one of ten blocks
 
 Index settings are not top-level attributes, and which block holds a given setting is not
-guessable from its name, so look it up in `docs/resources/index.md` rather than assuming.
+guessable from its name, so look it up in the
+[`algolia_index` reference](https://github.com/algolia/terraform-provider-algolia/blob/main/docs/resources/index.md) rather than assuming.
 The blocks are `advanced`, `attributes`, `faceting`, `highlighting`, `languages`,
 `pagination`, `performance`, `query_strategy`, `ranking` and `typos`.
 
