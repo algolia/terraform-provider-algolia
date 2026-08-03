@@ -1,3 +1,21 @@
+## 0.1.1 (Unreleased)
+
+NOTES:
+
+- **Installation now has its own guide, `INSTALL.md`.** It covers the no-checkout installer,
+  doing it by hand on macOS, Linux and Windows, and what to check when `terraform init`
+  cannot find the provider. The README links to it rather than carrying the detail.
+
+- **An agent skill ships in `skills/algolia-terraform-provider`.** It teaches a coding agent
+  to install the provider and to get the attribute shapes right, and installs into any
+  supported agent with `npx skills add algolia/terraform-provider-algolia`.
+
+- **`scripts/install.sh` no longer resolves a draft release.** Releases are created as drafts
+  and GitHub lists them to anyone with write access, so running the installer between a
+  release build and its publish could install an unpublished version. It now passes
+  `--exclude-drafts`. Its `--help` also no longer describes `--dev-overrides` as installing a
+  locally built binary, which it never did; it installs the released one.
+
 ## 0.1.0 (August 3, 2026)
 
 First release. There is no earlier version to upgrade from, so this

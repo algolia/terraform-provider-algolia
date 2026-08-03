@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# install.sh - install the Algolia Terraform provider from internal GitHub releases.
+# install.sh - install the Algolia Terraform provider from its GitHub releases.
 #
-# While the provider is internal-only (not on the public Terraform Registry),
-# this script fetches the signed release artifact with the GitHub CLI (gh) and
-# wires up your Terraform CLI config so `terraform` can find it.
+# The provider is not published to the Terraform Registry, so this script fetches
+# the release archive with the GitHub CLI (gh) and wires up your Terraform CLI
+# config so `terraform` can find it, unless that config already has a
+# provider_installation block, in which case it prints what to merge and leaves
+# the file alone. The archive is checked against the release's
+# SHA256SUMS on a best-effort basis; the release signs that checksum file rather
+# than each archive, and this script does not verify the signature.
 #
 #   Default mode  : filesystem mirror. Behaves like a normal provider - you pin
 #                   a version and run `terraform init`.
@@ -32,13 +36,14 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 
 usage() {
   cat <<'EOF'
-install.sh - install the Algolia Terraform provider from internal GitHub releases.
+install.sh - install the Algolia Terraform provider from its GitHub releases.
 
 Usage:
   scripts/install.sh [--tag vX.Y.Z] [--dev-overrides] [options]
 
 Options:
-  --tag TAG          Release tag to install (default: latest, including pre-releases)
+  --tag TAG          Release tag to install (default: latest published release,
+                     including pre-releases; drafts are skipped)
   --dev-overrides    Use a dev_overrides binary instead of a filesystem mirror
   --config PATH      Terraform CLI config file to update
                      (default: $TF_CLI_CONFIG_FILE or ~/.terraformrc)
@@ -88,7 +93,10 @@ esac
 # --- resolve tag/version ---
 if [ -z "$TAG" ]; then
   info "Resolving latest release..."
-  TAG=$(gh release list --repo "$REPO" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null) \
+  # --exclude-drafts matters: goreleaser creates each release as a draft, and gh lists
+  # drafts to anyone with write access, so without this a maintainer running the script
+  # between a build and its publish would install an unpublished release.
+  TAG=$(gh release list --repo "$REPO" --limit 1 --exclude-drafts --json tagName --jq '.[0].tagName' 2>/dev/null) \
     || err "could not list releases for $REPO"
   [ -n "$TAG" ] || err "no releases found for $REPO"
 fi
