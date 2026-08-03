@@ -26,14 +26,16 @@ The Algolia Terraform provider lets you configure and manage Algolia resources d
 
 ## Getting Started
 
-The provider is currently a pre-release (`0.1.0-beta.1`). Terraform excludes pre-release versions from range constraints (e.g. `~> 0.1` will **not** match a `-beta` build), so pin the exact version:
+Pin the version you installed. `scripts/install.sh` prints it when it finishes, and a filesystem
+mirror holds exactly the versions you have put in it, so a constraint that resolves to something
+absent fails with `no available releases match the given constraints` rather than fetching it:
 
 ```hcl
 terraform {
   required_providers {
     algolia = {
       source  = "algolia/algolia"
-      version = "0.1.0-beta.1"
+      version = "0.1.0"
     }
   }
 }
@@ -220,7 +222,7 @@ The [Quick install](#installation-internal) script (`scripts/install.sh`) automa
 ```bash
 # macOS / Linux
 mkdir -p ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia
-mv ~/Downloads/terraform-provider-algolia_0.1.0-beta.1_darwin_arm64.zip \
+mv ~/Downloads/terraform-provider-algolia_0.1.0_darwin_arm64.zip \
    ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia/
 ```
 
@@ -243,7 +245,7 @@ provider_installation {
 **4. (Optional) Verify the download.** Each release ships a GPG-signed `SHA256SUMS` (`SHA256SUMS.sig`). Filesystem-mirror installs are not signature-checked by Terraform, so verify manually if you need the assurance:
 
 ```bash
-shasum -a 256 -c terraform-provider-algolia_0.1.0-beta.1_SHA256SUMS 2>&1 | grep OK
+shasum -a 256 -c terraform-provider-algolia_0.1.0_SHA256SUMS 2>&1 | grep OK
 ```
 
 Then run `terraform init`, and Terraform will pick up the mirrored provider without contacting the network. Pin the exact pre-release version in `required_providers` as shown in [Getting Started](#getting-started).
