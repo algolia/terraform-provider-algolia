@@ -18,6 +18,10 @@ test:
 testexamples:
 	./scripts/validate-examples.sh
 
+prepare-release:
+	@test -n "$(VERSION)" || (echo "usage: make prepare-release VERSION=x.y.z" >&2; exit 1)
+	./scripts/prepare-release.sh "$(VERSION)"
+
 testacc:
 	TF_ACC=1 go test ./... -v $(TESTARGS) -timeout 120m
 
@@ -28,4 +32,4 @@ e2e:
 	@if [ -f .env.e2e ]; then set -a; . ./.env.e2e; set +a; fi; \
 		TF_ACC=1 go test -tags e2e ./internal/e2e/... -v $(TESTARGS) -timeout 30m
 
-.PHONY: build install lint generate test testexamples testacc e2e
+.PHONY: build install lint generate test testexamples prepare-release testacc e2e
