@@ -129,6 +129,7 @@ Optional:
 - `min_proximity` (Number) Precision of the proximity ranking criterion.
 - `mode` (String) The search mode. One of: neuralSearch, keywordSearch.
 - `re_ranking_apply_filter` (String) Filter to apply for AI Re-Ranking, as a JSON-encoded string.
+- `rendering_content` (String) Rendering metadata for search interfaces as a JSON-encoded object. Terraform manages the complete object; this provider version supports the top-level fields facetOrdering, redirect, and widgets. Upgrade the provider before configuring newer fields.
 - `replace_synonyms_in_highlight` (Boolean) Whether to highlight and snippet the original word that matches the synonym or the synonym itself.
 - `replicas` (List of String) Names of this index's **standard** replicas - the ones that hold their own copy of the records. Setting this declares the complete set of them: a standard replica Algolia currently reports but this list omits is unlinked. Leave it unset to keep whatever replicas the index already has.
 
@@ -137,8 +138,11 @@ Virtual replicas do not belong here. Algolia keeps both kinds in this one settin
 When a replica is also managed by its own `algolia_index` resource, prefer referencing it here (`replicas = [algolia_index.example.name]`) over repeating its name. Both the entry and the resource create that index, and Terraform applies resources with no dependency between them concurrently, which Algolia handles by restarting the index's task queue: the provider then has to notice its write went unacknowledged and send it again, adding about half a minute. Referencing the resource orders the two writes so neither the create nor the destroy has to recover from the collision.
 - `response_fields` (List of String) Properties to include in the API response of search and browse requests.
 - `semantic_search` (String) Semantic search settings, as a JSON-encoded string.
-- `separators_to_index` (String) Separators to index as part of the record.
 - `user_data` (String) Custom user data, as a JSON-encoded string.
+
+Read-Only:
+
+- `separators_to_index` (String) Separators to index as part of the record. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
 
 
 <a id="nestedblock--attributes"></a>
@@ -146,10 +150,13 @@ When a replica is also managed by its own `algolia_index` resource, prefer refer
 
 Optional:
 
-- `attribute_for_distinct` (String) The name of the attribute used for deduplication with distinct.
 - `attributes_to_retrieve` (List of String) The complete list of attributes that will be returned in search results.
-- `searchable_attributes` (List of String) The complete list of attributes used for searching.
 - `unretrievable_attributes` (List of String) List of attributes that cannot be retrieved at query time.
+
+Read-Only:
+
+- `attribute_for_distinct` (String) The name of the attribute used for deduplication with distinct. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
+- `searchable_attributes` (List of String) The complete list of attributes used for searching. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
 
 
 <a id="nestedblock--faceting"></a>
@@ -157,10 +164,13 @@ Optional:
 
 Optional:
 
-- `attributes_for_faceting` (List of String) The complete list of attributes that will be used for faceting.
 - `max_facet_hits` (Number) Maximum number of facet hits to return during a search for facet values.
 - `max_values_per_facet` (Number) Maximum number of facet values to return for each facet.
 - `sort_facet_values_by` (String) How to sort facet values. One of: count, alpha.
+
+Read-Only:
+
+- `attributes_for_faceting` (List of String) The complete list of attributes that will be used for faceting. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
 
 
 <a id="nestedblock--highlighting"></a>
@@ -181,19 +191,22 @@ Optional:
 
 Optional:
 
-- `attributes_to_transliterate` (List of String) List of attributes to apply transliteration.
 - `camel_case_attributes` (List of String) List of attributes on which to do a decomposition of camel case words.
 - `custom_normalization` (String) Custom normalization rules, as a JSON-encoded object.
 - `decompound_query` (Boolean) Whether to split compound words into their component word parts.
-- `decompounded_attributes` (String) Attributes for which to enable decompounding, as a JSON-encoded object.
 - `ignore_plurals` (Boolean) Whether to treat singular, plurals, and other forms of declensions as matching terms.
 - `ignore_plurals_languages` (List of String) List of specific languages for which ignore_plurals is enabled.
-- `index_languages` (List of String) List of languages for language-specific processing steps (plurals, stop-words, etc.).
 - `keep_diacritics_on_characters` (String) Characters for which diacritics should be preserved.
 - `query_languages` (List of String) List of languages to be used by language-specific query processing steps.
 - `remove_stop_words` (Boolean) Whether to remove stop words from the query before executing it.
 - `remove_stop_words_languages` (List of String) List of specific languages for which remove_stop_words is enabled.
 - `remove_words_if_no_results` (String) Strategy to remove words from the query when it doesn't match any results. One of: none, lastWords, firstWords, allOptional.
+
+Read-Only:
+
+- `attributes_to_transliterate` (List of String) List of attributes to apply transliteration. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
+- `decompounded_attributes` (String) Attributes for which to enable decompounding, as a JSON-encoded object. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
+- `index_languages` (List of String) List of languages for language-specific processing steps (plurals, stop-words, etc.). Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
 
 
 <a id="nestedblock--pagination"></a>
@@ -244,11 +257,14 @@ Optional:
 Optional:
 
 - `allow_typos_on_numeric_tokens` (Boolean) Whether to allow typos on numbers in the query string.
-- `disable_typo_tolerance_on_attributes` (List of String) List of attributes on which typo tolerance is disabled.
 - `disable_typo_tolerance_on_words` (List of String) List of words on which typo tolerance is disabled.
 - `min_word_size_for_1_typo` (Number) Minimum number of characters a word in the query string must contain to accept matches with one typo.
 - `min_word_size_for_2_typos` (Number) Minimum number of characters a word in the query string must contain to accept matches with two typos.
 - `typo_tolerance` (String) Whether typo tolerance is enabled and how it is applied. One of: true, false, min, strict.
+
+Read-Only:
+
+- `disable_typo_tolerance_on_attributes` (List of String) List of attributes on which typo tolerance is disabled. Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica.
 
 ## Import
 

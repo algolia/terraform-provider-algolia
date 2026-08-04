@@ -1,8 +1,12 @@
 package index
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
@@ -10,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
+
+const failedToParseJSON = "Failed to parse JSON: "
 
 // isKnown returns true if the value is neither null nor unknown.
 func isKnown(v interface {
@@ -199,7 +205,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 		if isKnown(lang.DecompoundedAttributes) {
 			var decompounded map[string]any
 			if err := json.Unmarshal([]byte(lang.DecompoundedAttributes.ValueString()), &decompounded); err != nil {
-				diags.AddError("Invalid decompounded_attributes", "Failed to parse JSON: "+err.Error())
+				diags.AddError("Invalid decompounded_attributes", failedToParseJSON+err.Error())
 				return nil, diags
 			}
 			settings.DecompoundedAttributes = decompounded
@@ -207,7 +213,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 		if isKnown(lang.CustomNormalization) {
 			var customNorm map[string]map[string]string
 			if err := json.Unmarshal([]byte(lang.CustomNormalization.ValueString()), &customNorm); err != nil {
-				diags.AddError("Invalid custom_normalization", "Failed to parse JSON: "+err.Error())
+				diags.AddError("Invalid custom_normalization", failedToParseJSON+err.Error())
 				return nil, diags
 			}
 			settings.CustomNormalization = &customNorm
@@ -297,10 +303,21 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 		if isKnown(adv.UserData) {
 			var userData any
 			if err := json.Unmarshal([]byte(adv.UserData.ValueString()), &userData); err != nil {
-				diags.AddError("Invalid user_data", "Failed to parse JSON: "+err.Error())
+				diags.AddError("Invalid user_data", failedToParseJSON+err.Error())
 				return nil, diags
 			}
 			settings.UserData = userData
+		}
+		if isKnown(adv.RenderingContent) {
+			renderingContent, err := decodeRenderingContent(adv.RenderingContent.ValueString())
+			if err != nil {
+				diags.AddError(
+					"Invalid rendering_content",
+					"Rendering content contains invalid or unsupported JSON: "+err.Error(),
+				)
+				return nil, diags
+			}
+			settings.RenderingContent = renderingContent
 		}
 		if isKnown(adv.EnableRules) {
 			settings.EnableRules = utils.ToPtr(adv.EnableRules.ValueBool())
@@ -317,7 +334,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 		if isKnown(adv.ReRankingApplyFilter) {
 			var reRankingFilter search.ReRankingApplyFilter
 			if err := json.Unmarshal([]byte(adv.ReRankingApplyFilter.ValueString()), &reRankingFilter); err != nil {
-				diags.AddError("Invalid re_ranking_apply_filter", "Failed to parse JSON: "+err.Error())
+				diags.AddError("Invalid re_ranking_apply_filter", failedToParseJSON+err.Error())
 				return nil, diags
 			}
 			settings.ReRankingApplyFilter = *utils.NewNullable(&reRankingFilter)
@@ -329,7 +346,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 		if isKnown(adv.SemanticSearch) {
 			var semanticSearch search.SemanticSearch
 			if err := json.Unmarshal([]byte(adv.SemanticSearch.ValueString()), &semanticSearch); err != nil {
-				diags.AddError("Invalid semantic_search", "Failed to parse JSON: "+err.Error())
+				diags.AddError("Invalid semantic_search", failedToParseJSON+err.Error())
 				return nil, diags
 			}
 			settings.SemanticSearch = &semanticSearch
@@ -340,6 +357,41 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 	}
 
 	return settings, diags
+}
+
+func decodeRenderingContent(value string) (*search.RenderingContent, error) {
+	decoder := json.NewDecoder(strings.NewReader(value))
+	var document json.RawMessage
+	if err := decoder.Decode(&document); err != nil {
+		return nil, err
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("must contain exactly one JSON object")
+		}
+		return nil, err
+	}
+
+	document = bytes.TrimSpace(document)
+	if len(document) == 0 || document[0] != '{' {
+		return nil, fmt.Errorf("must be a JSON object")
+	}
+
+	var renderingContent search.RenderingContent
+	strictDecoder := json.NewDecoder(bytes.NewReader(document))
+	strictDecoder.DisallowUnknownFields()
+	if err := strictDecoder.Decode(&renderingContent); err != nil {
+		return nil, err
+	}
+	canonical, err := json.Marshal(renderingContent)
+	if err != nil {
+		return nil, fmt.Errorf("encode rendering content: %w", err)
+	}
+	if !jsonSemanticallyEqual(string(document), string(canonical)) {
+		return nil, fmt.Errorf("contains field names or values this provider version cannot represent")
+	}
+	return &renderingContent, nil
 }
 
 // expandTypoTolerance converts a string typo tolerance value to the Algolia TypoTolerance union type.

@@ -46,5 +46,12 @@ resource "algolia_index" "example" {
 
   advanced {
     distinct = 1
+    rendering_content = jsonencode({
+      facetOrdering = {
+        facets = {
+          order = ["brand", "categories", "price"]
+        }
+      }
+    })
   }
 }

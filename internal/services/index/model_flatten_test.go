@@ -536,6 +536,37 @@ func TestFlattenUserData(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// flattenRenderingContent
+// ---------------------------------------------------------------------------
+
+func TestFlattenRenderingContent(t *testing.T) {
+	t.Run("nil returns null", func(t *testing.T) {
+		got := flattenRenderingContent(nil)
+		if !got.IsNull() {
+			t.Fatalf("expected null, got %q", got.ValueString())
+		}
+	})
+
+	t.Run("empty object returns JSON object", func(t *testing.T) {
+		got := flattenRenderingContent(&search.RenderingContent{})
+		if got.ValueString() != `{}` {
+			t.Fatalf("expected empty JSON object, got %q", got.ValueString())
+		}
+	})
+
+	t.Run("populated value returns JSON", func(t *testing.T) {
+		got := flattenRenderingContent(&search.RenderingContent{
+			FacetOrdering: &search.FacetOrdering{
+				Facets: &search.Facets{Order: []string{"brand", "category"}},
+			},
+		})
+		if got.ValueString() != `{"facetOrdering":{"facets":{"order":["brand","category"]}}}` {
+			t.Fatalf("unexpected rendering content: %q", got.ValueString())
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // flattenQueryType
 // ---------------------------------------------------------------------------
 

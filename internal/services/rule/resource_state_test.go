@@ -248,6 +248,51 @@ func TestExtractRawParamsWhenAbsent(t *testing.T) {
 	}
 }
 
+func TestDecodeRuleResponseOmitsOpenEndedParamsFromTypedDecode(t *testing.T) {
+	payload := []byte(`{"objectID":"rule-1","consequence":{"params":{"query":"iphone","hitsPerPage":"20","futureParam":true},"filterPromotes":true,"redirect":{"indexName":"products_redirect"}}}`)
+
+	// The generated Search model still rejects the legacy string form, which is
+	// why the typed response decoder must not inspect this open-ended object.
+	var upstream search.Rule
+	if err := json.Unmarshal(payload, &upstream); err == nil {
+		t.Fatal("plain Search rule decode accepted a string hitsPerPage; remove the compatibility workaround")
+	}
+
+	ruleResp, err := decodeRuleResponse(payload)
+	if err != nil {
+		t.Fatalf("decodeRuleResponse() error = %v, want nil", err)
+	}
+	if ruleResp.Consequence.Params == nil {
+		t.Fatalf("consequence params = %#v, want an empty typed object", ruleResp.Consequence)
+	}
+	typedParams, err := json.Marshal(ruleResp.Consequence.Params)
+	if err != nil {
+		t.Fatalf("marshal typed params: %v", err)
+	}
+	if string(typedParams) != `{}` {
+		t.Fatalf("typed params = %s, want {}", typedParams)
+	}
+	if ruleResp.Consequence.FilterPromotes == nil || !*ruleResp.Consequence.FilterPromotes {
+		t.Error("filterPromotes = false, want true")
+	}
+	if ruleResp.Consequence.Redirect == nil || ruleResp.Consequence.Redirect.GetIndexName() != "products_redirect" {
+		t.Errorf("redirect = %#v, want products_redirect", ruleResp.Consequence.Redirect)
+	}
+
+	// State still receives the API's original JSON, so a configuration snapshot
+	// with the legacy string remains stable instead of being rewritten to 20.
+	if got, want := string(extractRawParams(payload)), `{"query":"iphone","hitsPerPage":"20","futureParam":true}`; got != want {
+		t.Errorf("raw params = %s, want %s", got, want)
+	}
+}
+
+func TestOmitRuleParamsForTypedDecodeLeavesPayloadWithoutParamsUntouched(t *testing.T) {
+	payload := `{"objectID":"rule-1","consequence":{"filterPromotes":true}}`
+	if got := string(omitRuleParamsForTypedDecode([]byte(payload))); got != payload {
+		t.Errorf("omitRuleParamsForTypedDecode() = %s, want original %s", got, payload)
+	}
+}
+
 func TestHydrateRuleModelPreservesUnmodelledParams(t *testing.T) {
 	configured := `{"query":"iphone","brandNewAlgoliaParam":{"nested":[1,2]}}`
 

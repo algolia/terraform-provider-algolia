@@ -66,18 +66,67 @@ func virtualIndexResourceSchema() schema.Schema {
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"attributes":     schema.SingleNestedBlock{Description: "Configuration for searchable and retrievable attributes.", Attributes: attributesBlockSchema()},
+			"attributes":     schema.SingleNestedBlock{Description: "Configuration for searchable and retrievable attributes.", Attributes: virtualAttributesBlockSchema()},
 			"ranking":        schema.SingleNestedBlock{Description: "Configuration for virtual replica ranking behavior.", Attributes: virtualRankingBlockSchema()},
-			"faceting":       schema.SingleNestedBlock{Description: "Configuration for faceting behavior.", Attributes: facetingBlockSchema()},
+			"faceting":       schema.SingleNestedBlock{Description: "Configuration for faceting behavior.", Attributes: virtualFacetingBlockSchema()},
 			"highlighting":   schema.SingleNestedBlock{Description: "Configuration for highlighting and snippeting.", Attributes: highlightingBlockSchema()},
 			"pagination":     schema.SingleNestedBlock{Description: "Configuration for pagination.", Attributes: paginationBlockSchema()},
-			"typos":          schema.SingleNestedBlock{Description: "Configuration for typo tolerance.", Attributes: typosBlockSchema()},
-			"languages":      schema.SingleNestedBlock{Description: "Configuration for language-specific settings.", Attributes: languagesBlockSchema()},
+			"typos":          schema.SingleNestedBlock{Description: "Configuration for typo tolerance.", Attributes: virtualTyposBlockSchema()},
+			"languages":      schema.SingleNestedBlock{Description: "Configuration for language-specific settings.", Attributes: virtualLanguagesBlockSchema()},
 			"query_strategy": schema.SingleNestedBlock{Description: "Configuration for query strategy.", Attributes: queryStrategyBlockSchema()},
 			"performance":    schema.SingleNestedBlock{Description: "Configuration for performance settings.", Attributes: performanceBlockSchema()},
-			"advanced":       schema.SingleNestedBlock{Description: "Configuration for advanced settings.", Attributes: advancedBlockSchema()},
+			"advanced":       schema.SingleNestedBlock{Description: "Configuration for advanced settings.", Attributes: virtualAdvancedBlockSchema()},
 		},
 	}
+}
+
+func virtualAttributesBlockSchema() map[string]schema.Attribute {
+	attributes := attributesBlockSchema()
+	attributes["searchable_attributes"] = computedVirtualList(attributes["searchable_attributes"])
+	attributes["attribute_for_distinct"] = computedVirtualString(attributes["attribute_for_distinct"])
+	return attributes
+}
+
+func virtualFacetingBlockSchema() map[string]schema.Attribute {
+	attributes := facetingBlockSchema()
+	attributes["attributes_for_faceting"] = computedVirtualList(attributes["attributes_for_faceting"])
+	return attributes
+}
+
+func virtualTyposBlockSchema() map[string]schema.Attribute {
+	attributes := typosBlockSchema()
+	attributes["disable_typo_tolerance_on_attributes"] = computedVirtualList(attributes["disable_typo_tolerance_on_attributes"])
+	return attributes
+}
+
+func virtualLanguagesBlockSchema() map[string]schema.Attribute {
+	attributes := languagesBlockSchema()
+	attributes["attributes_to_transliterate"] = computedVirtualList(attributes["attributes_to_transliterate"])
+	attributes["decompounded_attributes"] = computedVirtualString(attributes["decompounded_attributes"])
+	attributes["index_languages"] = computedVirtualList(attributes["index_languages"])
+	return attributes
+}
+
+func virtualAdvancedBlockSchema() map[string]schema.Attribute {
+	attributes := advancedBlockSchema()
+	attributes["separators_to_index"] = computedVirtualString(attributes["separators_to_index"])
+	return attributes
+}
+
+func computedVirtualList(attribute schema.Attribute) schema.ListAttribute {
+	computed := attribute.(schema.ListAttribute)
+	computed.Description += " Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica."
+	computed.Optional = false
+	computed.Computed = true
+	return computed
+}
+
+func computedVirtualString(attribute schema.Attribute) schema.StringAttribute {
+	computed := attribute.(schema.StringAttribute)
+	computed.Description += " Algolia inherits this setting from the primary index, so it cannot be configured on a virtual replica."
+	computed.Optional = false
+	computed.Computed = true
+	return computed
 }
 
 func virtualIndexDataSourceSchema() datasourceschema.Schema {

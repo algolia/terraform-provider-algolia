@@ -234,6 +234,7 @@ func fullAdvanced(t *testing.T, distinct int64, reRankingApplyFilter string) typ
 		// decoded into an any and re-encoded by encoding/json, which sorts keys and
 		// renders whole floats without a fraction.
 		UserData:                                types.StringValue(`{"environment":"test","tags":["a","b"],"version":2}`),
+		RenderingContent:                        types.StringValue(`{"facetOrdering":{"facets":{"order":["brand","category"]}}}`),
 		EnableRules:                             types.BoolValue(true),
 		EnablePersonalization:                   types.BoolValue(false),
 		Replicas:                                stringList(t, "tf-test-replica"),
@@ -391,6 +392,7 @@ func TestExpandFlattenRoundTripPartialBlock(t *testing.T) {
 			SeparatorsToIndex:                       types.StringNull(),
 			ResponseFields:                          types.ListNull(types.StringType),
 			UserData:                                types.StringNull(),
+			RenderingContent:                        types.StringNull(),
 			EnableRules:                             types.BoolValue(false),
 			EnablePersonalization:                   types.BoolNull(),
 			Replicas:                                types.ListNull(types.StringType),
@@ -409,6 +411,47 @@ func TestExpandFlattenRoundTripPartialBlock(t *testing.T) {
 	}
 	if !model.Advanced.Equal(got.Advanced) {
 		t.Errorf("advanced block did not round-trip\n want: %s\n  got: %s", model.Advanced, got.Advanced)
+	}
+}
+
+// TestExpandFlattenRenderingContentStateRoundTrip covers the empty and populated
+// API shapes that import and refresh write into Terraform state.
+func TestExpandFlattenRenderingContentStateRoundTrip(t *testing.T) {
+	for _, value := range []string{
+		`{}`,
+		`{"facetOrdering":{"facets":{"order":["brand","category"]}}}`,
+		`{"facetOrdering":{"values":{"brand":{"hide":["archived"],"order":["featured"],"sortRemainingBy":"count"}}}}`,
+	} {
+		t.Run(value, func(t *testing.T) {
+			model := IndexResourceModel{
+				Name: types.StringValue("tf-test-rendering-content"),
+				Advanced: blockObject(t, advancedAttrTypes, AdvancedModel{
+					Distinct:                                types.Int64Null(),
+					MinProximity:                            types.Int64Null(),
+					ReplaceSynonymsInHighlight:              types.BoolNull(),
+					SeparatorsToIndex:                       types.StringNull(),
+					ResponseFields:                          types.ListNull(types.StringType),
+					UserData:                                types.StringNull(),
+					RenderingContent:                        types.StringValue(value),
+					EnableRules:                             types.BoolNull(),
+					EnablePersonalization:                   types.BoolNull(),
+					Replicas:                                types.ListNull(types.StringType),
+					EnableReRanking:                         types.BoolNull(),
+					ReRankingApplyFilter:                    types.StringNull(),
+					Mode:                                    types.StringNull(),
+					SemanticSearch:                          types.StringNull(),
+					AttributeCriteriaComputedByMinProximity: types.BoolNull(),
+				}),
+			}
+
+			got := roundTrip(t, model)
+			if diags := preservePlannedValues(context.Background(), &model, &got); diags.HasError() {
+				t.Fatalf("preservePlannedValues: %v", diags)
+			}
+			if !model.Advanced.Equal(got.Advanced) {
+				t.Errorf("advanced block did not round-trip\n want: %s\n  got: %s", model.Advanced, got.Advanced)
+			}
+		})
 	}
 }
 

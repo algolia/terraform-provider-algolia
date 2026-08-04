@@ -616,6 +616,17 @@ func advancedBlockSchema() map[string]schema.Attribute {
 				useStateForKnownString(),
 			},
 		},
+		"rendering_content": schema.StringAttribute{
+			Description: "Rendering metadata for search interfaces as a JSON-encoded object. Terraform manages the complete object; this provider version supports the top-level fields facetOrdering, redirect, and widgets. Upgrade the provider before configuring newer fields.",
+			Optional:    true,
+			Computed:    true,
+			Validators: []validator.String{
+				renderingContentJSONValidator{},
+			},
+			PlanModifiers: []planmodifier.String{
+				useStateForKnownString(),
+			},
+		},
 		"enable_rules": schema.BoolAttribute{
 			Description: "Whether Rules should be globally enabled.",
 			Optional:    true,

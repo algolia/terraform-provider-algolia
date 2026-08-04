@@ -83,6 +83,7 @@ func (r *virtualIndexResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	omitVirtualReplicaForbiddenSettings(settings)
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {
@@ -282,6 +283,7 @@ func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	omitVirtualReplicaForbiddenSettings(settings)
 
 	setResp, err := r.client.SetSettings(r.client.NewApiSetSettingsRequest(indexName, settings), search.WithContext(ctx))
 	if err != nil {

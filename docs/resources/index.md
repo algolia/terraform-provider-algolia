@@ -61,6 +61,13 @@ resource "algolia_index" "example" {
 
   advanced {
     distinct = 1
+    rendering_content = jsonencode({
+      facetOrdering = {
+        facets = {
+          order = ["brand", "categories", "price"]
+        }
+      }
+    })
   }
 }
 ```
@@ -107,6 +114,7 @@ Optional:
 - `min_proximity` (Number) Precision of the proximity ranking criterion.
 - `mode` (String) The search mode. One of: neuralSearch, keywordSearch.
 - `re_ranking_apply_filter` (String) Filter to apply for AI Re-Ranking, as a JSON-encoded string.
+- `rendering_content` (String) Rendering metadata for search interfaces as a JSON-encoded object. Terraform manages the complete object; this provider version supports the top-level fields facetOrdering, redirect, and widgets. Upgrade the provider before configuring newer fields.
 - `replace_synonyms_in_highlight` (Boolean) Whether to highlight and snippet the original word that matches the synonym or the synonym itself.
 - `replicas` (List of String) Names of this index's **standard** replicas - the ones that hold their own copy of the records. Setting this declares the complete set of them: a standard replica Algolia currently reports but this list omits is unlinked. Leave it unset to keep whatever replicas the index already has.
 

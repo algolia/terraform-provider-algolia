@@ -36,7 +36,7 @@ JSON-encoded attributes, by resource:
 
 | Resource | JSON-encoded attributes |
 | --- | --- |
-| `algolia_index`, `algolia_virtual_index` | `custom_normalization`, `decompounded_attributes`, `semantic_search`, `re_ranking_apply_filter`, `user_data` |
+| `algolia_index`, `algolia_virtual_index` | `custom_normalization`, `decompounded_attributes`, `rendering_content`, `semantic_search`, `re_ranking_apply_filter`, `user_data` |
 | `algolia_rule` | `consequence.params_json`, `consequence.user_data` |
 | `algolia_recommend_rule` | `condition`, `consequence`, `validity` |
 | `algolia_composition_rule` | `conditions`, `consequence`, `validity` |
@@ -75,7 +75,7 @@ resource "algolia_index" "products" {
   name = "products"
 
   advanced {
-    distinct = 1 # also: replicas, user_data, semantic_search, re_ranking_apply_filter
+    distinct = 1 # also: replicas, user_data, rendering_content, semantic_search, re_ranking_apply_filter
   }
 
   languages {

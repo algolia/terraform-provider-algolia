@@ -95,6 +95,7 @@ var advancedAttrTypes = map[string]attr.Type{
 	"separators_to_index":           types.StringType,
 	"response_fields":               types.ListType{ElemType: types.StringType},
 	"user_data":                     types.StringType,
+	"rendering_content":             types.StringType,
 	"enable_rules":                  types.BoolType,
 	"enable_personalization":        types.BoolType,
 	"replicas":                      types.ListType{ElemType: types.StringType},
@@ -380,6 +381,7 @@ func flattenAdvancedBlock(ctx context.Context, settings *search.SettingsResponse
 		SeparatorsToIndex:                       flattenNullableString(settings.SeparatorsToIndex),
 		ResponseFields:                          flattenStringList(ctx, settings.ResponseFields),
 		UserData:                                flattenUserData(settings.UserData),
+		RenderingContent:                        flattenRenderingContent(settings.RenderingContent),
 		EnableRules:                             flattenNullableBool(settings.EnableRules),
 		EnablePersonalization:                   flattenNullableBool(settings.EnablePersonalization),
 		Replicas:                                flattenStringList(ctx, standardReplicasOf(settings.Replicas)),
@@ -689,6 +691,19 @@ func flattenUserData(ud any) types.String {
 	}
 
 	data, err := json.Marshal(ud)
+	if err != nil {
+		return types.StringNull()
+	}
+	return types.StringValue(string(data))
+}
+
+// flattenRenderingContent converts rendering content to a JSON-encoded types.String.
+func flattenRenderingContent(content *search.RenderingContent) types.String {
+	if content == nil {
+		return types.StringNull()
+	}
+
+	data, err := json.Marshal(content)
 	if err != nil {
 		return types.StringNull()
 	}

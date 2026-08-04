@@ -117,6 +117,7 @@ type AdvancedModel struct {
 	SeparatorsToIndex                       types.String `tfsdk:"separators_to_index"`
 	ResponseFields                          types.List   `tfsdk:"response_fields"`
 	UserData                                types.String `tfsdk:"user_data"`
+	RenderingContent                        types.String `tfsdk:"rendering_content"`
 	EnableRules                             types.Bool   `tfsdk:"enable_rules"`
 	EnablePersonalization                   types.Bool   `tfsdk:"enable_personalization"`
 	Replicas                                types.List   `tfsdk:"replicas"`
