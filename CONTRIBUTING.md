@@ -15,9 +15,10 @@ make install    # compile and install to $GOPATH/bin
 ## Running Tests
 
 ```bash
-make test       # run unit tests (no credentials needed)
-make testacc    # run acceptance tests
-make lint       # run golangci-lint
+make test          # run unit tests (no credentials needed)
+make testexamples  # validate every example against the local provider schema
+make testacc       # run acceptance tests
+make lint          # run golangci-lint
 ```
 
 ### Acceptance Tests

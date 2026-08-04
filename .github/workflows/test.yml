@@ -59,6 +59,10 @@ jobs:
           cache: true
       - run: go mod download
       - run: go test ./... -v -timeout 120m
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - run: make testexamples
 
   acceptance:
     name: Acceptance Tests
