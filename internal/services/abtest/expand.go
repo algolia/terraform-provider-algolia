@@ -2,6 +2,7 @@ package abtest
 
 import (
 	"encoding/json"
+	"errors"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -91,11 +92,11 @@ func expandVariants(value types.String) ([]abtestingapi.AddABTestsVariant, diag.
 		}
 
 		if _, ok := keys["customSearchParameters"]; ok {
-			var withParams abtestingapi.AbTestsVariantSearchParams
-			if err := json.Unmarshal(entry, &withParams); err != nil {
+			variant, err := expandVariantWithSearchParams(entry)
+			if err != nil {
 				return invalid("Failed to parse a variant with customSearchParameters: " + err.Error())
 			}
-			variants = append(variants, *abtestingapi.AbTestsVariantSearchParamsAsAddABTestsVariant(&withParams))
+			variants = append(variants, variant)
 
 			continue
 		}
@@ -108,6 +109,22 @@ func expandVariants(value types.String) ([]abtestingapi.AddABTestsVariant, diag.
 	}
 
 	return variants, diags
+}
+
+func expandVariantWithSearchParams(entry json.RawMessage) (abtestingapi.AddABTestsVariant, error) {
+	var withParams abtestingapi.AbTestsVariantSearchParams
+	if err := json.Unmarshal(entry, &withParams); err != nil {
+		return abtestingapi.AddABTestsVariant{}, err
+	}
+	// GetABTest returns an empty object for variants that did not configure
+	// custom parameters, so import must canonicalise {} to absence. Reject the
+	// same ambiguous no-op shape on input; otherwise create would preserve the
+	// key while import necessarily drops it and every imported plan would
+	// propose replacing the A/B test.
+	if len(withParams.CustomSearchParameters) == 0 {
+		return abtestingapi.AddABTestsVariant{}, errors.New("customSearchParameters must contain at least one search parameter when present")
+	}
+	return *abtestingapi.AbTestsVariantSearchParamsAsAddABTestsVariant(&withParams), nil
 }
 
 // expandMetrics JSON-decodes the `metrics` attribute into the slice of

@@ -11,6 +11,12 @@ BUG FIXES:
   provider now selects the union arm itself. A test pins the serialised request, since asserting
   the decoded value passed while the wire format was wrong.
 
+- **Importing a plain `algolia_ab_test` no longer adds empty custom search parameters.** The
+  live API returns `customSearchParameters: {}` even when a variant did not configure them;
+  import now canonicalises that empty object to an absent field so the imported state matches
+  the configuration that created the test. An explicitly empty `customSearchParameters` object
+  is rejected because the API cannot distinguish it from an omitted one when reading the test.
+
 NOTES:
 
 - The `algolia_ab_test` example no longer sets `minimumDetectableEffect`, which the API rejects

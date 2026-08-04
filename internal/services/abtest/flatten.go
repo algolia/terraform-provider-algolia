@@ -170,8 +170,11 @@ func flattenABTestImport(abTest *abtestingapi.ABTest, model *ABTestResourceModel
 // createShapedVariants reduces the enriched variants GetABTest returns to the
 // keys the create endpoint accepts. The JSON tags come from the client's own
 // AbTestsVariantSearchParams, so the reconstruction stays correct if the create
-// shape gains a field, and `customSearchParameters` is omitted entirely for a
-// plain index-to-index test rather than emitted as null.
+// shape gains a field, and `customSearchParameters` is omitted entirely when it
+// is empty. The live API returns `{}` even for plain index-to-index variants, so
+// nil cannot distinguish "not configured" from "configured as an empty object".
+// Empty parameters have no effect; canonicalising them to absent is the only
+// shape that lets a normal index-to-index configuration match after import.
 func createShapedVariants(variants []abtestingapi.Variant) []map[string]any {
 	shaped := make([]map[string]any, 0, len(variants))
 
@@ -183,12 +186,9 @@ func createShapedVariants(variants []abtestingapi.Variant) []map[string]any {
 		if variant.Description != "" {
 			entry["description"] = variant.Description
 		}
-		// Present-but-empty is distinct from absent here, so this tests for nil
-		// rather than length. AddABTestsVariant is a union and its UnmarshalJSON
-		// picks the arm by whether `customSearchParameters` is present at all, so
-		// dropping an empty map would reconstruct a search-parameter variant as a
-		// plain one and stop matching a configuration that still declares it.
-		if variant.CustomSearchParameters != nil {
+		// GetABTest returns an empty object for plain variants, so only a non-empty
+		// map proves that custom search parameters were configured.
+		if len(variant.CustomSearchParameters) > 0 {
 			entry["customSearchParameters"] = variant.CustomSearchParameters
 		}
 
