@@ -165,6 +165,18 @@ func TestExpandVariants(t *testing.T) {
 	})
 }
 
+func TestExpandVariantsRejectsEmptyCustomSearchParameters(t *testing.T) {
+	_, diags := expandVariants(types.StringValue(`[
+		{"index": "prod", "trafficPercentage": 50, "customSearchParameters": {}}
+	]`))
+	if !diags.HasError() {
+		t.Fatal("expected an explicitly empty customSearchParameters object to be rejected")
+	}
+	if !strings.Contains(diags.Errors()[0].Detail(), "must contain at least one search parameter") {
+		t.Fatalf("unexpected diagnostic: %s", diags.Errors()[0].Detail())
+	}
+}
+
 func TestExpandMetrics(t *testing.T) {
 	t.Run("invalid JSON returns a diagnostic error", func(t *testing.T) {
 		_, diags := expandMetrics(types.StringValue(`not valid json`))
