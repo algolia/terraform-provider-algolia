@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.2 (August 4, 2026)
 
 FEATURES:
 
@@ -7,6 +7,15 @@ FEATURES:
   for UI metadata such as facet ordering, redirects and widgets. Index data sources expose
   the same setting. Terraform manages the complete object and rejects fields that this
   provider version cannot represent, so newer fields require a provider upgrade.
+
+BREAKING CHANGES:
+
+- **Virtual replicas no longer accept primary-only settings in configuration.** Remove
+  `attribute_for_distinct`, `attributes_for_faceting`, `attributes_to_transliterate`,
+  `decompounded_attributes`, `disable_typo_tolerance_on_attributes`, `index_languages`,
+  `searchable_attributes`, and `separators_to_index` from `algolia_virtual_index` before
+  upgrading. Algolia inherits these values from the primary index and rejects attempts to
+  write them on a virtual replica.
 
 BUG FIXES:
 

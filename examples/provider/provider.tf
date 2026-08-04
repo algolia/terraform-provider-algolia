@@ -2,7 +2,7 @@ terraform {
   required_providers {
     algolia = {
       source  = "algolia/algolia"
-      version = "0.1.1"
+      version = "0.1.2"
     }
   }
 }
