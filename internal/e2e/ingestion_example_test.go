@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/ingestion"
+	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	"github.com/algolia/terraform-provider-algolia/internal/analyticsregion"
 	testconfig "github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -23,6 +24,16 @@ import (
 // fetching the illustrative feed or replacing records in an index.
 func TestE2EIngestionExample(t *testing.T) {
 	requireE2E(t)
+	if os.Getenv(analyticsregion.EnvVar) == "" {
+		t.Skip("ALGOLIA_ANALYTICS_REGION must be set for the Ingestion example")
+	}
+	assertExampleResourceAddresses(t, "ingestion-pipeline", []string{
+		"algolia_ingestion_source.products_csv",
+		"algolia_ingestion_transformation.stamp_indexed_at",
+		"algolia_ingestion_authentication.destination",
+		"algolia_ingestion_destination.products_index",
+		"algolia_ingestion_task.nightly_sync",
+	})
 
 	client, err := analyticsregion.NewIngestionClient(
 		os.Getenv("ALGOLIA_APP_ID"),
@@ -212,8 +223,15 @@ func checkIngestionExampleAbsent(client *ingestion.APIClient, ids *ingestionExam
 			{"source", ids.source, func() error { _, err := client.GetSource(client.NewApiGetSourceRequest(ids.source)); return err }},
 		}
 		for _, check := range checks {
-			if check.id != "" && check.get() == nil {
+			if check.id == "" {
+				return fmt.Errorf("Ingestion %s ID was not captured before destroy", check.kind)
+			}
+			err := check.get()
+			if err == nil {
 				return fmt.Errorf("Ingestion %s %s still exists after destroy", check.kind, check.id)
+			}
+			if !algoliaerr.IsNotFound(err) {
+				return fmt.Errorf("unexpected error checking Ingestion %s %s destruction: %w", check.kind, check.id, err)
 			}
 		}
 		return nil
