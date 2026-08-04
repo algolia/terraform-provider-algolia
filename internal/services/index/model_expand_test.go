@@ -475,6 +475,7 @@ func TestExpandIndexSettings(t *testing.T) {
 			SeparatorsToIndex:                       types.StringNull(),
 			ResponseFields:                          types.ListNull(types.StringType),
 			UserData:                                types.StringNull(),
+			RenderingContent:                        types.StringNull(),
 			EnableRules:                             types.BoolNull(),
 			EnablePersonalization:                   types.BoolNull(),
 			Replicas:                                types.ListNull(types.StringType),
@@ -517,6 +518,61 @@ func TestExpandIndexSettings(t *testing.T) {
 		}
 		if dv != 2 {
 			t.Errorf("expected distinct=2, got %d", dv)
+		}
+	})
+
+	t.Run("rendering content", func(t *testing.T) {
+		for _, tt := range []struct {
+			name      string
+			value     types.String
+			wantError bool
+			wantSet   bool
+		}{
+			{name: "null", value: types.StringNull()},
+			{name: "empty string", value: types.StringValue(""), wantError: true},
+			{name: "null JSON", value: types.StringValue(`null`), wantError: true},
+			{name: "trailing JSON", value: types.StringValue(`{} {}`), wantError: true},
+			{name: "empty object", value: types.StringValue(`{}`), wantSet: true},
+			{name: "populated", value: types.StringValue(`{"facetOrdering":{"facets":{"order":["brand"]}}}`), wantSet: true},
+			{name: "unsupported field", value: types.StringValue(`{"futureField":true}`), wantError: true},
+			{name: "case variant field", value: types.StringValue(`{"FacetOrdering":{"facets":{"order":["brand"]}}}`), wantError: true},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				advObj, diags := types.ObjectValueFrom(ctx, advancedAttrTypes, &AdvancedModel{
+					Distinct:                                types.Int64Null(),
+					MinProximity:                            types.Int64Null(),
+					ReplaceSynonymsInHighlight:              types.BoolNull(),
+					SeparatorsToIndex:                       types.StringNull(),
+					ResponseFields:                          types.ListNull(types.StringType),
+					UserData:                                types.StringNull(),
+					RenderingContent:                        tt.value,
+					EnableRules:                             types.BoolNull(),
+					EnablePersonalization:                   types.BoolNull(),
+					Replicas:                                types.ListNull(types.StringType),
+					EnableReRanking:                         types.BoolNull(),
+					ReRankingApplyFilter:                    types.StringNull(),
+					Mode:                                    types.StringNull(),
+					SemanticSearch:                          types.StringNull(),
+					AttributeCriteriaComputedByMinProximity: types.BoolNull(),
+				})
+				if diags.HasError() {
+					t.Fatalf("building advanced block: %v", diags)
+				}
+
+				model := &IndexResourceModel{
+					Advanced: advObj,
+				}
+				settings, expandDiags := expandIndexSettings(ctx, model)
+				if expandDiags.HasError() != tt.wantError {
+					t.Fatalf("diagnostics error = %t, want %t: %v", expandDiags.HasError(), tt.wantError, expandDiags)
+				}
+				if tt.wantError {
+					return
+				}
+				if (settings.RenderingContent != nil) != tt.wantSet {
+					t.Errorf("RenderingContent set = %t, want %t", settings.RenderingContent != nil, tt.wantSet)
+				}
+			})
 		}
 	})
 }

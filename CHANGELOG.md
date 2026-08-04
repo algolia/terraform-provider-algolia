@@ -1,6 +1,22 @@
 ## Unreleased
 
+FEATURES:
+
+- **Index rendering content can now be managed.** The `advanced.rendering_content`
+  attribute on `algolia_index` and `algolia_virtual_index` accepts a JSON-encoded object
+  for UI metadata such as facet ordering, redirects and widgets. Index data sources expose
+  the same setting. Terraform manages the complete object and rejects fields that this
+  provider version cannot represent, so newer fields require a provider upgrade.
+
 BUG FIXES:
+
+- **Virtual replicas no longer send primary-only settings that Algolia rejects.** The eight
+  inherited settings are now computed-only on `algolia_virtual_index`; create and update also
+  remove them defensively from the API request.
+
+- **Rules with a legacy string `hitsPerPage` value can now be read.** The provider normalizes
+  that value for the generated client's typed decode while preserving the original raw rule
+  parameters in Terraform state.
 
 - **Every checked-in Terraform example is now validated in CI.** The validator runs the
   examples against the current provider schema, including documentation snippets that do not

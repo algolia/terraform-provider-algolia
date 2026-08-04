@@ -365,6 +365,10 @@ func advancedDataSourceBlockSchema() map[string]datasourceschema.Attribute {
 			Description: "Custom user data as a JSON-encoded string.",
 			Computed:    true,
 		},
+		"rendering_content": datasourceschema.StringAttribute{
+			Description: "Rendering metadata for search interfaces as a JSON-encoded object. This provider version exposes the top-level fields facetOrdering, redirect, and widgets; newer fields require a provider upgrade.",
+			Computed:    true,
+		},
 		"enable_rules": datasourceschema.BoolAttribute{
 			Description: "Whether Rules are enabled.",
 			Computed:    true,

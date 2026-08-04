@@ -166,12 +166,59 @@ func getRuleRaw(ctx context.Context, client *search.APIClient, indexName, object
 		return nil, nil, ruleAPIError(res.StatusCode, resBody)
 	}
 
-	var rule search.Rule
-	if err := json.Unmarshal(resBody, &rule); err != nil {
-		return nil, nil, fmt.Errorf("decode rule: %w", err)
+	rule, err := decodeRuleResponse(resBody)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return &rule, extractRawParams(resBody), nil
+	return rule, extractRawParams(resBody), nil
+}
+
+// decodeRuleResponse decodes the typed fields of a GetRule response without
+// routing consequence.params through the generated client model. Terraform
+// preserves that open-ended object from the untouched response, while the
+// generated type rejects legacy or future parameter shapes it does not model.
+func decodeRuleResponse(payload []byte) (*search.Rule, error) {
+	typedPayload := omitRuleParamsForTypedDecode(payload)
+
+	var rule search.Rule
+	if err := json.Unmarshal(typedPayload, &rule); err != nil {
+		return nil, fmt.Errorf("decode rule: %w", err)
+	}
+
+	return &rule, nil
+}
+
+// omitRuleParamsForTypedDecode replaces consequence.params with an empty
+// object only in the copy decoded by the generated client. extractRawParams
+// continues to supply the original document to Terraform state.
+func omitRuleParamsForTypedDecode(payload []byte) []byte {
+	var rule map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &rule); err != nil {
+		return payload
+	}
+
+	var consequence map[string]json.RawMessage
+	if err := json.Unmarshal(rule["consequence"], &consequence); err != nil {
+		return payload
+	}
+
+	if _, ok := consequence["params"]; !ok {
+		return payload
+	}
+
+	consequence["params"] = json.RawMessage(`{}`)
+	normalizedConsequence, err := json.Marshal(consequence)
+	if err != nil {
+		return payload
+	}
+	rule["consequence"] = normalizedConsequence
+	normalizedRule, err := json.Marshal(rule)
+	if err != nil {
+		return payload
+	}
+
+	return normalizedRule
 }
 
 // extractRawParams pulls `consequence.params` out of a rule payload without
