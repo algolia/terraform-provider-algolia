@@ -1,8 +1,8 @@
 # Attribute shapes
 
-The shapes that differ from what Algolia's own API reference shows. Verified against the
-v0.1.1 schema; the [generated resource docs](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/resources) are
-authoritative.
+The shapes that differ from what Algolia's own API reference shows. The
+[generated resource docs](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/resources)
+are authoritative.
 
 ## JSON strings and nested blocks
 
