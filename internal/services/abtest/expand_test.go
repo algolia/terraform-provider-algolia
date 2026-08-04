@@ -139,6 +139,17 @@ func TestExpandVariants(t *testing.T) {
 		}
 	})
 
+	// Selecting the arm by hand made this regress once: `null` decodes into a nil map
+	// without error and then into the variant struct as a no-op, so a null entry became
+	// a silent {"index":"","trafficPercentage":0} where it used to be rejected.
+	t.Run("a null variant is rejected rather than becoming an empty one", func(t *testing.T) {
+		variants, diags := expandVariants(types.StringValue(`[null]`))
+		if !diags.HasError() {
+			encoded, _ := json.Marshal(variants)
+			t.Fatalf("expected a diagnostic for a null variant, got %s", encoded)
+		}
+	})
+
 	t.Run("invalid JSON returns a diagnostic error", func(t *testing.T) {
 		_, diags := expandVariants(types.StringValue(`not valid json`))
 		if !diags.HasError() {

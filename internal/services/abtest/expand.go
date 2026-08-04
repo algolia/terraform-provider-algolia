@@ -83,6 +83,12 @@ func expandVariants(value types.String) ([]abtestingapi.AddABTestsVariant, diag.
 		if err := json.Unmarshal(entry, &keys); err != nil {
 			return invalid("Failed to parse a variant: " + err.Error())
 		}
+		// A JSON `null` decodes into a nil map without error, and would then decode
+		// into the variant struct as a successful no-op, turning a null entry into a
+		// silent `{"index":"","trafficPercentage":0}`. Every element has to be an object.
+		if keys == nil {
+			return invalid("Each variant must be a JSON object; found a null entry.")
+		}
 
 		if _, ok := keys["customSearchParameters"]; ok {
 			var withParams abtestingapi.AbTestsVariantSearchParams
