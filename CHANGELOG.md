@@ -1,3 +1,23 @@
+## Unreleased
+
+BUG FIXES:
+
+- **`algolia_ab_test` silently dropped `customSearchParameters` from its variants.** The
+  generated union type in the Algolia client populates both of its arms when a variant carries
+  `customSearchParameters`, and serialises the one without them, so the parameters never
+  reached Algolia. Where the variants also differed by index the API accepted the request and
+  ran a test that exercised none of the requested parameters; variants sharing an index failed
+  instead with `An A/B test variant must have a unique index or custom search parameters`. The
+  provider now selects the union arm itself. A test pins the serialised request, since asserting
+  the decoded value passed while the wire format was wrong.
+
+NOTES:
+
+- The `algolia_ab_test` example no longer sets `minimumDetectableEffect`, which the API rejects
+  unless sample sizes accompany it, and takes its `end_at` as a variable: a test may not run for
+  more than 90 days, so a fixed date in an example expires. Its two experiments also target
+  different indices, because Algolia refuses a second test on an index that already has one.
+
 ## 0.1.1 (August 3, 2026)
 
 NOTES:

@@ -20,8 +20,12 @@ provider "algolia" {
 # diverges from what was submitted here. Use the algolia_ab_test data
 # source to inspect a test's live results.
 resource "algolia_ab_test" "ranking_experiment" {
-  name   = "homepage-ranking-experiment"
-  end_at = "2026-12-31T23:59:59Z"
+  name = "homepage-ranking-experiment"
+
+  # An A/B test cannot run for more than 90 days, so this has to be within 90 days
+  # of the apply. A date further out is rejected with "ABTest cannot run for more
+  # than 90 days (due to retention)".
+  end_at = var.ab_test_end_at
 
   # The first variant is conventionally the control (e.g. production);
   # the rest are indices with changed settings to test against it.
@@ -44,11 +48,10 @@ resource "algolia_ab_test" "ranking_experiment" {
     { name = "revenue", dimension = "USD" },
   ])
 
+  # `minimumDetectableEffect` is deliberately not set here: the API rejects it
+  # unless sample sizes are supplied alongside it ("Sample sizes are required when
+  # a minimum detectable effect is provided").
   configuration = jsonencode({
-    minimumDetectableEffect = {
-      size   = 0.1
-      metric = "conversionRate"
-    }
     errorCorrection = "bonferroni"
   })
 }
@@ -59,7 +62,7 @@ resource "algolia_ab_test" "ranking_experiment" {
 # both against `products_prod` would fail on apply.
 resource "algolia_ab_test" "search_params_experiment" {
   name   = "typo-tolerance-experiment"
-  end_at = "2026-12-31T23:59:59Z"
+  end_at = var.ab_test_end_at
 
   variants = jsonencode([
     {
@@ -78,4 +81,9 @@ resource "algolia_ab_test" "search_params_experiment" {
   metrics = jsonencode([
     { name = "clickThroughRate" },
   ])
+}
+
+variable "ab_test_end_at" {
+  description = "When both tests stop, RFC3339. Must be within 90 days of the apply: the API rejects a longer run because A/B test data is only retained that long."
+  type        = string
 }

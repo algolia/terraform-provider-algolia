@@ -1,6 +1,8 @@
 package abtest
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
@@ -101,6 +103,39 @@ func TestExpandVariants(t *testing.T) {
 		}
 		if searchParams.Index != "prod" || searchParams.TrafficPercentage != 50 {
 			t.Fatalf("searchParams = %#v, want index=prod trafficPercentage=50", searchParams)
+		}
+	})
+
+	// Asserting the arm is populated is not enough, and that is how this went
+	// unnoticed: the generated UnmarshalJSON populates the SearchParams arm and then
+	// the plain arm as well, and the generated MarshalJSON serialises the plain one
+	// first, so customSearchParameters never reached Algolia. Where the variants also
+	// differed by index the API accepted the request and ran a test that exercised
+	// none of the requested parameters. Pin the serialised form, which is the thing
+	// that was actually wrong.
+	t.Run("customSearchParameters survives serialisation", func(t *testing.T) {
+		variants, diags := expandVariants(types.StringValue(`[
+			{"index": "prod", "trafficPercentage": 50},
+			{"index": "prod", "trafficPercentage": 50, "customSearchParameters": {"typoTolerance": false}}
+		]`))
+		if diags.HasError() {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+
+		if variants[1].AbTestsVariant != nil {
+			t.Errorf("a variant carrying customSearchParameters must not also populate the plain arm, "+
+				"or MarshalJSON serialises that one and drops the parameters: %#v", variants[1].AbTestsVariant)
+		}
+
+		encoded, err := json.Marshal(variants)
+		if err != nil {
+			t.Fatalf("marshalling variants: %v", err)
+		}
+		if !strings.Contains(string(encoded), "customSearchParameters") {
+			t.Fatalf("customSearchParameters was dropped on the way to Algolia: %s", encoded)
+		}
+		if !strings.Contains(string(encoded), `"typoTolerance":false`) {
+			t.Fatalf("the parameter value was not serialised: %s", encoded)
 		}
 	})
 
