@@ -46,20 +46,65 @@ func expandAddABTestsRequest(model *ABTestResourceModel) (*abtestingapi.AddABTes
 
 // expandVariants JSON-decodes the `variants` attribute into the slice of
 // AddABTestsVariant expected by AddABTestsRequest. AddABTestsVariant is a
-// oneOf(AbTestsVariant, AbTestsVariantSearchParams); its generated
-// UnmarshalJSON picks the right variant based on whether
-// `customSearchParameters` is present, so a plain json.Unmarshal into the
-// slice is enough.
+// oneOf(AbTestsVariant, AbTestsVariantSearchParams), and the union arm has to be
+// selected here rather than left to the generated UnmarshalJSON, which cannot do
+// it: given a variant carrying `customSearchParameters` it populates the
+// SearchParams arm and *then* unconditionally populates the plain AbTestsVariant
+// arm too, which also succeeds because the extra key is simply ignored. The
+// generated MarshalJSON serialises whichever arm it finds first, and that is the
+// plain one, so `customSearchParameters` is dropped on the way out.
+//
+// The consequence is worse than an error. When the variants also differ by index
+// Algolia accepts the request and creates a test that silently exercises none of
+// the parameters that were asked for; only variants sharing an index fail loudly,
+// with "An A/B test variant must have a unique index or custom search
+// parameters". So decode into a plain map first and construct the arm explicitly.
 func expandVariants(value types.String) ([]abtestingapi.AddABTestsVariant, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	var variants []abtestingapi.AddABTestsVariant
 
-	if err := json.Unmarshal([]byte(value.ValueString()), &variants); err != nil {
+	invalid := func(detail string) ([]abtestingapi.AddABTestsVariant, diag.Diagnostics) {
 		diags.AddError(
 			"Invalid variants JSON",
 			"The `variants` attribute must be a JSON-encoded array of A/B test variants (e.g. "+
-				"jsonencode([{ index = \"prod\", trafficPercentage = 50 }, ...])). Failed to parse: "+err.Error(),
+				"jsonencode([{ index = \"prod\", trafficPercentage = 50 }, ...])). "+detail,
 		)
+
+		return nil, diags
+	}
+
+	var raw []json.RawMessage
+	if err := json.Unmarshal([]byte(value.ValueString()), &raw); err != nil {
+		return invalid("Failed to parse: " + err.Error())
+	}
+
+	variants := make([]abtestingapi.AddABTestsVariant, 0, len(raw))
+	for _, entry := range raw {
+		var keys map[string]json.RawMessage
+		if err := json.Unmarshal(entry, &keys); err != nil {
+			return invalid("Failed to parse a variant: " + err.Error())
+		}
+		// A JSON `null` decodes into a nil map without error, and would then decode
+		// into the variant struct as a successful no-op, turning a null entry into a
+		// silent `{"index":"","trafficPercentage":0}`. Every element has to be an object.
+		if keys == nil {
+			return invalid("Each variant must be a JSON object; found a null entry.")
+		}
+
+		if _, ok := keys["customSearchParameters"]; ok {
+			var withParams abtestingapi.AbTestsVariantSearchParams
+			if err := json.Unmarshal(entry, &withParams); err != nil {
+				return invalid("Failed to parse a variant with customSearchParameters: " + err.Error())
+			}
+			variants = append(variants, *abtestingapi.AbTestsVariantSearchParamsAsAddABTestsVariant(&withParams))
+
+			continue
+		}
+
+		var plain abtestingapi.AbTestsVariant
+		if err := json.Unmarshal(entry, &plain); err != nil {
+			return invalid("Failed to parse a variant: " + err.Error())
+		}
+		variants = append(variants, *abtestingapi.AbTestsVariantAsAddABTestsVariant(&plain))
 	}
 
 	return variants, diags
