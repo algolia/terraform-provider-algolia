@@ -2,6 +2,13 @@
 
 BUG FIXES:
 
+- **Every checked-in Terraform example is now validated in CI.** The validator runs the
+  examples against the current provider schema, including documentation snippets that do not
+  carry their own `required_providers` block. End-to-end tests also execute the three complete
+  examples through create, out-of-band drift, reconciliation, update and destroy, with isolated
+  names and cleanup-safe overrides. Two import examples now name resources and objects that
+  their accompanying configurations actually declare.
+
 - **`algolia_ab_test` silently dropped `customSearchParameters` from its variants.** The
   generated union type in the Algolia client populates both of its arms when a variant carries
   `customSearchParameters`, and serialises the one without them, so the parameters never

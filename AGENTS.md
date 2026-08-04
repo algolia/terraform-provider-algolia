@@ -7,6 +7,7 @@ This file provides guidance to AI coding agents working with code in this reposi
 ```bash
 make build                    # compile the provider
 make test                     # no credentials needed; acceptance tests skip themselves without TF_ACC
+make testexamples             # format-check and validate every example against the local provider schema
 make testacc                  # acceptance tests (needs ALGOLIA_APP_ID & ALGOLIA_API_KEY; some suites also need ALGOLIA_ANALYTICS_REGION)
 make e2e                      # end-to-end tests against a real application (build tag `e2e`, see below)
 make lint                     # run golangci-lint

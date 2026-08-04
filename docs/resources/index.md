@@ -237,5 +237,5 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 
 ```shell
 # Import an index by its name.
-terraform import algolia_index.example products
+terraform import algolia_index.example example_index
 ```
