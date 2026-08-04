@@ -327,11 +327,18 @@ default, so a document still naming the previous version sends a reader straight
 
 1. Date the `CHANGELOG.md` heading, replacing `(Unreleased)`.
 2. Update every version reference: `README.md`, `INSTALL.md` (the `--tag` example, the two
-   archive filenames, and the pin), `examples/provider/provider.tf`,
-   `examples/ecommerce-search/versions.tf`, `examples/ingestion-pipeline/versions.tf`,
+   archive filenames, and the pin), `examples/provider/provider.tf`, the `versions.tf` of
+   **every** directory under `examples/` that has one (`ecommerce-search`,
+   `ingestion-pipeline`, `media-search`),
    `skills/algolia-terraform-provider/SKILL.md` plus the schema note at the top of its
    `references/attribute-shapes.md`, and this file's state-compatibility section. Find them
    with `grep -rn '<previous-version>' --include='*.md' --include='*.tf' .`
+
+   That grep is necessary but not sufficient: a range constraint such as `~> 0.1` matches
+   the previous version without containing its literal text, so it never appears in the
+   results. `media-search` was missed
+   by two releases that way. Also run
+   `grep -rn 'version *= *"' examples --include='*.tf'` and read every pin.
 3. Run `make generate`. `docs/index.md` takes its snippet from
    `examples/provider/provider.tf`, so it follows rather than being edited.
 4. Confirm the Tests workflow is green for the commit you are about to tag: the release

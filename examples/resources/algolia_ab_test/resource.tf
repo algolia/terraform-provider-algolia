@@ -53,20 +53,22 @@ resource "algolia_ab_test" "ranking_experiment" {
   })
 }
 
-# A/B test that compares custom search parameters on the same index,
-# instead of two different indices.
+# A/B test that compares custom search parameters on one index, instead of two
+# different indices. Note it targets a different index from the test above:
+# Algolia does not run two tests against the same index at once, so declaring
+# both against `products_prod` would fail on apply.
 resource "algolia_ab_test" "search_params_experiment" {
   name   = "typo-tolerance-experiment"
   end_at = "2026-12-31T23:59:59Z"
 
   variants = jsonencode([
     {
-      index             = "products_prod"
+      index             = "articles_prod"
       trafficPercentage = 50
       description       = "default typo tolerance"
     },
     {
-      index                  = "products_prod"
+      index                  = "articles_prod"
       trafficPercentage      = 50
       description            = "typo tolerance disabled"
       customSearchParameters = { typoTolerance = false }

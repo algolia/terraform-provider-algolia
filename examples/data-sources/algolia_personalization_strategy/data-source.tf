@@ -20,3 +20,8 @@ resource "algolia_personalization_strategy" "example" {
 data "algolia_personalization_strategy" "example" {
   depends_on = [algolia_personalization_strategy.example]
 }
+
+# The strategy Algolia is applying, useful for confirming a write landed.
+output "personalization_impact" {
+  value = data.algolia_personalization_strategy.example.personalization_impact
+}

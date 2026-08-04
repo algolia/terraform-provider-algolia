@@ -40,7 +40,9 @@ resource "algolia_index" "catalog" {
 
   advanced {
     # A standard replica: its own copy of the records, with its own settings.
-    replicas = ["catalog_by_name"]
+    # Reference the resource rather than repeating its name as a string: the
+    # reference orders the two writes, where a literal leaves them concurrent.
+    replicas = [algolia_index.catalog_by_name.name]
   }
 }
 
