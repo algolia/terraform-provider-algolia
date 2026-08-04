@@ -334,8 +334,9 @@ default, so a document still naming the previous version sends a reader straight
    `references/attribute-shapes.md`, and this file's state-compatibility section. Find them
    with `grep -rn '<previous-version>' --include='*.md' --include='*.tf' .`
 
-   That grep is necessary but not sufficient: a range constraint such as `~> 0.1` does not
-   contain the previous version, so it never appears in the results. `media-search` was missed
+   That grep is necessary but not sufficient: a range constraint such as `~> 0.1` matches
+   the previous version without containing its literal text, so it never appears in the
+   results. `media-search` was missed
    by two releases that way. Also run
    `grep -rn 'version *= *"' examples --include='*.tf'` and read every pin.
 3. Run `make generate`. `docs/index.md` takes its snippet from

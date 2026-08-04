@@ -36,8 +36,11 @@ output "source_type" {
   value = data.algolia_ingestion_source.example.type
 }
 
+# `input` can carry credentials for some source types, so it is sensitive and the
+# output has to be marked as such.
 output "source_input" {
-  value = data.algolia_ingestion_source.example.input
+  value     = data.algolia_ingestion_source.example.input
+  sensitive = true
 }
 ```
 
