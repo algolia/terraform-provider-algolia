@@ -3,14 +3,11 @@
 page_title: "algolia Provider"
 description: |-
   The Algolia provider allows you to manage Algolia resources.
-  Some resources handle credentials. Terraform can retain sensitive values in state and saved plans, so protect those files and related CI artifacts.
 ---
 
 # algolia Provider
 
 The Algolia provider allows you to manage Algolia resources.
-
-Some resources handle credentials. Terraform can retain sensitive values in state and saved plans, so protect those files and related CI artifacts.
 
 ## Example Usage
 

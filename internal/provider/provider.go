@@ -63,9 +63,7 @@ func (p *algoliaProvider) Metadata(_ context.Context, _ provider.MetadataRequest
 
 func (p *algoliaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "The Algolia provider allows you to manage Algolia resources.\n\n" +
-			"Some resources handle credentials. Terraform can retain sensitive values in state " +
-			"and saved plans, so protect those files and related CI artifacts.",
+		Description: "The Algolia provider allows you to manage Algolia resources.",
 		Attributes: map[string]schema.Attribute{
 			"app_id": schema.StringAttribute{
 				Description: "The Algolia Application ID. Can also be set via the ALGOLIA_APP_ID environment variable.",
