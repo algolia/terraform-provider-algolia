@@ -1,3 +1,10 @@
+## Unreleased
+
+NOTES:
+
+- Documented secret-bearing provider configuration and the need to protect Terraform
+  state, plans, logs, and CI environments.
+
 ## 0.1.2 (August 4, 2026)
 
 FEATURES:
