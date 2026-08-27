@@ -1,17 +1,26 @@
 name: Dependabot auto-merge
 
-on: pull_request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   auto-merge:
     name: Auto-merge patch updates
     runs-on: ubuntu-latest
-    # Only act on PRs opened by Dependabot.
-    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    # Only act on Dependabot PRs that originate from this repository and target it.
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.user.type == 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/')
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
