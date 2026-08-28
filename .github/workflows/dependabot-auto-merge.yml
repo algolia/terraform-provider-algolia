@@ -1,21 +1,24 @@
 name: Dependabot auto-merge
 
 on:
-  pull_request:
+  # Dependabot pull_request runs receive a read-only token. pull_request_target
+  # lets the isolated merge job request write access; neither job executes PR code.
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions: {}
 
 jobs:
-  auto-merge:
-    name: Auto-merge patch updates
+  metadata:
+    name: Inspect Dependabot update
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      pull-requests: read
+    outputs:
+      update-type: ${{ steps.metadata.outputs.update-type }}
     # Only act on Dependabot PRs that originate from this repository and target it.
     if: >
-      github.event_name == 'pull_request' &&
+      github.event_name == 'pull_request_target' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.user.type == 'Bot' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -28,6 +31,17 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+  auto-merge:
+    name: Auto-merge patch updates
+    needs: metadata
+    if: needs.metadata.outputs.update-type == 'version-update:semver-patch'
+    runs-on: ubuntu-latest
+    # GitHub requires both permissions to enable auto-merge. Keep them confined to
+    # this job, which runs no third-party Action or pull-request code.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
       # Enable GitHub's native auto-merge so the PR merges as soon as the required
       # status checks pass.
       #
@@ -40,7 +54,6 @@ jobs:
       # Minor and major bumps therefore wait for a maintainer, who can merge to main
       # and read the acceptance run before releasing.
       - name: Enable auto-merge for patch bumps
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
