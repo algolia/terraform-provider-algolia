@@ -6,21 +6,23 @@
 # the release archive with the GitHub CLI (gh) and wires up your Terraform CLI
 # config so `terraform` can find it, unless that config already has a
 # provider_installation block, in which case it prints what to merge and leaves
-# the file alone. The archive is checked against the release's
-# SHA256SUMS on a best-effort basis; the release signs that checksum file rather
-# than each archive, and this script does not verify the signature.
+# the file alone. Before installing anything, the script authenticates the
+# release's SHA256SUMS with the project signing key and verifies the archive.
 #
 #   Default mode  : filesystem mirror. Behaves like a normal provider - you pin
 #                   a version and run `terraform init`.
 #   --dev-overrides: quick-test mode. No version pin and no `terraform init`;
 #                    Terraform prints a "development overrides" warning.
 #
-# Requirements: gh (authenticated). --dev-overrides also needs unzip.
+# Requirements: gh (authenticated), gpg, and sha256sum or shasum.
+# --dev-overrides also needs unzip.
 
 set -euo pipefail
 
 REPO="algolia/terraform-provider-algolia"
 PROVIDER_ADDR="registry.terraform.io/algolia/algolia"
+SIGNING_KEY_FINGERPRINT="8A8D999493009BEF83F4A16713B6FAB5E0DBAF30"
+SIGNING_KEYSERVER="hkps://keys.openpgp.org"
 
 # --- defaults (all overridable so the script is testable without touching real files) ---
 TAG=""
@@ -28,7 +30,7 @@ MODE="mirror"
 CONFIG_FILE="${TF_CLI_CONFIG_FILE:-$HOME/.terraformrc}"
 MIRROR_DIR="$HOME/.terraform.d/plugins"
 BIN_DIR="$HOME/.terraform.d/algolia-dev"
-TMP=""  # scratch dir for --dev-overrides; created on demand, removed on exit
+TMP=""  # verified release assets; created on demand, removed on exit
 
 err()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 info() { printf '==> %s\n' "$*"; }
@@ -51,7 +53,8 @@ Options:
   --bin-dir PATH     dev_overrides binary dir (default: ~/.terraform.d/algolia-dev)
   -h, --help         Show this help
 
-Requirements: gh (authenticated); unzip is also needed for --dev-overrides.
+Requirements: gh (authenticated), gpg, and sha256sum or shasum;
+              unzip is also needed for --dev-overrides.
 EOF
   exit 0
 }
@@ -71,6 +74,10 @@ done
 
 # --- prerequisite checks ---
 command -v gh >/dev/null 2>&1 || err "the GitHub CLI (gh) is required: https://cli.github.com"
+command -v gpg >/dev/null 2>&1 || err "gpg is required to verify the release signature"
+if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+  err "sha256sum or shasum is required to verify the release archive"
+fi
 # A token in the environment (e.g. GH_TOKEN in CI) counts as authenticated;
 # otherwise fall back to gh's stored credentials.
 if [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ] && ! gh auth status >/dev/null 2>&1; then
@@ -102,7 +109,52 @@ if [ -z "$TAG" ]; then
 fi
 VERSION="${TAG#v}"
 ZIP="terraform-provider-algolia_${VERSION}_${os}_${arch}.zip"
+SUMS="terraform-provider-algolia_${VERSION}_SHA256SUMS"
+SIGNATURE="$SUMS.sig"
 info "Installing $REPO $TAG ($os/$arch)"
+
+download_and_verify() {
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT
+
+  info "Downloading release archive and integrity files..."
+  gh release download "$TAG" --repo "$REPO" --pattern "$ZIP" --dir "$TMP" --clobber \
+    || err "download failed (is $ZIP an asset of $TAG?)"
+  gh release download "$TAG" --repo "$REPO" --pattern "$SUMS" --dir "$TMP" --clobber \
+    || err "download failed (is $SUMS an asset of $TAG?)"
+  gh release download "$TAG" --repo "$REPO" --pattern "$SIGNATURE" --dir "$TMP" --clobber \
+    || err "download failed (is $SIGNATURE an asset of $TAG?)"
+
+  local keyring="$TMP/gnupg"
+  mkdir -m 0700 "$keyring"
+  gpg --homedir "$keyring" --batch --keyserver "$SIGNING_KEYSERVER" \
+    --recv-keys "$SIGNING_KEY_FINGERPRINT" >/dev/null 2>&1 \
+    || err "could not retrieve release signing key $SIGNING_KEY_FINGERPRINT"
+
+  local imported_fingerprint
+  imported_fingerprint=$(gpg --homedir "$keyring" --batch --with-colons \
+    --fingerprint "$SIGNING_KEY_FINGERPRINT" 2>/dev/null \
+    | awk -F: '$1 == "fpr" { print $10; exit }')
+  [ "$imported_fingerprint" = "$SIGNING_KEY_FINGERPRINT" ] \
+    || err "retrieved release signing key has an unexpected fingerprint"
+
+  gpg --homedir "$keyring" --batch --verify "$TMP/$SIGNATURE" "$TMP/$SUMS" >/dev/null 2>&1 \
+    || err "signature verification failed for $SUMS"
+  info "Checksum signature OK ($SIGNING_KEY_FINGERPRINT)"
+
+  local expected actual
+  expected=$(awk -v file="$ZIP" '$2 == file { print $1 }' "$TMP/$SUMS")
+  [[ "$expected" =~ ^[[:xdigit:]]{64}$ ]] \
+    || err "$SUMS does not contain exactly one valid checksum for $ZIP"
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual=$(sha256sum "$TMP/$ZIP")
+  else
+    actual=$(shasum -a 256 "$TMP/$ZIP")
+  fi
+  actual=${actual%% *}
+  [ "$actual" = "$expected" ] || err "checksum verification failed for $ZIP"
+  info "Archive checksum OK"
+}
 
 mirror_block() {
   cat <<EOF
@@ -159,36 +211,15 @@ write_config_block() {
 
 install_mirror() {
   local dest="$MIRROR_DIR/$PROVIDER_ADDR"
-  info "Downloading $ZIP into filesystem mirror: $dest"
+  info "Installing $ZIP into filesystem mirror: $dest"
   mkdir -p "$dest"
-  gh release download "$TAG" --repo "$REPO" --pattern "$ZIP" --dir "$dest" --clobber \
-    || err "download failed (is $ZIP an asset of $TAG?)"
-
-  # Best-effort integrity check against the published SHA256SUMS (not GPG).
-  if gh release download "$TAG" --repo "$REPO" --pattern '*_SHA256SUMS' --dir "$dest" --clobber >/dev/null 2>&1; then
-    local sums; sums=$(ls "$dest"/*_SHA256SUMS 2>/dev/null | head -1 || true)
-    if [ -n "$sums" ]; then
-      local checker=""
-      command -v shasum   >/dev/null 2>&1 && checker="shasum -a 256 -c"
-      command -v sha256sum >/dev/null 2>&1 && checker="sha256sum -c"
-      if [ -n "$checker" ]; then
-        ( cd "$dest" && grep " $ZIP\$" "$(basename "$sums")" | $checker - >/dev/null 2>&1 ) \
-          && info "Checksum OK" || warn "checksum verification skipped/failed for $ZIP"
-      fi
-      rm -f "$sums"
-    fi
-  fi
+  install -m 0644 "$TMP/$ZIP" "$dest/$ZIP"
 
   write_config_block "$(mirror_block)"
 }
 
 install_dev() {
   command -v unzip >/dev/null 2>&1 || err "unzip is required for --dev-overrides"
-  TMP=$(mktemp -d)
-  trap 'rm -rf "$TMP"' EXIT
-  info "Downloading $ZIP..."
-  gh release download "$TAG" --repo "$REPO" --pattern "$ZIP" --dir "$TMP" --clobber \
-    || err "download failed (is $ZIP an asset of $TAG?)"
   info "Installing binary to $BIN_DIR"
   mkdir -p "$BIN_DIR" "$TMP/unz"
   unzip -o -q "$TMP/$ZIP" -d "$TMP/unz"
@@ -197,6 +228,8 @@ install_dev() {
   install -m 0755 "$bin" "$BIN_DIR/terraform-provider-algolia"
   write_config_block "$(dev_block)"
 }
+
+download_and_verify
 
 if [ "$MODE" = "dev" ]; then
   install_dev

@@ -10,8 +10,8 @@ modules, not providers, so one of the routes below is necessary.
 
 ## Quickest, no checkout
 
-Requires [`gh`](https://cli.github.com/) authenticated (`gh auth login`), which the
-installer needs anyway to download the release:
+Requires [`gh`](https://cli.github.com/) authenticated (`gh auth login`), GnuPG, and either
+`sha256sum` or `shasum`:
 
 ```bash
 gh api -H "Accept: application/vnd.github.raw" \
@@ -22,11 +22,11 @@ That resolves the most recent release, populates the mirror, and writes a
 `provider_installation` block to `~/.terraformrc` unless one is already there. It prints the
 version to pin when it finishes.
 
-Two things it does not promise. "Most recent" includes pre-releases, so pass `--tag` when you
-want a specific version rather than whatever was published last. And the checksum step is
-best-effort: it verifies the archive against the published `SHA256SUMS` when it can, but a
-missing checksum asset or checksum tool is tolerated silently, and a mismatch only warns
-before installing anyway. Verify by hand if you need the guarantee.
+"Most recent" includes pre-releases, so pass `--tag` when you want a specific version rather
+than whatever was published last. Before writing the archive or provider binary, the installer
+retrieves the project signing key by its pinned fingerprint, verifies the signature on the
+release's `SHA256SUMS`, and verifies the selected archive against that authenticated manifest.
+It stops without installing when any download, tool, signature, or checksum check fails.
 
 ## From a checkout
 
@@ -85,17 +85,21 @@ provider_installation {
 }
 ```
 
-**4. Optionally verify the download.** Terraform does not check signatures for
-filesystem-mirror installs, so verify by hand if you want the assurance. Download
-`terraform-provider-algolia_<version>_SHA256SUMS` from the same release, next to the archive,
-then check the archive against it:
+**4. Verify the download before using it.** Terraform does not check signatures for
+filesystem-mirror installs. Download `terraform-provider-algolia_<version>_SHA256SUMS` and
+its `.sig` file from the same release, retrieve the signing key by its pinned fingerprint,
+authenticate the checksum manifest, and then check the archive against it:
 
 ```bash
-shasum -a 256 -c terraform-provider-algolia_0.1.2_SHA256SUMS 2>&1 | grep OK
+gpg --keyserver hkps://keys.openpgp.org \
+  --recv-keys 8A8D999493009BEF83F4A16713B6FAB5E0DBAF30
+gpg --verify terraform-provider-algolia_0.1.2_SHA256SUMS.sig \
+  terraform-provider-algolia_0.1.2_SHA256SUMS
+grep ' terraform-provider-algolia_0.1.2_darwin_arm64.zip$' \
+  terraform-provider-algolia_0.1.2_SHA256SUMS | shasum -a 256 -c -
 ```
 
-`SHA256SUMS` is also signed, as `SHA256SUMS.sig`. The signing key is published on
-`keys.openpgp.org` as `contact@algolia.com`, fingerprint
+The signing key is published on `keys.openpgp.org` as `contact@algolia.com`, fingerprint
 `8A8D 9994 9300 9BEF 83F4  A167 13B6 FAB5 E0DB AF30`.
 
 ## Pin the version you installed
