@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/terraform-provider-algolia/internal/agentstudioerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -63,7 +64,7 @@ func (d *agentProviderDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	apiResp, err := d.client.GetProvider(d.client.NewApiGetProviderRequest(providerID), agentStudio.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading provider", "Could not read provider "+providerID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading provider", agentstudioerr.Message("read provider "+providerID, err))
 		return
 	}
 
@@ -120,7 +121,7 @@ func (d *agentProviderModelsDataSource) Read(ctx context.Context, req datasource
 
 	models, err := d.client.ListProviderModels(d.client.NewApiListProviderModelsRequest(providerID), agentStudio.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading provider models", "Could not read provider models for "+providerID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading provider models", agentstudioerr.Message("read models for provider "+providerID, err))
 		return
 	}
 
