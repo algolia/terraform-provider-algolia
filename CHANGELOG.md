@@ -19,6 +19,10 @@ BREAKING CHANGES:
 
 BUG FIXES:
 
+- **Agent Studio API errors no longer expose downstream response text.** Agent and Agent
+  Provider resources and data sources now return operation-specific diagnostics without
+  including untrusted API error details that could contain provider keys or MCP headers.
+
 - **Virtual replicas no longer send primary-only settings that Algolia rejects.** The eight
   inherited settings are now computed-only on `algolia_virtual_index`; create and update also
   remove them defensively from the API request.

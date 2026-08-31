@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/terraform-provider-algolia/internal/agentstudioerr"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -81,7 +82,7 @@ func (r *agentProviderResource) Create(ctx context.Context, req resource.CreateR
 
 	apiResp, err := r.client.CreateProvider(r.client.NewApiCreateProviderRequest(apiReq), agentStudio.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating provider", "Could not create provider: "+err.Error())
+		resp.Diagnostics.AddError("Error creating provider", agentstudioerr.Message("create the provider", err))
 		return
 	}
 
@@ -111,7 +112,7 @@ func (r *agentProviderResource) Read(ctx context.Context, req resource.ReadReque
 			return
 		}
 
-		resp.Diagnostics.AddError("Error reading provider", "Could not read provider "+providerID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading provider", agentstudioerr.Message("read provider "+providerID, err))
 		return
 	}
 
@@ -141,7 +142,7 @@ func (r *agentProviderResource) Update(ctx context.Context, req resource.UpdateR
 
 	apiResp, err := r.client.UpdateProvider(r.client.NewApiUpdateProviderRequest(providerID, apiReq), agentStudio.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating provider", "Could not update provider "+providerID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating provider", agentstudioerr.Message("update provider "+providerID, err))
 		return
 	}
 
@@ -164,7 +165,7 @@ func (r *agentProviderResource) Delete(ctx context.Context, req resource.DeleteR
 	tflog.Debug(ctx, "Deleting agent provider", map[string]any{"id": providerID})
 
 	if err := r.client.DeleteProvider(r.client.NewApiDeleteProviderRequest(providerID), agentStudio.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error deleting provider", "Could not delete provider "+providerID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting provider", agentstudioerr.Message("delete provider "+providerID, err))
 		return
 	}
 }
@@ -172,7 +173,7 @@ func (r *agentProviderResource) Delete(ctx context.Context, req resource.DeleteR
 func (r *agentProviderResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	apiResp, err := r.client.GetProvider(r.client.NewApiGetProviderRequest(req.ID), agentStudio.WithContext(ctx))
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing provider", "Could not import provider "+req.ID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing provider", agentstudioerr.Message("import provider "+req.ID, err))
 		return
 	}
 

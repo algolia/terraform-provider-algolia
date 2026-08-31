@@ -7,6 +7,7 @@ import (
 	"github.com/algolia/terraform-provider-algolia/internal/deletionprotection"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/terraform-provider-algolia/internal/agentstudioerr"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -68,7 +69,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	doc, err := createAgent(ctx, r.client, apiReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating agent", "Could not create agent: "+err.Error())
+		resp.Diagnostics.AddError("Error creating agent", agentstudioerr.Message("create the agent", err))
 		return
 	}
 
@@ -76,7 +77,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if plan.Publish.ValueBool() {
 		doc, err = publishAgent(ctx, r.client, doc.agent.Id)
 		if err != nil {
-			resp.Diagnostics.AddError("Error publishing agent", "Agent created but could not be published: "+err.Error())
+			resp.Diagnostics.AddError("Error publishing agent", agentstudioerr.Message("publish the newly created agent", err))
 			return
 		}
 	}
@@ -106,7 +107,7 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Error reading agent", "Could not read agent "+agentID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading agent", agentstudioerr.Message("read agent "+agentID, err))
 		return
 	}
 
@@ -147,7 +148,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	doc, err := updateAgent(ctx, r.client, agentID, apiReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating agent", "Could not update agent "+agentID+": "+err.Error())
+		resp.Diagnostics.AddError("Error updating agent", agentstudioerr.Message("update agent "+agentID, err))
 		return
 	}
 
@@ -155,7 +156,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if shouldPublishAfterUpdate(state, plan) {
 		doc, err = publishAgent(ctx, r.client, agentID)
 		if err != nil {
-			resp.Diagnostics.AddError("Error publishing agent", "Agent updated but could not be published: "+err.Error())
+			resp.Diagnostics.AddError("Error publishing agent", agentstudioerr.Message("publish the updated agent", err))
 			return
 		}
 	}
@@ -185,7 +186,7 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	tflog.Debug(ctx, "Deleting agent", map[string]interface{}{"id": agentID})
 
 	if err := r.client.DeleteAgent(r.client.NewApiDeleteAgentRequest(agentID), agentStudio.WithContext(ctx)); err != nil {
-		resp.Diagnostics.AddError("Error deleting agent", "Could not delete agent "+agentID+": "+err.Error())
+		resp.Diagnostics.AddError("Error deleting agent", agentstudioerr.Message("delete agent "+agentID, err))
 		return
 	}
 }
@@ -193,7 +194,7 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	doc, err := getAgent(ctx, r.client, req.ID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error importing agent", "Could not import agent "+req.ID+": "+err.Error())
+		resp.Diagnostics.AddError("Error importing agent", agentstudioerr.Message("import agent "+req.ID, err))
 		return
 	}
 
