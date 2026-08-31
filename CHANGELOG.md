@@ -1,3 +1,12 @@
+## Unreleased
+
+NOTES:
+
+- **The release installer now requires authenticated verification.** GnuPG and either
+  `sha256sum` or `shasum` are required. The installer verifies the signature on the release
+  checksum manifest and the selected archive before writing any provider or Terraform CLI
+  configuration files, and stops without installing if verification fails.
+
 ## 0.1.2 (August 4, 2026)
 
 FEATURES:
