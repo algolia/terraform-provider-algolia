@@ -47,8 +47,8 @@ gh api -H "Accept: application/vnd.github.raw" \
   repos/algolia/terraform-provider-algolia/contents/scripts/install.sh | bash
 ```
 
-Then pin the version it prints. See [INSTALL.md](INSTALL.md) for the other routes, doing it
-by hand, and what to check when `terraform init` cannot find the provider.
+Then pin the version it prints. See [INSTALL.md](INSTALL.md) for installer options and what
+to check when `terraform init` cannot find the provider.
 
 ## Use it
 

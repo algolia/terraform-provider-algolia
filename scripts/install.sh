@@ -88,7 +88,7 @@ fi
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$os" in
   darwin|linux) ;;
-  *) err "unsupported OS '$os' (macOS and Linux only; on Windows follow the README manual steps)" ;;
+  *) err "unsupported OS '$os' (macOS and Linux only; native Windows is not supported)" ;;
 esac
 arch=$(uname -m)
 case "$arch" in
