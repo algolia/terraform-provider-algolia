@@ -8,6 +8,9 @@ No private registry is required.
 Terraform cannot install a provider from a git URL. `source = "git::https://..."` works for
 modules, not providers, so one of the routes below is necessary.
 
+The installer supports macOS and Linux, including WSL when Terraform runs inside WSL. It does
+not support native Windows installations.
+
 ## Quickest, no checkout
 
 Requires [`gh`](https://cli.github.com/) authenticated (`gh auth login`), GnuPG, and either
@@ -22,11 +25,11 @@ That resolves the most recent release, populates the mirror, and writes a
 `provider_installation` block to `~/.terraformrc` unless one is already there. It prints the
 version to pin when it finishes.
 
-"Most recent" includes pre-releases, so pass `--tag` when you want a specific version rather
-than whatever was published last. Before writing the archive or provider binary, the installer
-retrieves the project signing key by its pinned fingerprint, verifies the signature on the
-release's `SHA256SUMS`, and verifies the selected archive against that authenticated manifest.
-It stops without installing when any download, tool, signature, or checksum check fails.
+"Most recent" includes pre-releases. Before writing the archive or provider binary, the
+installer retrieves the project signing key by its pinned fingerprint, verifies the signature
+on the release's `SHA256SUMS`, and verifies the selected archive against that authenticated
+manifest. It stops without installing when any download, tool, signature, or checksum check
+fails.
 
 ## From a checkout
 
@@ -47,60 +50,6 @@ The script never edits an existing `provider_installation` block, since Terrafor
 one. What it does depends on what is already there: if the config already mentions the Algolia
 provider it leaves the file untouched and says so, and if there is a `provider_installation`
 block that does not mention Algolia it prints the entries for you to merge in by hand.
-
-## By hand
-
-The script automates exactly these steps.
-
-**1. Download the archive for your platform** from the
-[releases page](https://github.com/algolia/terraform-provider-algolia/releases):
-`terraform-provider-algolia_<version>_<os>_<arch>.zip`, where `<os>_<arch>` is one of
-`darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64` or
-`windows_arm64`.
-
-**2. Put it in the mirror without unzipping it.** The mirror uses the packed layout:
-
-```bash
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia
-mv ~/Downloads/terraform-provider-algolia_0.1.2_darwin_arm64.zip \
-   ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia/
-```
-
-On Windows the directory is
-`%APPDATA%\terraform.d\plugins\registry.terraform.io\algolia\algolia\`.
-
-**3. Point Terraform at the mirror** from your CLI config, `~/.terraformrc` on macOS and
-Linux or `%APPDATA%\terraform.rc` on Windows. This keeps every other provider coming from
-the public registry:
-
-```hcl
-provider_installation {
-  filesystem_mirror {
-    path    = "/Users/<you>/.terraform.d/plugins"
-    include = ["registry.terraform.io/algolia/algolia"]
-  }
-  direct {
-    exclude = ["registry.terraform.io/algolia/algolia"]
-  }
-}
-```
-
-**4. Verify the download before using it.** Terraform does not check signatures for
-filesystem-mirror installs. Download `terraform-provider-algolia_<version>_SHA256SUMS` and
-its `.sig` file from the same release, retrieve the signing key by its pinned fingerprint,
-authenticate the checksum manifest, and then check the archive against it:
-
-```bash
-gpg --keyserver hkps://keys.openpgp.org \
-  --recv-keys 8A8D999493009BEF83F4A16713B6FAB5E0DBAF30
-gpg --verify terraform-provider-algolia_0.1.2_SHA256SUMS.sig \
-  terraform-provider-algolia_0.1.2_SHA256SUMS
-grep ' terraform-provider-algolia_0.1.2_darwin_arm64.zip$' \
-  terraform-provider-algolia_0.1.2_SHA256SUMS | shasum -a 256 -c -
-```
-
-The signing key is published on `keys.openpgp.org` as `contact@algolia.com`, fingerprint
-`8A8D 9994 9300 9BEF 83F4  A167 13B6 FAB5 E0DB AF30`.
 
 ## Pin the version you installed
 
