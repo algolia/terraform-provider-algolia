@@ -94,6 +94,28 @@ until you set it to `false` and apply; and a primary index's replicas are split 
 resources, standard ones in `algolia_index`'s `advanced.replicas` and each virtual one in
 its own `algolia_virtual_index`. The [CHANGELOG](CHANGELOG.md) notes cover both.
 
+## Sensitive data
+
+In addition to the Algolia Admin API key, resources and data sources can handle:
+
+- Algolia API-key values managed by `algolia_api_key` or read by the
+  `algolia_api_key` and `algolia_api_keys` data sources
+- Agent Provider API keys managed by `algolia_agent_provider`
+- MCP authorization headers managed or read by `algolia_agent`
+- credentials in `algolia_ingestion_authentication.input`
+- connector secrets and presigned URLs in `algolia_ingestion_source.input`
+
+These attributes are marked sensitive, which suppresses their values in normal Terraform
+output but does not omit or encrypt them in state. Sensitive values may also be present in
+configuration, saved plans, outputs, logs, and CI artifacts. Treat state and plan files as
+sensitive, restrict access to them, and use the encryption and access controls offered by
+the selected backend and CI platform. Environment variables and sensitive Terraform
+variables can keep credentials out of checked-in configuration and routine CLI output,
+but values assigned to resource attributes can still be retained in state.
+
+Configuration repositories, state backends, saved plans, outputs, and CI environments
+are controlled by the Terraform operator and the systems they select.
+
 ## Using it with a coding agent
 
 [`skills/algolia-terraform-provider`](skills/algolia-terraform-provider/) is an agent skill
