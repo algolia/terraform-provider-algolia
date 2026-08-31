@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
+	"github.com/algolia/terraform-provider-algolia/internal/agentstudioerr"
 	providertypes "github.com/algolia/terraform-provider-algolia/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -57,7 +58,7 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	doc, err := getAgent(ctx, d.client, agentID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading agent", "Could not read agent "+agentID+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading agent", agentstudioerr.Message("read agent "+agentID, err))
 		return
 	}
 
