@@ -5,8 +5,7 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   # A tag push does not trigger the Tests workflow (it runs on pushes to main and
