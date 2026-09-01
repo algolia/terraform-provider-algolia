@@ -116,6 +116,22 @@ but values assigned to resource attributes can still be retained in state.
 Configuration repositories, state backends, saved plans, outputs, and CI environments
 are controlled by the Terraform operator and the systems they select.
 
+## Downstream external integrations
+
+The provider runs in the operator's environment and sends configuration to Algolia;
+Algolia services may make downstream calls, like so:
+
+```text
+Operator -> Terraform Provider -> Algolia API -> Algolia-managed service -> External endpoint
+```
+
+Configuration that may cause downstream calls includes:
+
+- Agent Studio: Agent Provider `base_url` fields and Agent MCP `url`, optionally with `headers`
+- Ingestion: source and OAuth URLs; connector configuration and transformation code may
+  specify additional destinations
+
+
 ## Using it with a coding agent
 
 [`skills/algolia-terraform-provider`](skills/algolia-terraform-provider/) is an agent skill
