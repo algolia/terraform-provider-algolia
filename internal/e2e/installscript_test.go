@@ -12,19 +12,24 @@ import (
 )
 
 // requireInstallScript skips unless this is an e2e run (TF_ACC) and the tools
-// the install script needs are present: bash, gh (authenticated), terraform,
-// and unzip. Unlike the other e2e tests it does NOT need Algolia credentials -
-// scripts/install.sh only downloads the published provider release and runs
-// terraform init/plan; it makes no live Algolia API calls.
+// the install script needs are present: bash, gh (authenticated), gpg, a SHA-256
+// tool, terraform, and unzip. Unlike the other e2e tests it does NOT need Algolia
+// credentials - scripts/install.sh only downloads the published provider release
+// and runs terraform init/plan; it makes no live Algolia API calls.
 func requireInstallScript(t *testing.T) {
 	t.Helper()
 
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("install-script test is skipped unless TF_ACC is set; run `make e2e`")
 	}
-	for _, tool := range []string{"bash", "gh", "terraform", "unzip"} {
+	for _, tool := range []string{"bash", "gh", "gpg", "terraform", "unzip"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Skipf("%q not found on PATH; skipping install-script test", tool)
+		}
+	}
+	if _, err := exec.LookPath("sha256sum"); err != nil {
+		if _, err := exec.LookPath("shasum"); err != nil {
+			t.Skip("sha256sum and shasum not found on PATH; skipping install-script test")
 		}
 	}
 	// A token in the environment (GH_TOKEN in CI) counts as authenticated;
