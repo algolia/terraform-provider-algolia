@@ -78,10 +78,9 @@ func latestReleaseTag(t *testing.T, root string) string {
 	return tag
 }
 
-// TestE2EInstallScript exercises the README "Quick install" (scripts/install.sh)
-// against the latest published release, in both install modes, proving an
-// internal developer can install and use the provider without the public
-// Terraform Registry.
+// TestE2EInstallScript exercises the signed release installer (scripts/install.sh)
+// against the latest published release in both install modes, proving it works
+// whenever direct Registry access is unavailable.
 func TestE2EInstallScript(t *testing.T) {
 	requireInstallScript(t)
 

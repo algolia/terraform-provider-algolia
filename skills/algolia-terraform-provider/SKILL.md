@@ -8,8 +8,9 @@ description: Use when installing the Algolia Terraform provider or writing Terra
 For writing Terraform that *uses* this provider.
 
 The authoritative reference for every argument and attribute is the provider's generated
-documentation. It is not on the Terraform Registry, so read it in the repository:
+documentation:
 
+- [Terraform Registry](https://registry.terraform.io/providers/algolia/algolia/latest/docs)
 - [Resources](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/resources)
 - [Data sources](https://github.com/algolia/terraform-provider-algolia/tree/main/docs/data-sources)
 
@@ -27,21 +28,7 @@ Reference files in this skill, to read when the topic comes up:
 
 ## Install
 
-Not on the Terraform Registry, so Terraform will not fetch it. With `gh` authenticated:
-
-```bash
-gh api -H "Accept: application/vnd.github.raw" \
-  repos/algolia/terraform-provider-algolia/contents/scripts/install.sh | bash
-```
-
-This puts the release archive in a filesystem mirror, writes a `provider_installation` block
-to `~/.terraformrc` unless the file already has one, and prints the version to pin. If it
-finds an existing block it changes nothing and prints what to merge in by hand.
-[INSTALL.md](https://github.com/algolia/terraform-provider-algolia/blob/main/INSTALL.md)
-covers doing it by hand and what to check when `terraform init` cannot find the provider.
-
-Then pin that exact version. A mirror holds only what has been put in it, so a constraint
-matching nothing fails rather than downloading:
+Declare the provider from the public Terraform Registry:
 
 ```hcl
 terraform {
@@ -55,6 +42,10 @@ terraform {
 
 provider "algolia" {} # reads ALGOLIA_APP_ID and ALGOLIA_API_KEY
 ```
+
+Run `terraform init` to download the provider and create or update `.terraform.lock.hcl`.
+[INSTALL.md](https://github.com/algolia/terraform-provider-algolia/blob/main/INSTALL.md)
+covers Registry upgrades, signed release installation as a fallback, and troubleshooting.
 
 `ALGOLIA_API_KEY` must be an admin key. Also set `ALGOLIA_ANALYTICS_REGION` to `us` or `eu`
 when using Query Suggestions, Personalization, A/B testing or Ingestion; those APIs are
