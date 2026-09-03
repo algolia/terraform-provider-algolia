@@ -30,6 +30,25 @@ run:
 terraform init -upgrade
 ```
 
+### Migrating from the release installer
+
+If you previously used `install.sh` and now want to install from the Registry, its
+`provider_installation` block excludes Algolia from direct installation. Replace the block the
+installer created in `~/.terraformrc` (or the configured CLI configuration file) with:
+
+```hcl
+provider_installation {
+  direct {}
+}
+```
+
+Then run `terraform init -upgrade`. Do not only delete the block while the provider remains in
+the default mirror at `~/.terraform.d/plugins`: without an explicit block, Terraform's
+[implied installation configuration](https://developer.hashicorp.com/terraform/cli/config/config-file#implied-local-mirror-directories)
+detects providers there and automatically excludes them from direct installation. To return to
+that implicit configuration instead, remove both the block and
+`~/.terraform.d/plugins/registry.terraform.io/algolia/algolia`.
+
 ## Install from a release archive
 
 Use the release installer when direct Registry access is unavailable or when testing a

@@ -2,7 +2,7 @@
 
 | Message | Cause |
 | --- | --- |
-| `no available releases match the given constraints` | Check the [published versions](https://registry.terraform.io/providers/algolia/algolia/latest), the configured constraint, and direct Registry access. When using the signed release installer's filesystem mirror as a fallback, check that the constraint matches the version it reported installing. |
+| `no available releases match the given constraints` | Check the [published versions](https://registry.terraform.io/providers/algolia/algolia/latest), the configured constraint, and direct Registry access. An older `install.sh` configuration excludes Algolia from direct installation; follow the migration instructions in [INSTALL.md](https://github.com/algolia/terraform-provider-algolia/blob/main/INSTALL.md). When intentionally using its filesystem mirror as a fallback, check that the constraint matches the version it reported installing. |
 | `does not support resource type "algolia_..."` for a resource that exists, or `Unsupported argument` for a documented argument | Terraform loaded a different build than the selected version. An old unpacked build under `~/.terraform.d/plugins/registry.terraform.io/algolia/algolia/<version>/` can shadow the Registry or release-archive package of the same version; remove it. See [INSTALL.md](https://github.com/algolia/terraform-provider-algolia/blob/main/INSTALL.md). |
 | `Deletion Protection Enabled` | Set `deletion_protection = false` and apply that before destroying. |
 | `Virtual replica declared on the wrong resource` | A `virtual(...)` entry is in `advanced.replicas`. Declare it as an `algolia_virtual_index` instead. |
