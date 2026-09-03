@@ -9,7 +9,14 @@ fi
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 version="$1"
 release_date=$(date '+%B %e, %Y' | sed 's/  / /g')
-previous_version=$(sed -n 's/^[[:space:]]*version = "\([0-9][0-9.]*\)"$/\1/p' "$repo_root/examples/provider/provider.tf")
+previous_version=$(
+  git -C "$repo_root" tag --list 'v*' --sort=-version:refname |
+    awk '/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/ {
+      sub(/^v/, "")
+      print
+      exit
+    }'
+)
 
 version_is_greater() {
   local candidate_major candidate_minor candidate_patch current_major current_minor current_patch
@@ -20,7 +27,11 @@ version_is_greater() {
     ((candidate_major == current_major && candidate_minor == current_minor && candidate_patch > current_patch))
 }
 
-if [[ -z "$previous_version" ]] || ! version_is_greater "$version" "$previous_version"; then
+if [[ -z "$previous_version" ]]; then
+  echo "no stable release tag found; fetch tags before preparing a release" >&2
+  exit 1
+fi
+if ! version_is_greater "$version" "$previous_version"; then
   echo "$version must be greater than the current release $previous_version" >&2
   exit 1
 fi
@@ -51,8 +62,16 @@ version_files=(
   skills/algolia-terraform-provider/SKILL.md
 )
 
+for relative_path in "${version_files[@]}"; do
+  if ! grep -Eq "version[[:space:]]*=[[:space:]]*\"${previous_version//./\\.}\"" \
+    "$repo_root/$relative_path"; then
+    echo "$relative_path does not pin the current release $previous_version" >&2
+    exit 1
+  fi
+done
+
 rollback() {
-  git -C "$repo_root" restore -- CHANGELOG.md README.md INSTALL.md docs "${version_files[@]}"
+  git -C "$repo_root" restore -- CHANGELOG.md docs "${version_files[@]}"
   rm -f "$repo_root/CHANGELOG.md.tmp"
 }
 rollback_on_failure() {
@@ -86,7 +105,8 @@ if grep -n -F "$previous_version" "${absolute_version_files[@]}" >/dev/null; the
   echo "a release-version reference was not updated" >&2
   exit 1
 fi
-if ! grep -q "version = \"$version\"" "$repo_root/docs/index.md"; then
+if ! grep -Eq "version[[:space:]]*=[[:space:]]*\"${version//./\\.}\"" \
+  "$repo_root/docs/index.md"; then
   echo "generated provider documentation does not reference $version" >&2
   exit 1
 fi
@@ -94,8 +114,8 @@ fi
 # constraint used `~> 0.1`. Inspect every Terraform file that declares this provider,
 # including examples added after this script, and require an exact prepared pin.
 while IFS= read -r -d '' terraform_file; do
-  if grep -q 'source  *= *"algolia/algolia"' "$terraform_file" &&
-    ! grep -q "version  *= *\"$version\"" "$terraform_file"; then
+  if grep -Eq 'source[[:space:]]*=[[:space:]]*"algolia/algolia"' "$terraform_file" &&
+    ! grep -Eq "version[[:space:]]*=[[:space:]]*\"${version//./\\.}\"" "$terraform_file"; then
     echo "$terraform_file does not pin algolia/algolia to $version" >&2
     exit 1
   fi

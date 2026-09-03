@@ -321,17 +321,13 @@ and therefore run only on a push to `main`. Do not widen those triggers to pull 
 
 ### Cutting a release
 
-The version string is not stored in one place, and a missed copy leaves a snippet that
-someone will paste and watch fail. `scripts/install.sh` installs the **latest** release by
-default, so a document still naming the previous version sends a reader straight into
-`no available releases match the given constraints`. Before tagging:
+The checked-in installation examples pin an exact provider version so copied configurations
+resolve to the provider release their documentation describes. Before tagging:
 
-1. Run `make prepare-release VERSION=x.y.z`. It dates the changelog, updates every
-   checked-in version example, regenerates the provider documentation, and fails if a
-   tracked release pin was missed. Read the resulting diff rather than treating the command
-   as approval to release. The script deliberately inspects every Terraform example that
-   declares this provider: a range such as `~> 0.1` does not contain the previous literal,
-   which caused `media-search` to be missed by two earlier releases.
+1. Run `make prepare-release VERSION=x.y.z`. It checks that the version is newer than the
+   latest stable Git tag, dates the changelog, updates every checked-in version example,
+   regenerates the provider documentation, and fails if a tracked release pin was missed.
+   Read the resulting diff rather than treating the command as approval to release.
 2. Confirm the Tests workflow is green for the commit you are about to tag: the release
    workflow refuses to build otherwise.
 3. Tag and push. Then install from the published release into a scratch mirror and run
