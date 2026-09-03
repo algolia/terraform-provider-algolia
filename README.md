@@ -4,7 +4,6 @@
 
 Manage your [Algolia](https://www.algolia.com/) search infrastructure as code.
 
-[![Status](https://img.shields.io/badge/status-beta-orange.svg)](https://github.com/algolia/terraform-provider-algolia/releases)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](LICENSE)
 
 </div>
@@ -39,16 +38,16 @@ Which Algolia APIs are covered, and which are deliberately out of scope, is trac
 
 ## Install
 
-The provider is not on the Terraform Registry, so it installs from a release archive. With
-[`gh`](https://cli.github.com/) authenticated:
+Terraform installs the provider from the public
+[Terraform Registry](https://registry.terraform.io/providers/algolia/algolia/latest) when you
+declare it in `required_providers` as shown below and initialize the configuration:
 
 ```bash
-gh api -H "Accept: application/vnd.github.raw" \
-  repos/algolia/terraform-provider-algolia/contents/scripts/install.sh | bash
+terraform init
 ```
 
-Then pin the version it prints. See [INSTALL.md](INSTALL.md) for installer options and what
-to check when `terraform init` cannot find the provider.
+See [INSTALL.md](INSTALL.md) for version upgrades, signed release installation as a fallback,
+and what to check when `terraform init` cannot find the provider.
 
 ## Use it
 

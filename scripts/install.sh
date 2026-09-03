@@ -2,12 +2,12 @@
 #
 # install.sh - install the Algolia Terraform provider from its GitHub releases.
 #
-# The provider is not published to the Terraform Registry, so this script fetches
-# the release archive with the GitHub CLI (gh) and wires up your Terraform CLI
-# config so `terraform` can find it, unless that config already has a
-# provider_installation block, in which case it prints what to merge and leaves
-# the file alone. Before installing anything, the script authenticates the
-# release's SHA256SUMS with the project signing key and verifies the archive.
+# As a manual fallback, this script fetches the release archive with the GitHub
+# CLI (gh) and wires up your Terraform CLI without direct Registry access. If
+# the Terraform CLI config already has a provider_installation block, it prints
+# what to merge and leaves the file alone. Before installing anything, the
+# script authenticates the release's SHA256SUMS with the project signing key and
+# verifies the archive.
 #
 #   Default mode  : filesystem mirror. Behaves like a normal provider - you pin
 #                   a version and run `terraform init`.

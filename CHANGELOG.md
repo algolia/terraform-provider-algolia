@@ -2,6 +2,10 @@
 
 NOTES:
 
+- **The provider can now be installed directly from the public Terraform Registry.** Declare
+  `source = "algolia/algolia"` and run `terraform init`. The signed GitHub release installer
+  remains available as a fallback when direct Registry access is unavailable.
+
 - **The release installer now requires authenticated verification.** GnuPG and either
   `sha256sum` or `shasum` are required. The installer verifies the signature on the release
   checksum manifest and the selected archive before writing any provider or Terraform CLI

@@ -1,42 +1,65 @@
 # Installing the provider
 
-This provider is not published to the Terraform Registry, so Terraform will not fetch it
-for you. Instead you place the release archive on disk and point Terraform at it with a
-[filesystem mirror](https://developer.hashicorp.com/terraform/cli/config/config-file#filesystem_mirror).
-No private registry is required.
+Terraform installs the provider directly from the public
+[Terraform Registry](https://registry.terraform.io/providers/algolia/algolia/latest). Declare
+the provider in the configuration:
 
-Terraform cannot install a provider from a git URL. `source = "git::https://..."` works for
-modules, not providers, so one of the routes below is necessary.
+```hcl
+terraform {
+  required_providers {
+    algolia = {
+      source  = "algolia/algolia"
+      version = "0.1.2"
+    }
+  }
+}
+```
 
-The installer supports macOS and Linux, including WSL when Terraform runs inside WSL. It does
-not support native Windows installations.
+Then initialize the working directory:
 
-## Quickest, no checkout
+```bash
+terraform init
+```
 
-Requires [`gh`](https://cli.github.com/) authenticated (`gh auth login`), GnuPG, and either
-`sha256sum` or `shasum`:
+Terraform will select the pinned Registry release and record it and its checksums in
+`.terraform.lock.hcl`. Commit that lock file so subsequent runs select and verify the same
+provider release. To move to a newer release, update `version` in `required_providers`, then
+run:
+
+```shell
+terraform init -upgrade
+```
+
+## Install from a release archive
+
+Use the release installer when direct Registry access is unavailable or when testing a
+specific GitHub release through a local Terraform installation mirror. It supports macOS and
+Linux, including WSL when Terraform runs inside WSL, but not native Windows installations.
+
+The installer requires [`gh`](https://cli.github.com/) authenticated (`gh auth login`), GnuPG,
+and either `sha256sum` or `shasum`. Without a checkout:
 
 ```bash
 gh api -H "Accept: application/vnd.github.raw" \
   repos/algolia/terraform-provider-algolia/contents/scripts/install.sh | bash
 ```
 
-That resolves the most recent release, populates the mirror, and writes a
-`provider_installation` block to `~/.terraformrc` unless one is already there. It prints the
-version to pin when it finishes.
+From a checkout:
+
+```bash
+scripts/install.sh                 # latest published release
+scripts/install.sh --tag vX.Y.Z    # a specific release
+```
+
+It resolves the selected release, populates a
+[filesystem mirror](https://developer.hashicorp.com/terraform/cli/config/config-file#filesystem_mirror),
+configures Terraform to use it when safe, and prints the exact version to declare.
 
 "Most recent" includes pre-releases. Before writing the archive or provider binary, the
 installer retrieves the project signing key by its pinned fingerprint, verifies the signature
 on the release's `SHA256SUMS`, and verifies the selected archive against that authenticated
 manifest. It stops without installing when any download, tool, signature, or checksum check
 fails.
-
-## From a checkout
-
-```bash
-scripts/install.sh                 # latest release
-scripts/install.sh --tag v0.1.2    # a specific release
-```
 
 Useful options: `--config PATH` and `--mirror-dir PATH` to write somewhere other than
 `~/.terraformrc` and `~/.terraform.d/plugins`, `--bin-dir PATH` for the `dev_overrides`
@@ -50,19 +73,6 @@ The script never edits an existing `provider_installation` block, since Terrafor
 one. What it does depends on what is already there: if the config already mentions the Algolia
 provider it leaves the file untouched and says so, and if there is a `provider_installation`
 block that does not mention Algolia it prints the entries for you to merge in by hand.
-
-## Pin the version you installed
-
-```hcl
-terraform {
-  required_providers {
-    algolia = {
-      source  = "algolia/algolia"
-      version = "0.1.2"
-    }
-  }
-}
-```
 
 A mirror holds exactly the versions you have put in it. A constraint that resolves to
 something absent fails rather than fetching it:
@@ -85,9 +95,9 @@ different build than you think.
 
 `~/.terraform.d/plugins` is also Terraform's implicit local plugin directory, and it accepts
 an unpacked layout (`<version>/<os>_<arch>/terraform-provider-algolia`) alongside the packed
-`.zip` this installer writes. An old unpacked build left there from `go build` shadows the
-release archive of the same version number, so `terraform init` reports the version you
-pinned while running older code. Check for one and remove it:
+`.zip` this installer writes. An old unpacked build left there from `go build` can shadow a
+Registry or release-archive package of the same version, so `terraform init` reports the
+version you pinned while running older code. Check for one and remove it:
 
 ```bash
 ls ~/.terraform.d/plugins/registry.terraform.io/algolia/algolia/

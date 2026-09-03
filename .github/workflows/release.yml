@@ -9,12 +9,12 @@ permissions: {}
 
 jobs:
   # A tag push does not trigger the Tests workflow (it runs on pushes to main and
-  # on pull requests), so without this job `git tag && git push` publishes to the
-  # registry regardless of CI state. This gate has two parts: the tagged commit
-  # must already have a green Tests run - the only run that includes the
-  # acceptance suite, which cannot be executed here because it needs the
-  # main-branch-only secrets - and the fast checks are re-run against the exact
-  # tagged tree.
+  # on pull requests), so without this job `git tag && git push` creates a GitHub
+  # release eligible for Registry ingestion regardless of CI state. This gate has
+  # two parts: the tagged commit must already have a green Tests run - the only
+  # run that includes the acceptance suite, which cannot be executed here because
+  # it needs the main-branch-only secrets - and the fast checks are re-run against
+  # the exact tagged tree.
   verify:
     name: Verify
     runs-on: ubuntu-latest
