@@ -63,7 +63,7 @@ version_files=(
 )
 
 for relative_path in "${version_files[@]}"; do
-  if ! grep -Eq "version[[:space:]]*=[[:space:]]*\"${previous_version//./\\.}\"" \
+  if ! grep -Eq "^[[:space:]]*version[[:space:]]*=[[:space:]]*\"${previous_version//./\\.}\"" \
     "$repo_root/$relative_path"; then
     echo "$relative_path does not pin the current release $previous_version" >&2
     exit 1
@@ -105,7 +105,7 @@ if grep -n -F "$previous_version" "${absolute_version_files[@]}" >/dev/null; the
   echo "a release-version reference was not updated" >&2
   exit 1
 fi
-if ! grep -Eq "version[[:space:]]*=[[:space:]]*\"${version//./\\.}\"" \
+if ! grep -Eq "^[[:space:]]*version[[:space:]]*=[[:space:]]*\"${version//./\\.}\"" \
   "$repo_root/docs/index.md"; then
   echo "generated provider documentation does not reference $version" >&2
   exit 1
@@ -115,7 +115,7 @@ fi
 # including examples added after this script, and require an exact prepared pin.
 while IFS= read -r -d '' terraform_file; do
   if grep -Eq 'source[[:space:]]*=[[:space:]]*"algolia/algolia"' "$terraform_file" &&
-    ! grep -Eq "version[[:space:]]*=[[:space:]]*\"${version//./\\.}\"" "$terraform_file"; then
+    ! grep -Eq "^[[:space:]]*version[[:space:]]*=[[:space:]]*\"${version//./\\.}\"" "$terraform_file"; then
     echo "$terraform_file does not pin algolia/algolia to $version" >&2
     exit 1
   fi
