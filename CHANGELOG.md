@@ -1,3 +1,9 @@
+## Unreleased
+
+NOTES:
+
+- Update gRPC to 1.83.2 and golangci-lint action to 9.3.0.
+
 ## 1.0.0 (September 3, 2026)
 
 NOTES:
