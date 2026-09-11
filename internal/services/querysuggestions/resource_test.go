@@ -302,6 +302,10 @@ func testAccQuerySuggestionsConfig(sourceIndexName, qsIndexName, analyticsTag st
 resource "algolia_index" "source" {
   name                = %[1]q
   deletion_protection = false
+
+  faceting {
+    attributes_for_faceting = ["brand", "category"]
+  }
 }
 
 resource "algolia_query_suggestions" "test" {
