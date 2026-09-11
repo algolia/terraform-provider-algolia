@@ -5,6 +5,7 @@
 Manage your [Algolia](https://www.algolia.com/) search infrastructure as code.
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](LICENSE)
+[![Terraform Registry](https://img.shields.io/badge/Terraform-Registry-844FBA?logo=terraform&logoColor=white)](https://registry.terraform.io/providers/algolia/algolia/latest)
 
 </div>
 
