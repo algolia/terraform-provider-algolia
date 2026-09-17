@@ -3,7 +3,7 @@ module github.com/algolia/terraform-provider-algolia
 go 1.25.12
 
 require (
-	github.com/algolia/algoliasearch-client-go/v4 v4.45.0
+	github.com/algolia/algoliasearch-client-go/v4 v4.47.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
