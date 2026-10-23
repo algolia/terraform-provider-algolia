@@ -337,7 +337,7 @@ func hydrateRuleModel(indexName string, ruleResp *search.Rule, rawParams json.Ra
 	model.Scope = nullableString(ruleResp.Scope)
 	model.Tags = flattenStringList(ruleResp.Tags)
 
-	conditions, conditionDiags := flattenConditions(ruleResp.GetConditions())
+	conditions, conditionDiags := flattenConditions(effectiveConditions(ruleResp))
 	diags.Append(conditionDiags...)
 	if diags.HasError() {
 		return diags
@@ -436,6 +436,21 @@ func flattenConditions(conditions []search.Condition) (types.List, diag.Diagnost
 	}
 
 	return types.ListValue(conditionModelType, values)
+}
+
+// effectiveConditions returns the rule's conditions, falling back to the
+// deprecated singular `condition` that rules saved before multi-condition
+// support still carry. Without the fallback such a rule reads as having no
+// conditions, and the next update would save it unconditional. Writes always
+// use `conditions`, so an update migrates the rule to the current format.
+func effectiveConditions(rule *search.Rule) []search.Condition {
+	if conditions := rule.GetConditions(); len(conditions) > 0 {
+		return conditions
+	}
+	if rule.Condition != nil {
+		return []search.Condition{*rule.Condition}
+	}
+	return nil
 }
 
 // expandConsequence returns the typed consequence and, separately, the raw
