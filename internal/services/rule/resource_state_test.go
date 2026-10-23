@@ -780,3 +780,63 @@ func TestHydrateRuleModel_ConsequenceHidePreservesPriorEmptiness(t *testing.T) {
 		})
 	}
 }
+
+func TestHydrateRuleModelReadsLegacySingularCondition(t *testing.T) {
+	// Rules saved before multi-condition support still come back with the
+	// deprecated singular `condition` and no `conditions`.
+	payload := []byte(`{"objectID":"legacy-1","condition":{"alternatives":true,"anchoring":"is","pattern":"breakfast"},"consequence":{"filterPromotes":true,"promote":[{"objectID":"recipe_7554","position":0}]},"description":"Staff Pick","enabled":false}`)
+
+	ruleResp, err := decodeRuleResponse(payload)
+	if err != nil {
+		t.Fatalf("decodeRuleResponse() error = %v", err)
+	}
+
+	var model RuleResourceModel
+	if diags := hydrateRuleModel("products", ruleResp, extractRawParams(payload), &model); diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	conditions := model.Conditions.Elements()
+	if len(conditions) != 1 {
+		t.Fatalf("conditions = %s, want the legacy condition", model.Conditions)
+	}
+	got := conditions[0].(types.Object).Attributes()
+	if !got["pattern"].Equal(types.StringValue("breakfast")) ||
+		!got["anchoring"].Equal(types.StringValue("is")) ||
+		!got["alternatives"].Equal(types.BoolValue(true)) {
+		t.Errorf("condition = %v, want pattern breakfast, anchoring is, alternatives true", got)
+	}
+
+	// Writing the state back sends the condition in the current plural form,
+	// so an update keeps the rule conditional instead of making it global.
+	body, diags := ruleRequestBodyFromModel(&model)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	if _, ok := body["condition"]; ok {
+		t.Errorf("request body has deprecated condition: %v", body)
+	}
+	want := []any{map[string]any{"alternatives": true, "anchoring": "is", "pattern": "breakfast"}}
+	if !reflect.DeepEqual(body["conditions"], want) {
+		t.Errorf("request conditions = %#v, want %#v", body["conditions"], want)
+	}
+}
+
+func TestHydrateRuleModelPrefersPluralConditions(t *testing.T) {
+	payload := []byte(`{"objectID":"rule-1","condition":{"anchoring":"is","pattern":"stale"},"conditions":[{"anchoring":"contains","pattern":"current"}],"consequence":{}}`)
+
+	ruleResp, err := decodeRuleResponse(payload)
+	if err != nil {
+		t.Fatalf("decodeRuleResponse() error = %v", err)
+	}
+
+	var model RuleResourceModel
+	if diags := hydrateRuleModel("products", ruleResp, nil, &model); diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+
+	conditions := model.Conditions.Elements()
+	if len(conditions) != 1 || !conditions[0].(types.Object).Attributes()["pattern"].Equal(types.StringValue("current")) {
+		t.Errorf("conditions = %s, want only the plural condition", model.Conditions)
+	}
+}
