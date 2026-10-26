@@ -1,3 +1,12 @@
+## Unreleased
+
+BUG FIXES:
+
+- **Rules saved with the deprecated singular `condition` now read their condition.** They
+  previously read as having no conditions, so an import generated a configuration without
+  them and the next update saved the rule unconditional. The next update now writes the
+  condition as `conditions`.
+
 ## 1.0.1 (September 10, 2026)
 
 NOTES:
