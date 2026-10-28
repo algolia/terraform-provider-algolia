@@ -1,6 +1,7 @@
 package rule_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -143,6 +144,22 @@ func TestAccRuleResource_unmodelledFields(t *testing.T) {
 				ResourceName:      "algolia_rule.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+				// Import has no configured JSON formatting to preserve. Compare
+				// its contents separately instead of requiring identical key order.
+				ImportStateVerifyIgnore: []string{"consequence.0.params_json"},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected one imported rule, got %d", len(states))
+					}
+					var params map[string]string
+					if err := json.Unmarshal([]byte(states[0].Attributes["consequence.0.params_json"]), &params); err != nil {
+						return err
+					}
+					if len(params) != 2 || params["query"] != "iphone" || params["filters"] != "brand:apple" {
+						return fmt.Errorf("imported params = %v, want query iphone and filters brand:apple", params)
+					}
+					return nil
+				},
 			},
 		},
 	})

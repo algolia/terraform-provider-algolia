@@ -358,7 +358,7 @@ resource algolia_recommend_rule
   validity tftypes.String [optional]
 
 resource algolia_rule
-  schema version 0
+  schema version 1
   description tftypes.String [optional]
   enabled tftypes.Bool [optional computed]
   id tftypes.String [computed]
@@ -379,7 +379,7 @@ resource algolia_rule
     redirect_index_name tftypes.String [optional]
     user_data tftypes.String [optional]
     block promote (LIST)
-      object_ids tftypes.Set[tftypes.String] [required]
+      object_ids tftypes.List[tftypes.String] [required]
       position tftypes.Number [required]
   block validity (LIST)
     from tftypes.String [optional]
@@ -879,7 +879,7 @@ data source algolia_rule
     redirect_index_name tftypes.String [computed]
     user_data tftypes.String [computed]
     block promote (LIST)
-      object_ids tftypes.Set[tftypes.String] [computed]
+      object_ids tftypes.List[tftypes.String] [computed]
       position tftypes.Number [computed]
   block validity (LIST)
     from tftypes.String [computed]

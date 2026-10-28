@@ -70,7 +70,8 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 							Description: "Promoted object IDs and their position.",
 							NestedObject: datasourceschema.NestedBlockObject{
 								Attributes: map[string]datasourceschema.Attribute{
-									"object_ids": datasourceschema.SetAttribute{
+									"object_ids": datasourceschema.ListAttribute{
+										Description: "Object IDs promoted as a group, in the order returned by Algolia.",
 										Computed:    true,
 										ElementType: types.StringType,
 									},

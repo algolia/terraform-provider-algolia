@@ -89,7 +89,7 @@ Optional:
 
 Required:
 
-- `object_ids` (Set of String) Object IDs to promote as a group.
+- `object_ids` (List of String) Object IDs to promote as a group, in the order they should appear.
 - `position` (Number) Result position for the promoted group.
 
 
