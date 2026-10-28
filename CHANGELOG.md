@@ -2,6 +2,10 @@
 
 BUG FIXES:
 
+- **Index updates no longer fail when Algolia changes the creation timestamp.**
+  Index and virtual-index resources now allow `created_at` to change during settings
+  updates instead of reporting an inconsistent result after apply.
+
 - **Rules saved with the deprecated singular `condition` now read their condition.** They
   previously read as having no conditions, so an import generated a configuration without
   them and the next update saved the rule unconditional. The next update now writes the

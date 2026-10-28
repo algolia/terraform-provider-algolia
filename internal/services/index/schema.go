@@ -43,11 +43,10 @@ func indexResourceSchema() schema.Schema {
 				Computed:    true,
 			},
 			"created_at": schema.StringAttribute{
+				// Algolia can change this timestamp when settings are updated.
+				// Leave it unknown during updates rather than promising the prior value.
 				Description: "The creation date of the index.",
 				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					useStateForKnownString(),
-				},
 			},
 			"updated_at": schema.StringAttribute{
 				Description: "The last update date of the index.",

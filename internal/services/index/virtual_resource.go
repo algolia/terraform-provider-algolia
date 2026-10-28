@@ -260,6 +260,9 @@ func (r *virtualIndexResource) ModifyPlan(ctx context.Context, req resource.Modi
 	// both true and enough to turn an otherwise empty plan into an in-place update.
 	// The warning Read raises explains why.
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("updated_at"), types.StringUnknown())...)
+	// This repair can be planned with unchanged configuration, after the framework's
+	// unknown-marking pass. The settings write can also change creation metadata.
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("created_at"), types.StringUnknown())...)
 }
 
 func (r *virtualIndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
