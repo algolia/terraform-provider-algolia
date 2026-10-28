@@ -20,7 +20,7 @@ func newTestComposition() *compositionapi.Composition {
 				*compositionapi.NewInjectionMain(
 					compositionapi.WithInjectionMainSource(
 						*compositionapi.InjectionMainSearchSourceAsInjectionMainSource(
-							compositionapi.NewInjectionMainSearchSource(*compositionapi.NewMainSearch("products")),
+							compositionapi.NewInjectionMainSearchSource(*compositionapi.NewInjectionMainSearch("products")),
 						),
 					),
 				),

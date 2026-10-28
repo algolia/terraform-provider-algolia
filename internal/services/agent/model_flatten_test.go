@@ -27,7 +27,7 @@ func TestFlattenAgentResponse_basic(t *testing.T) {
 		Instructions: "Be helpful",
 		SystemPrompt: *utils.NewNullable(strPtr("Be safe")),
 		Config:       map[string]any{"temperature": 0.7},
-		Tools:        []agentStudio.ToolConfigInput{},
+		Tools:        []agentStudio.ToolConfigOutput{},
 		CreatedAt:    "2026-01-01T00:00:00Z",
 		UpdatedAt:    *utils.NewNullable(strPtr("2026-01-01T00:00:00Z")),
 	}
@@ -92,8 +92,8 @@ func TestFlattenAgentResponse_withClientSideTool(t *testing.T) {
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Use tools",
 		Config:       map[string]any{},
-		Tools: []agentStudio.ToolConfigInput{
-			*agentStudio.ClientSideToolConfigAsToolConfigInput(&agentStudio.ClientSideToolConfig{
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.ClientSideToolConfigAsToolConfigOutput(&agentStudio.ClientSideToolConfig{
 				Name:        "get_order",
 				Type:        "client_side",
 				Description: "Get order status",
@@ -143,8 +143,8 @@ func TestFlattenAgentResponse_withAlgoliaSearchTool(t *testing.T) {
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Search things",
 		Config:       map[string]any{},
-		Tools: []agentStudio.ToolConfigInput{
-			*agentStudio.AlgoliaSearchToolConfigAsToolConfigInput(&agentStudio.AlgoliaSearchToolConfig{
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.AlgoliaSearchToolConfigAsToolConfigOutput(&agentStudio.AlgoliaSearchToolConfig{
 				Name: "search_products",
 				Type: "algolia_search_index",
 				Indices: []agentStudio.AlgoliaSearchToolIndexConfig{
@@ -829,13 +829,15 @@ func TestFlattenAgentResponse_withDisplayResultsTool(t *testing.T) {
 		Name:         "display-agent",
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Show results",
-		Tools: []agentStudio.ToolConfigInput{
-			*agentStudio.AlgoliaDisplayResultsToolConfigAsToolConfigInput(&agentStudio.AlgoliaDisplayResultsToolConfig{
-				Name:               strPtr("display_results"),
-				Type:               "algolia_display_results",
-				MinGroups:          int32Value(1),
-				MaxGroups:          int32Value(3),
-				MinResultsPerGroup: int32Value(2),
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.UnknownToolConfigAsToolConfigOutput(agentStudio.UnknownToolConfig{
+				Name: "algolia_display_results",
+				Type: "algolia_display_results",
+				AdditionalProperties: map[string]any{
+					"minGroups":          1,
+					"maxGroups":          3,
+					"minResultsPerGroup": 2,
+				},
 			}),
 		},
 		CreatedAt: "2026-01-01T00:00:00Z",
@@ -859,8 +861,8 @@ func TestFlattenAgentResponse_withDisplayResultsTool(t *testing.T) {
 	if len(tools) != 1 {
 		t.Fatalf("expected 1 display results tool, got %d", len(tools))
 	}
-	if tools[0].Name.ValueString() != "display_results" {
-		t.Errorf("expected tool name 'display_results', got %q", tools[0].Name.ValueString())
+	if tools[0].Name.ValueString() != "algolia_display_results" {
+		t.Errorf("expected tool name 'algolia_display_results', got %q", tools[0].Name.ValueString())
 	}
 	if tools[0].MinGroups.ValueInt64() != 1 {
 		t.Errorf("expected min_groups 1, got %d", tools[0].MinGroups.ValueInt64())
@@ -886,7 +888,7 @@ func TestFlattenAgentResponse_displayResultsToolRoundTrip(t *testing.T) {
 	displayToolList := mustList(t, ctx, types.ObjectType{AttrTypes: algoliaDisplayResultsToolAttrTypes},
 		[]ToolAlgoliaDisplayResultsModel{
 			{
-				Name:               types.StringValue("display_results"),
+				Name:               types.StringValue("algolia_display_results"),
 				MinGroups:          types.Int64Value(1),
 				MaxGroups:          types.Int64Value(3),
 				MinResultsPerGroup: types.Int64Null(),
@@ -907,15 +909,14 @@ func TestFlattenAgentResponse_displayResultsToolRoundTrip(t *testing.T) {
 	if len(cfg.Tools) != 1 {
 		t.Fatalf("expected 1 tool after expand, got %d", len(cfg.Tools))
 	}
-	if cfg.Tools[0].AlgoliaDisplayResultsToolConfig == nil {
-		t.Fatalf("expected an AlgoliaDisplayResultsToolConfig, got %#v", cfg.Tools[0])
+	if cfg.Tools[0].UnknownToolConfig == nil {
+		t.Fatalf("expected an UnknownToolConfig, got %#v", cfg.Tools[0])
 	}
-	if got := cfg.Tools[0].AlgoliaDisplayResultsToolConfig.Type; got != "algolia_display_results" {
+	if got := cfg.Tools[0].UnknownToolConfig.Type; got != "algolia_display_results" {
 		t.Errorf("expected type 'algolia_display_results', got %q", got)
 	}
-	if cfg.Tools[0].AlgoliaDisplayResultsToolConfig.MinResultsPerGroup != nil {
-		t.Errorf("expected a null min_results_per_group to be omitted, got %d",
-			*cfg.Tools[0].AlgoliaDisplayResultsToolConfig.MinResultsPerGroup)
+	if got, ok := cfg.Tools[0].UnknownToolConfig.AdditionalProperties["minResultsPerGroup"]; ok {
+		t.Errorf("expected a null min_results_per_group to be omitted, got %v", got)
 	}
 
 	out := &AgentResourceModel{}
@@ -924,8 +925,10 @@ func TestFlattenAgentResponse_displayResultsToolRoundTrip(t *testing.T) {
 		Name:         "display-roundtrip",
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Show results",
-		Tools:        cfg.Tools,
-		CreatedAt:    "2026-01-01T00:00:00Z",
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.UnknownToolConfigAsToolConfigOutput(*cfg.Tools[0].UnknownToolConfig),
+		},
+		CreatedAt: "2026-01-01T00:00:00Z",
 	}), out)
 	if diags.HasError() {
 		t.Fatalf("flatten: %v", diags.Errors())
@@ -955,8 +958,8 @@ func TestFlattenAgentResponse_unknownToolConfigErrors(t *testing.T) {
 		Name:         "unknown-tool-agent",
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Use tools",
-		Tools: []agentStudio.ToolConfigInput{
-			*agentStudio.UnknownToolConfigAsToolConfigInput(agentStudio.UnknownToolConfig{
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.UnknownToolConfigAsToolConfigOutput(agentStudio.UnknownToolConfig{
 				Name: "some_future_tool",
 				Type: "future_tool",
 			}),
@@ -977,7 +980,7 @@ func TestFlattenAgentResponse_unknownToolConfigErrors(t *testing.T) {
 }
 
 // TestFlattenAgentResponse_unhandledToolVariantErrors exercises the switch's
-// default arm: a ToolConfigInput whose populated variant the provider does not
+// default arm: a ToolConfigOutput whose populated variant the provider does not
 // handle must fail loudly. A future client release adding a seventh variant
 // hits this path, and the whole point is that it cannot pass silently.
 func TestFlattenAgentResponse_unhandledToolVariantErrors(t *testing.T) {
@@ -989,7 +992,7 @@ func TestFlattenAgentResponse_unhandledToolVariantErrors(t *testing.T) {
 		Instructions: "Use tools",
 		// No variant populated: stands in for a variant this provider
 		// version has no case for.
-		Tools:     []agentStudio.ToolConfigInput{{}},
+		Tools:     []agentStudio.ToolConfigOutput{{}},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 
@@ -1083,8 +1086,8 @@ func TestFlattenAgentResponse_preservesConfiguredEmptyHeaders(t *testing.T) {
 		Name:         "mcp-agent",
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Use MCP",
-		Tools: []agentStudio.ToolConfigInput{
-			*agentStudio.McpServerToolConfigAsToolConfigInput(&agentStudio.McpServerToolConfig{
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.McpServerToolConfigAsToolConfigOutput(&agentStudio.McpServerToolConfig{
 				Name:      "my_mcp",
 				Type:      "mcp_tools",
 				Url:       "https://mcp.example.com",
@@ -1127,8 +1130,8 @@ func TestFlattenAgentResponse_nullHeadersStayNull(t *testing.T) {
 		Name:         "mcp-agent",
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Use MCP",
-		Tools: []agentStudio.ToolConfigInput{
-			*agentStudio.McpServerToolConfigAsToolConfigInput(&agentStudio.McpServerToolConfig{
+		Tools: []agentStudio.ToolConfigOutput{
+			*agentStudio.McpServerToolConfigAsToolConfigOutput(&agentStudio.McpServerToolConfig{
 				Name:    "my_mcp",
 				Type:    "mcp_tools",
 				Url:     "https://mcp.example.com",
@@ -1186,10 +1189,6 @@ func TestAgentResourceSchema_HeadersAreSensitive(t *testing.T) {
 	}
 }
 
-func int32Value(v int32) *int32 {
-	return &v
-}
-
 // agentDocumentOf turns a typed response into the agentDocument the flatten path
 // consumes, by encoding it and decoding it back the way the provider does for a
 // real response body. Tests needing a payload the client's own models cannot
@@ -1222,9 +1221,9 @@ func agentDocumentFromJSON(t *testing.T, body string) *agentDocument {
 // agentDocumentOfTools builds an agentDocument straight from typed tools,
 // skipping the JSON round trip agentDocumentOf performs.
 //
-// flattenTools switches on which ToolConfigInput variant is populated, and two
+// flattenTools switches on which ToolConfigOutput variant is populated, and two
 // of its arms cannot be reached through a payload at all: the client's oneOf
-// decoder falls back to AlgoliaRecommendToolConfigInput for any object carrying a
+// decoder falls back to AlgoliaRecommendToolConfig for any object carrying a
 // name and a type, so neither an unrecognised tool type nor an empty variant
 // survives decoding. Those arms guard against a future client release, so they
 // are exercised by populating the variant directly.

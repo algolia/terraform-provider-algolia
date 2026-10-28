@@ -44,6 +44,7 @@ type rawAgent struct {
 // `tools` array. searchParameters is keyed by index name, which is unique
 // within a tool.
 type rawTool struct {
+	name                          json.RawMessage
 	inputSchema                   json.RawMessage
 	predefinedRecommendParameters json.RawMessage
 	searchParameters              map[string]json.RawMessage
@@ -55,8 +56,12 @@ type rawTool struct {
 type agentAPICall func() (*http.Response, []byte, error)
 
 func createAgent(ctx context.Context, client *agentStudio.APIClient, config *agentStudio.AgentConfigCreate) (*agentDocument, error) {
+	opts, err := displayResultsWriteOptions(config, config.Tools)
+	if err != nil {
+		return nil, err
+	}
 	return callAgentAPI(func() (*http.Response, []byte, error) {
-		return client.CreateAgentWithHTTPInfo(client.NewApiCreateAgentRequest(config), agentStudio.WithContext(ctx))
+		return client.CreateAgentWithHTTPInfo(client.NewApiCreateAgentRequest(config), append(opts, agentStudio.WithContext(ctx))...)
 	})
 }
 
@@ -67,8 +72,12 @@ func getAgent(ctx context.Context, client *agentStudio.APIClient, agentID string
 }
 
 func updateAgent(ctx context.Context, client *agentStudio.APIClient, agentID string, config *agentStudio.AgentConfigUpdate) (*agentDocument, error) {
+	opts, err := displayResultsWriteOptions(config, config.Tools)
+	if err != nil {
+		return nil, err
+	}
 	return callAgentAPI(func() (*http.Response, []byte, error) {
-		return client.UpdateAgentWithHTTPInfo(client.NewApiUpdateAgentRequest(agentID, config), agentStudio.WithContext(ctx))
+		return client.UpdateAgentWithHTTPInfo(client.NewApiUpdateAgentRequest(agentID, config), append(opts, agentStudio.WithContext(ctx))...)
 	})
 }
 
@@ -138,6 +147,7 @@ func extractRawAgent(payload []byte) (rawAgent, error) {
 	var decoded struct {
 		Config json.RawMessage `json:"config"`
 		Tools  []struct {
+			Name                          json.RawMessage `json:"name"`
 			InputSchema                   json.RawMessage `json:"inputSchema"`
 			PredefinedRecommendParameters json.RawMessage `json:"predefinedRecommendParameters"`
 			Indices                       json.RawMessage `json:"indices"`
@@ -153,6 +163,7 @@ func extractRawAgent(payload []byte) (rawAgent, error) {
 	}
 	for _, tool := range decoded.Tools {
 		raw.tools = append(raw.tools, rawTool{
+			name:                          tool.Name,
 			inputSchema:                   tool.InputSchema,
 			predefinedRecommendParameters: tool.PredefinedRecommendParameters,
 			searchParameters:              extractRawIndices(tool.Indices),

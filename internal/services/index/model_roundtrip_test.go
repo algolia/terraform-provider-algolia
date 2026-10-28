@@ -162,7 +162,7 @@ func fullHighlighting(t *testing.T) types.Object {
 func fullPagination(t *testing.T) types.Object {
 	return blockObject(t, paginationAttrTypes, PaginationModel{
 		HitsPerPage:         types.Int64Value(25),
-		PaginationLimitedTo: types.Int64Value(500),
+		PaginationLimitedTo: types.Int64Value(1 << 32), // The API field is int64, not int32.
 	})
 }
 

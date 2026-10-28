@@ -24,7 +24,7 @@ func newTestCompositionRule() *compositionapi.CompositionRule {
 					*compositionapi.NewInjectionMain(
 						compositionapi.WithInjectionMainSource(
 							*compositionapi.InjectionMainSearchSourceAsInjectionMainSource(
-								compositionapi.NewInjectionMainSearchSource(*compositionapi.NewMainSearch("products_featured")),
+								compositionapi.NewInjectionMainSearchSource(*compositionapi.NewInjectionMainSearch("products_featured")),
 							),
 						),
 					),

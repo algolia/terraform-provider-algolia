@@ -26,7 +26,7 @@ func TestHydrateAgentProviderResourceState_PreservesSensitiveFields(t *testing.T
 		Id:           "provider-123",
 		Name:         "OpenAI Prod",
 		ProviderName: "openai",
-		Input: *agentStudio.OpenAIProviderInputAsProviderInput(&agentStudio.OpenAIProviderInput{
+		Input: *agentStudio.OpenAIProviderInputAsInputUnion(&agentStudio.OpenAIProviderInput{
 			ApiKey:  "aV6IA",
 			BaseUrl: *utils.NewNullable(strPtr("https://proxy.example.com/v1")),
 		}),
@@ -57,7 +57,7 @@ func TestHydrateImportedAgentProviderResourceState_LeavesSensitiveFieldsNull(t *
 		Id:           "provider-456",
 		Name:         "Gemini",
 		ProviderName: "google_genai",
-		Input: *agentStudio.BaseProviderInputAsProviderInput(&agentStudio.BaseProviderInput{
+		Input: *agentStudio.BaseProviderInputAsInputUnion(&agentStudio.BaseProviderInput{
 			ApiKey: "mask",
 		}),
 		CreatedAt: "2026-01-01T00:00:00Z",
@@ -83,7 +83,7 @@ func TestHydrateAgentProviderDataSourceState_OmitsSensitiveFields(t *testing.T) 
 		Id:           "provider-789",
 		Name:         "OpenAI DS",
 		ProviderName: "openai",
-		Input: *agentStudio.OpenAIProviderInputAsProviderInput(&agentStudio.OpenAIProviderInput{
+		Input: *agentStudio.OpenAIProviderInputAsInputUnion(&agentStudio.OpenAIProviderInput{
 			ApiKey:  "masked",
 			BaseUrl: *utils.NewNullable(strPtr("https://api.openai.com/v1")),
 		}),

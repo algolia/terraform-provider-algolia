@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -16,13 +17,14 @@ func newTestABTest() *abtestingapi.ABTest {
 		"2026-06-01T00:00:00Z",
 		"2026-08-01T00:00:00Z",
 		"homepage-ranking",
+		"",
 		abtestingapi.STATUS_ACTIVE,
 		[]abtestingapi.Variant{
 			{Index: "prod", TrafficPercentage: 50, Description: description, Metrics: []abtestingapi.MetricResult{
-				{Name: "addToCartRate", Value: 0.12, PValue: 0.03},
+				{Name: "addToCartRate", Value: 0.12, PValue: utils.ToPtr(0.03)},
 			}},
 			{Index: "prod_variant", TrafficPercentage: 50, Metrics: []abtestingapi.MetricResult{
-				{Name: "addToCartRate", Value: 0.14, PValue: 0.03},
+				{Name: "addToCartRate", Value: 0.14, PValue: utils.ToPtr(0.03)},
 			}},
 		},
 	)
