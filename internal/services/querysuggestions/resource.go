@@ -25,6 +25,7 @@ type querySuggestionsResource struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+	userAgentSuffix string
 }
 
 func NewResource() resource.Resource {
@@ -56,6 +57,7 @@ func (r *querySuggestionsResource) Configure(_ context.Context, req resource.Con
 	r.appID = data.AppID
 	r.apiKey = data.APIKey
 	r.analyticsRegion = data.AnalyticsRegion
+	r.userAgentSuffix = data.UserAgentSuffix
 }
 
 func (r *querySuggestionsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -227,6 +229,7 @@ func (r *querySuggestionsResource) client() (*suggestions.APIClient, diag.Diagno
 		return nil, diags
 	}
 
+	client.GetConfiguration().UserAgent += r.userAgentSuffix
 	tflog.Debug(context.Background(), "Configured Query Suggestions client", map[string]any{"region": r.analyticsRegion})
 	return client, diags
 }

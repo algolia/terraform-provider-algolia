@@ -10,6 +10,7 @@ type ProviderData struct {
 	AppID           string
 	APIKey          string
 	AnalyticsRegion string
+	UserAgentSuffix string
 	Client          *search.APIClient
 	AgentClient     *agentStudio.APIClient // shared Agent Studio SDK client
 	CrawlerClient   interface{}            // *crawler.Client — shared Crawler API client stored as interface{} to break import cycles; nil when crawler credentials aren't configured

@@ -24,12 +24,14 @@ type personalizationStrategyResource struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+	userAgentSuffix string
 }
 
 type personalizationStrategyDataSource struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+	userAgentSuffix string
 }
 
 func NewResource() resource.Resource {
@@ -65,6 +67,7 @@ func (r *personalizationStrategyResource) Configure(_ context.Context, req resou
 	r.appID = data.AppID
 	r.apiKey = data.APIKey
 	r.analyticsRegion = data.AnalyticsRegion
+	r.userAgentSuffix = data.UserAgentSuffix
 }
 
 func (r *personalizationStrategyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -215,6 +218,7 @@ func (r *personalizationStrategyResource) client() (*api.APIClient, diag.Diagnos
 		return nil, diags
 	}
 
+	client.GetConfiguration().UserAgent += r.userAgentSuffix
 	return client, diags
 }
 
@@ -243,6 +247,7 @@ func (d *personalizationStrategyDataSource) Configure(_ context.Context, req dat
 	d.appID = data.AppID
 	d.apiKey = data.APIKey
 	d.analyticsRegion = data.AnalyticsRegion
+	d.userAgentSuffix = data.UserAgentSuffix
 }
 
 func (d *personalizationStrategyDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -250,6 +255,7 @@ func (d *personalizationStrategyDataSource) Read(ctx context.Context, req dataso
 		appID:           d.appID,
 		apiKey:          d.apiKey,
 		analyticsRegion: d.analyticsRegion,
+		userAgentSuffix: d.userAgentSuffix,
 	}).client()
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
