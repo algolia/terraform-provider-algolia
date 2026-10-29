@@ -29,6 +29,8 @@ Notes on the less obvious ones:
 - `algolia_allowed_sources` and `algolia_dictionary_settings` are per-application
   singletons, so the id is the application id.
 
-After importing, run `terraform plan`. An empty plan means the configuration matches what
-Algolia holds; anything else means the two disagree and needs reconciling before the next
-apply.
+Import cannot recover every attribute. For `algolia_ingestion_task`, the API does not
+return the required `action`, so supplying it in configuration after import plans a
+replacement even when it matches the live task. `cursor` also cannot be recovered, and
+setting it after import forces replacement. A replacement in the first plan can therefore
+be an import limitation rather than a mismatch with the live task.

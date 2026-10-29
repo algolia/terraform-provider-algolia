@@ -86,13 +86,3 @@ which costs about thirty seconds on create and can fail a destroy.
 **Attribute shapes are the other common cause of a failed apply**, and they are not
 guessable: see `references/attribute-shapes.md` before writing rules, A/B tests, Ingestion
 tasks, agents or index settings.
-
-## Checking your work
-
-Run `terraform plan` again after an apply. It must report no changes: this provider reads most
-settings back from Algolia, so a second plan that still proposes changes usually means the
-configuration and Algolia disagree, and applying repeatedly will not settle it. That is the
-cheapest signal that something is wrong, and it catches more than `terraform validate` does.
-Some attributes are deliberately not refreshed, because Algolia redacts, enriches or cannot
-return them, so drift in those is not reported at all. `references/errors.md` covers the main
-ones, and what the common failures mean.

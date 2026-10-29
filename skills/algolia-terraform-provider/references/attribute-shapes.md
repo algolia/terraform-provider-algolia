@@ -10,9 +10,10 @@ Some complex settings are `jsonencode()`d strings and others are nested blocks. 
 attribute name is not the same shape on every resource**, so check the resource's own docs
 page rather than carrying a shape over from a neighbouring resource.
 
-`validity` is the clearest trap: a block on `algolia_rule`, a JSON string on
-`algolia_recommend_rule` and `algolia_composition_rule`, and a number of seconds on
-`algolia_api_key`.
+`validity` is a block on `algolia_rule` and a JSON string on `algolia_recommend_rule` and
+`algolia_composition_rule`. The `algolia_api_key` resource instead sets expiry with
+`expires_at`, an RFC3339 timestamp. Numeric `validity` in seconds is read-only on the
+`algolia_api_key` and `algolia_api_keys` data sources.
 
 Blocks rather than JSON: `conditions`, `consequence` and `validity` on `algolia_rule`.
 
