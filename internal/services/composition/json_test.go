@@ -1,6 +1,7 @@
 package composition
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -29,13 +30,13 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			name:     "different array order",
 			a:        `{"tags":["1","2"]}`,
 			b:        `{"tags":["2","1"]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "different numeric array order",
 			a:        `{"scores":[1,2,3]}`,
 			b:        `{"scores":[3,1,2]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "arrays of objects keep order (not reordered)",
@@ -80,6 +81,18 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 }
 
 func TestFlattenRequiredJSONField(t *testing.T) {
+	t.Run("adopts reordered feeds from API", func(t *testing.T) {
+		prior := `{"multifeed":{"feedsOrder":["featured","organic"]}}`
+		api := `{"multifeed":{"feedsOrder":["organic","featured"]}}`
+		got, diags := flattenRequiredJSONField(json.RawMessage(api), types.StringValue(prior), "behavior")
+		if diags.HasError() {
+			t.Fatal(diags)
+		}
+		if got.ValueString() != api {
+			t.Fatalf("behavior = %s, want reordered API value %s", got.ValueString(), api)
+		}
+	})
+
 	t.Run("adopts API encoding when no prior", func(t *testing.T) {
 		value, diags := flattenRequiredJSONField(map[string]string{"a": "1"}, types.StringNull(), "behavior")
 		if diags.HasError() {

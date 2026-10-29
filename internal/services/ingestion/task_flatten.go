@@ -18,7 +18,7 @@ import (
 // full (nothing is redacted), but naively overwriting the configured JSON
 // string with the API's encoding on every Create/Read/Update would cause
 // a perpetual diff whenever the API echoes back semantically identical
-// JSON in a different form (key order, array order). So the corresponding
+// JSON in a different form (object key order, whitespace). So the corresponding
 // flatten helpers below keep the model's existing string as-is when it is
 // semantically equal to what the API returned, and only adopt the API's
 // encoding when it actually differs.

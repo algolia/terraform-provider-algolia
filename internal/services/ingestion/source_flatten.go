@@ -18,8 +18,8 @@ import (
 // a source's configuration in full - nothing is redacted. But naively
 // overwriting model.Input with the API's JSON encoding on every
 // Create/Read/Update would cause a perpetual diff whenever the API echoes
-// back semantically identical JSON in a different form (key order, array
-// order). So flattenSourceInput keeps the model's existing Input string
+// back semantically identical JSON in a different form (object key order,
+// whitespace). So flattenSourceInput keeps the model's existing Input string
 // as-is when it is semantically equal to what the API returned, and only
 // adopts the API's encoding when it actually differs.
 func flattenSource(source *ingestionapi.Source, model *SourceResourceModel) diag.Diagnostics {

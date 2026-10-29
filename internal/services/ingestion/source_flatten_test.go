@@ -72,7 +72,7 @@ func TestFlattenSource_NoAuthenticationIDIsNull(t *testing.T) {
 // authentication's write-only input, GetSource returns a source's input in
 // full, so naively overwriting the configured JSON string with the API's
 // encoding on every Read would create a perpetual diff whenever the API
-// echoes back the same configuration with different key/array ordering.
+// echoes back the same configuration with different object key ordering.
 func TestFlattenSource_InputPreservedWhenSemanticallyEqual(t *testing.T) {
 	const configuredInput = `{"url": "https://example.com/data.csv", "uniqueIDColumn": "id"}`
 

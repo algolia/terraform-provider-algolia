@@ -120,7 +120,7 @@ func expandDestinationUpdateInput(input types.String) (*ingestionapi.Destination
 // expandTransformationIDs converts the `transformation_ids` list attribute
 // into a []string for the Ingestion API, mirroring
 // internal/services/dictionary's expandStringList (not imported across
-// service packages, per that package's own note on jsonSemanticallyEqual).
+// service packages).
 // A null or unknown list yields a nil slice, which the API client's
 // MarshalJSON omits from the request body entirely (as opposed to an
 // explicit empty list, which clears transformation_ids).

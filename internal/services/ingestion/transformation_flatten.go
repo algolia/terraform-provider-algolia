@@ -14,7 +14,7 @@ import (
 // flattenTransformation copies a GetTransformation response into the
 // Terraform resource model.
 //
-// Code is a plain string (never redacted, no key/array ordering ambiguity),
+// Code is a plain string (never redacted, no JSON encoding ambiguity),
 // so it's refreshed directly. When the API returns an empty code (a no-code
 // transformation, or none set), the previously configured value is preserved
 // rather than forced to null, so an explicitly configured `code = ""` doesn't

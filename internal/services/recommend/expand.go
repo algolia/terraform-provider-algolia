@@ -94,7 +94,7 @@ func recommendRuleResourceID(indexName, model, objectID string) string {
 // generateObjectID returns a randomly generated RFC 4122 version 4 UUID,
 // used as the object_id when the user does not supply one. Mirrors
 // internal/services/dictionary's generateObjectID (not imported across
-// service packages, per that package's own note on jsonSemanticallyEqual).
+// service packages).
 func generateObjectID() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
