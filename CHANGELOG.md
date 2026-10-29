@@ -2,6 +2,10 @@
 
 BUG FIXES:
 
+- **Index updates no longer fail when Algolia changes the creation timestamp.**
+  Index and virtual-index resources now allow `created_at` to change during settings
+  updates instead of reporting an inconsistent result after apply.
+
 - **Rule promote groups now preserve record order.** `consequence.promote.object_ids`
   is now a list in the resource and data source. Existing resource state upgrades
   automatically, and refresh restores Algolia's order; no re-import is needed.

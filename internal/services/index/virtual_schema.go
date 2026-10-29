@@ -54,11 +54,9 @@ func virtualIndexResourceSchema() schema.Schema {
 				Computed:    true,
 			},
 			"created_at": schema.StringAttribute{
+				// Like a regular index, settings writes can change creation metadata.
 				Description: "The creation date of the virtual index.",
 				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					useStateForKnownString(),
-				},
 			},
 			"updated_at": schema.StringAttribute{
 				Description: "The last update date of the virtual index.",
