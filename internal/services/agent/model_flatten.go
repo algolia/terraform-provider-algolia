@@ -163,7 +163,7 @@ func flattenConfiguredJSONDocument(document json.RawMessage, prior types.String)
 
 // flattenTools distributes API tools into the typed tool list attributes on the model.
 //
-// Every variant of agentStudio.ToolConfigInput must be accounted for. Agent
+// Every variant of agentStudio.ToolConfigOutput must be accounted for. Agent
 // writes are full replacements of the tool list (see expandTools), so a
 // variant that is read but not stored is silently deleted from the live agent
 // by the next apply. The switch therefore ends in a default arm that raises an
@@ -177,7 +177,7 @@ func flattenConfiguredJSONDocument(document json.RawMessage, prior types.String)
 // on Create/Update) are captured before the model is overwritten, so each tool's
 // header map and JSON documents can be compared against what the same tool held
 // before the refresh - see flattenMCPHeaders and flattenJSONDocument.
-func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, raw []rawTool, model *AgentResourceModel) diag.Diagnostics {
+func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigOutput, raw []rawTool, model *AgentResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	priorHeaders := priorMCPHeaders(model.ToolMCP)
@@ -194,6 +194,22 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, r
 	for i := range apiTools {
 		tool := apiTools[i]
 		switch {
+		case tool.UnknownToolConfig != nil && tool.UnknownToolConfig.Type == "algolia_display_results":
+			// Check before the typed variants: the client's fallback also
+			// populates Recommend for display-results tools.
+			encoded, err := json.Marshal(tool.UnknownToolConfig)
+			var displayTool displayResultsToolConfig
+			if err == nil {
+				err = json.Unmarshal(encoded, &displayTool)
+			}
+			if err != nil {
+				diags.AddError("Error decoding algolia_display_results tool", err.Error())
+				continue
+			}
+			if isJSONNull(raw[i].name) {
+				displayTool.Name = nil
+			}
+			displayResultsTools = append(displayResultsTools, flattenAlgoliaDisplayResultsTool(&displayTool))
 		case tool.AlgoliaSearchToolConfig != nil:
 			name := tool.AlgoliaSearchToolConfig.Name
 			t, d := flattenAlgoliaSearchTool(tool.AlgoliaSearchToolConfig, raw[i], priorSearchParameters[name])
@@ -201,9 +217,9 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, r
 			if t != nil {
 				searchTools = append(searchTools, *t)
 			}
-		case tool.AlgoliaRecommendToolConfigInput != nil:
-			name := tool.AlgoliaRecommendToolConfigInput.Name
-			t, d := flattenAlgoliaRecommendTool(tool.AlgoliaRecommendToolConfigInput, raw[i], priorRecommendParameters[name])
+		case tool.AlgoliaRecommendToolConfig != nil:
+			name := tool.AlgoliaRecommendToolConfig.Name
+			t, d := flattenAlgoliaRecommendTool(tool.AlgoliaRecommendToolConfig, raw[i], priorRecommendParameters[name])
 			diags.Append(d...)
 			if t != nil {
 				recommendTools = append(recommendTools, *t)
@@ -219,12 +235,6 @@ func flattenTools(ctx context.Context, apiTools []agentStudio.ToolConfigInput, r
 			if t != nil {
 				mcpTools = append(mcpTools, *t)
 			}
-		case tool.AlgoliaDisplayResultsToolConfig != nil:
-			// Checked after the variants above: every optional field of
-			// AlgoliaDisplayResultsToolConfig is a pointer, so the client's
-			// greedy oneOf fallback can populate it for a payload that also
-			// matched a more specific variant.
-			displayResultsTools = append(displayResultsTools, flattenAlgoliaDisplayResultsTool(tool.AlgoliaDisplayResultsToolConfig))
 		case tool.UnknownToolConfig != nil:
 			// The client's placeholder for a tool whose `type` it does not
 			// recognise. There is no Terraform schema that could hold its
@@ -390,7 +400,7 @@ func flattenSearchParameters(document json.RawMessage, prior types.String) (type
 }
 
 func flattenAlgoliaRecommendTool(
-	tool *agentStudio.AlgoliaRecommendToolConfigInput,
+	tool *agentStudio.AlgoliaRecommendToolConfig,
 	raw rawTool,
 	priorParameters types.String,
 ) (*ToolAlgoliaRecommendModel, diag.Diagnostics) {
@@ -435,7 +445,7 @@ func flattenAlgoliaRecommendTool(
 // flattenAlgoliaDisplayResultsTool maps an algolia_display_results tool. All
 // of its fields are optional in the API, and all of them are Computed in the
 // schema, so an absent field becomes null and is filled from the API response.
-func flattenAlgoliaDisplayResultsTool(tool *agentStudio.AlgoliaDisplayResultsToolConfig) ToolAlgoliaDisplayResultsModel {
+func flattenAlgoliaDisplayResultsTool(tool *displayResultsToolConfig) ToolAlgoliaDisplayResultsModel {
 	return ToolAlgoliaDisplayResultsModel{
 		Name:               types.StringPointerValue(tool.Name),
 		MinGroups:          flattenNullableInt32(tool.MinGroups),

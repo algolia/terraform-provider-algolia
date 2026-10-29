@@ -13,6 +13,7 @@ import (
 
 func ruleResourceSchema() schema.Schema {
 	return schema.Schema{
+		Version:     1,
 		Description: "Manages an Algolia Rule for a specific index.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -122,8 +123,8 @@ func ruleResourceSchema() schema.Schema {
 							Description: "Promoted object IDs and their position.",
 							NestedObject: schema.NestedBlockObject{
 								Attributes: map[string]schema.Attribute{
-									"object_ids": schema.SetAttribute{
-										Description: "Object IDs to promote as a group.",
+									"object_ids": schema.ListAttribute{
+										Description: "Object IDs to promote as a group, in the order they should appear.",
 										Required:    true,
 										ElementType: types.StringType,
 									},

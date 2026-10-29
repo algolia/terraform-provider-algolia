@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// agentStudio.ProviderInput is a oneOf with no discriminator field: its
+// agentStudio.InputUnion is a oneOf with no discriminator field: its
 // generated UnmarshalJSON tries every variant, never returns early, and no
 // variant struct rejects unknown or missing keys, so decoding an API response
 // leaves several pointers non-nil at once. MarshalJSON then serializes
@@ -211,10 +211,10 @@ func TestProviderRequestFromModel_MarshalsDeclaredVariant(t *testing.T) {
 	}
 }
 
-func decodeProviderInput(t *testing.T, raw string) agentStudio.ProviderInput {
+func decodeProviderInput(t *testing.T, raw string) agentStudio.InputUnion {
 	t.Helper()
 
-	var input agentStudio.ProviderInput
+	var input agentStudio.InputUnion
 	if err := json.Unmarshal([]byte(raw), &input); err != nil {
 		t.Fatalf("decoding %s into ProviderInput: %v", raw, err)
 	}

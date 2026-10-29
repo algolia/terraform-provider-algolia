@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	abtestingapi "github.com/algolia/algoliasearch-client-go/v4/algolia/abtesting-v3"
+	"github.com/algolia/algoliasearch-client-go/v4/algolia/utils"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -29,8 +30,8 @@ func enrichedABTest() *abtestingapi.ABTest {
 				Description:         "control",
 				EstimatedSampleSize: func() *int32 { v := int32(1000); return &v }(),
 				Metrics: []abtestingapi.MetricResult{
-					{Name: "addToCartRate", Value: 0.12, PValue: 0.4},
-					{Name: "revenue", Dimension: strPtr("USD"), Value: 91.5, PValue: 0.2},
+					{Name: "addToCartRate", Value: 0.12, PValue: utils.ToPtr(0.4)},
+					{Name: "revenue", Dimension: strPtr("USD"), Value: 91.5, PValue: utils.ToPtr(0.2)},
 				},
 			},
 			{
@@ -42,8 +43,8 @@ func enrichedABTest() *abtestingapi.ABTest {
 				Metrics: []abtestingapi.MetricResult{
 					// Repeated on purpose: metrics are a property of the test and are
 					// reported once per variant, so the rebuild must not duplicate them.
-					{Name: "addToCartRate", Value: 0.15, PValue: 0.3},
-					{Name: "revenue", Dimension: strPtr("USD"), Value: 104.0, PValue: 0.1},
+					{Name: "addToCartRate", Value: 0.15, PValue: utils.ToPtr(0.3)},
+					{Name: "revenue", Dimension: strPtr("USD"), Value: 104.0, PValue: utils.ToPtr(0.1)},
 				},
 			},
 		},

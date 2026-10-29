@@ -26,6 +26,7 @@ type base struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+	userAgentSuffix string
 
 	// searchClient is the shared search client, needed because an A/B test write
 	// queues an ordinary search *index* task that has to be waited on before the
@@ -55,6 +56,7 @@ func (b *base) configure(providerData any) diag.Diagnostics {
 	b.appID = data.AppID
 	b.apiKey = data.APIKey
 	b.analyticsRegion = data.AnalyticsRegion
+	b.userAgentSuffix = data.UserAgentSuffix
 	b.searchClient = data.Client
 
 	return diags
@@ -71,5 +73,6 @@ func (b *base) client() (*abtestingapi.APIClient, diag.Diagnostics) {
 		return nil, diags
 	}
 
+	client.GetConfiguration().UserAgent += b.userAgentSuffix
 	return client, diags
 }

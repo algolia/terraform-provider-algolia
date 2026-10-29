@@ -25,6 +25,7 @@ type base struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+	userAgentSuffix string
 }
 
 // configure extracts appID/apiKey/analyticsRegion from a Configure request's
@@ -54,6 +55,7 @@ func (b *base) configure(providerData any) diag.Diagnostics {
 	b.appID = data.AppID
 	b.apiKey = data.APIKey
 	b.analyticsRegion = data.AnalyticsRegion
+	b.userAgentSuffix = data.UserAgentSuffix
 
 	return diags
 }
@@ -69,5 +71,6 @@ func (b *base) client() (*ingestionapi.APIClient, diag.Diagnostics) {
 		return nil, diags
 	}
 
+	client.GetConfiguration().UserAgent += b.userAgentSuffix
 	return client, diags
 }

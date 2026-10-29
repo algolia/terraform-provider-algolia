@@ -133,7 +133,7 @@ func expandIndexSettings(ctx context.Context, model *IndexResourceModel) (*searc
 			settings.HitsPerPage = utils.ToPtr(int32(pag.HitsPerPage.ValueInt64()))
 		}
 		if isKnown(pag.PaginationLimitedTo) {
-			settings.PaginationLimitedTo = utils.ToPtr(int32(pag.PaginationLimitedTo.ValueInt64()))
+			settings.PaginationLimitedTo = pag.PaginationLimitedTo.ValueInt64Pointer()
 		}
 	}
 

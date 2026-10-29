@@ -31,7 +31,7 @@ var (
 	conditionModelType = types.ObjectType{AttrTypes: conditionModelAttrTypes}
 
 	promoteModelAttrTypes = map[string]attr.Type{
-		"object_ids": types.SetType{ElemType: types.StringType},
+		"object_ids": types.ListType{ElemType: types.StringType},
 		"position":   types.Int64Type,
 	}
 	promoteModelType = types.ObjectType{AttrTypes: promoteModelAttrTypes}

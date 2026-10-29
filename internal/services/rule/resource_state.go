@@ -504,7 +504,7 @@ func expandConsequence(list types.List) (*search.Consequence, json.RawMessage, d
 				return nil, nil, diags
 			}
 			promoteAttrs := promoteObj.Attributes()
-			objectIDsValue, ok := promoteAttrs["object_ids"].(types.Set)
+			objectIDsValue, ok := promoteAttrs["object_ids"].(types.List)
 			if !ok || objectIDsValue.IsNull() || objectIDsValue.IsUnknown() {
 				diags.AddError("Missing object_ids", "Each promote block requires object_ids.")
 				return nil, nil, diags
@@ -515,8 +515,7 @@ func expandConsequence(list types.List) (*search.Consequence, json.RawMessage, d
 				return nil, nil, diags
 			}
 
-			objectIDs := setStrings(objectIDsValue)
-			sort.Strings(objectIDs)
+			objectIDs := expandStringList(objectIDsValue)
 			promote = append(promote, *search.PromoteObjectIDsAsPromote(search.NewPromoteObjectIDs(objectIDs, int32(positionValue.ValueInt64()))))
 		}
 		consequence.Promote = promote
@@ -562,7 +561,7 @@ func flattenConsequence(consequence search.Consequence, rawParams json.RawMessag
 		case search.PromoteObjectIDs:
 			objectIDs := stringSliceValues(p.GetObjectIDs())
 			value, diags := types.ObjectValue(promoteModelAttrTypes, map[string]attr.Value{
-				"object_ids": types.SetValueMust(types.StringType, objectIDs),
+				"object_ids": types.ListValueMust(types.StringType, objectIDs),
 				"position":   types.Int64Value(int64(p.GetPosition())),
 			})
 			if diags.HasError() {
@@ -571,7 +570,7 @@ func flattenConsequence(consequence search.Consequence, rawParams json.RawMessag
 			promoteValues = append(promoteValues, value)
 		case search.PromoteObjectID:
 			value, diags := types.ObjectValue(promoteModelAttrTypes, map[string]attr.Value{
-				"object_ids": types.SetValueMust(types.StringType, []attr.Value{types.StringValue(p.GetObjectID())}),
+				"object_ids": types.ListValueMust(types.StringType, []attr.Value{types.StringValue(p.GetObjectID())}),
 				"position":   types.Int64Value(int64(p.GetPosition())),
 			})
 			if diags.HasError() {
