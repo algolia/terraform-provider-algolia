@@ -55,7 +55,7 @@ func TestBuildRuleRequest(t *testing.T) {
 			"params_json": types.StringValue(`{"query":"iphone"}`),
 			"promote": types.ListValueMust(promoteModelType, []attr.Value{
 				types.ObjectValueMust(promoteModelAttrTypes, map[string]attr.Value{
-					"object_ids": types.SetValueMust(types.StringType, []attr.Value{types.StringValue("1"), types.StringValue("2")}),
+					"object_ids": types.ListValueMust(types.StringType, []attr.Value{types.StringValue("1"), types.StringValue("2")}),
 					"position":   types.Int64Value(0),
 				}),
 			}),

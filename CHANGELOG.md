@@ -2,6 +2,11 @@
 
 BUG FIXES:
 
+- **Rule promote groups now preserve record order.** `consequence.promote.object_ids`
+  is now a list in the resource and data source. Existing resource state upgrades
+  automatically, and refresh restores Algolia's order; no re-import is needed.
+  Keep the desired order in configuration: changing it now produces a plan diff.
+
 - **Rules saved with the deprecated singular `condition` now read their condition.** They
   previously read as having no conditions, so an import generated a configuration without
   them and the next update saved the rule unconditional. The next update now writes the

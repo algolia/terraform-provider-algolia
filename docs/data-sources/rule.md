@@ -89,7 +89,7 @@ Read-Only:
 
 Read-Only:
 
-- `object_ids` (Set of String)
+- `object_ids` (List of String) Object IDs promoted as a group, in the order returned by Algolia.
 - `position` (Number)
 
 
