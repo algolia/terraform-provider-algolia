@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	agentStudio "github.com/algolia/algoliasearch-client-go/v4/algolia/agent-studio"
@@ -175,6 +176,10 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
+	userAgentSuffix := fmt.Sprintf("; Terraform Provider (%s)", p.version)
+	client.GetConfiguration().UserAgent += userAgentSuffix
+	agentClient.GetConfiguration().UserAgent += userAgentSuffix
+
 	// The crawler is optional: only the (future) crawler resource/data source needs these
 	// credentials, so an empty crawler_user_id/crawler_api_key is not an error here — the
 	// client is simply left nil and only constructed when both are set.
@@ -187,6 +192,7 @@ func (p *algoliaProvider) Configure(ctx context.Context, req provider.ConfigureR
 		AppID:           appID,
 		APIKey:          apiKey,
 		AnalyticsRegion: normalizedAnalyticsRegion,
+		UserAgentSuffix: userAgentSuffix,
 		Client:          client,
 		AgentClient:     agentClient,
 		CrawlerClient:   crawlerClient,

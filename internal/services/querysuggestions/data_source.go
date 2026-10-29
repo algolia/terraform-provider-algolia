@@ -19,6 +19,7 @@ type querySuggestionsDataSource struct {
 	appID           string
 	apiKey          string
 	analyticsRegion string
+	userAgentSuffix string
 }
 
 func NewDataSource() datasource.DataSource {
@@ -50,6 +51,7 @@ func (d *querySuggestionsDataSource) Configure(_ context.Context, req datasource
 	d.appID = data.AppID
 	d.apiKey = data.APIKey
 	d.analyticsRegion = data.AnalyticsRegion
+	d.userAgentSuffix = data.UserAgentSuffix
 }
 
 func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -63,6 +65,7 @@ func (d *querySuggestionsDataSource) Read(ctx context.Context, req datasource.Re
 		appID:           d.appID,
 		apiKey:          d.apiKey,
 		analyticsRegion: d.analyticsRegion,
+		userAgentSuffix: d.userAgentSuffix,
 	}
 
 	client, diags := resource.client()
