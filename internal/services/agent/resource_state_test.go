@@ -22,7 +22,7 @@ func TestHydrateAgentResourceState_UsesRemotePublishStateAndPreservesDeletionPro
 		Name:         "support-bot",
 		Status:       agentStudio.AGENT_STATUS_DRAFT,
 		Instructions: "Be helpful.",
-		Tools:        []agentStudio.ToolConfigInput{},
+		Tools:        []agentStudio.ToolConfigOutput{},
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 
@@ -49,7 +49,7 @@ func TestHydrateImportedAgentResourceState_DefaultsDeletionProtection(t *testing
 		Name:         "support-bot",
 		Status:       agentStudio.AGENT_STATUS_PUBLISHED,
 		Instructions: "Be helpful.",
-		Tools:        []agentStudio.ToolConfigInput{},
+		Tools:        []agentStudio.ToolConfigOutput{},
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 

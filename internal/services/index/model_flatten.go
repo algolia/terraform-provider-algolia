@@ -263,7 +263,7 @@ func flattenPaginationBlock(ctx context.Context, settings *search.SettingsRespon
 
 	block := PaginationModel{
 		HitsPerPage:         flattenNullableInt32(settings.HitsPerPage),
-		PaginationLimitedTo: flattenNullableInt32(settings.PaginationLimitedTo),
+		PaginationLimitedTo: types.Int64PointerValue(settings.PaginationLimitedTo),
 	}
 
 	objVal, d := types.ObjectValueFrom(ctx, paginationAttrTypes, &block)

@@ -311,12 +311,12 @@ func decodeProviderInputStruct(providerName string, input map[string]any) (any, 
 	return target, diags
 }
 
-// providerInputToMap converts the typed ProviderInput union from the API response
+// providerInputToMap converts the typed InputUnion from the API response
 // into a generic map keyed by the provider's API field names.
 //
 // It encodes the union member matching providerName rather than the union itself:
 // see providerInputVariant.
-func providerInputToMap(providerName string, input agentStudio.ProviderInput) (map[string]any, diag.Diagnostics) {
+func providerInputToMap(providerName string, input agentStudio.InputUnion) (map[string]any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	variant, variantDiags := providerInputVariant(providerName, input)
@@ -344,10 +344,10 @@ func providerInputToMap(providerName string, input agentStudio.ProviderInput) (m
 	return result, diags
 }
 
-// providerInputVariant returns the member of the ProviderInput union that
+// providerInputVariant returns the member of InputUnion that
 // matches providerName.
 //
-// Encoding the union itself is lossy. ProviderInput is a generated oneOf with no
+// Encoding the union itself is lossy. InputUnion is a generated oneOf with no
 // discriminator field: OpenAIProviderInput, BaseProviderInput and
 // AnthropicProviderInput are decoded unconditionally and always "succeed", so a
 // decoded API response has several pointers set at once, and MarshalJSON
@@ -356,7 +356,7 @@ func providerInputToMap(providerName string, input agentStudio.ProviderInput) (m
 // therefore dropped azureEndpoint, azureDeployment and apiVersion, leaving three
 // Required attributes null in state. provider_name is the discriminator the API
 // itself uses, so it is what selects the variant here.
-func providerInputVariant(providerName string, input agentStudio.ProviderInput) (any, diag.Diagnostics) {
+func providerInputVariant(providerName string, input agentStudio.InputUnion) (any, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	switch providerName {

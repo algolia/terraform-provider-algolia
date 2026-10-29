@@ -281,7 +281,7 @@ func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommend
 		apiConfigs = append(apiConfigs, entry)
 	}
 
-	tool := &agentStudio.AlgoliaRecommendToolConfigInput{
+	tool := &agentStudio.AlgoliaRecommendToolConfig{
 		Name:           model.Name.ValueString(),
 		Type:           "algolia_recommend",
 		AllowedConfigs: apiConfigs,
@@ -299,23 +299,27 @@ func expandAlgoliaRecommendTool(ctx context.Context, model *ToolAlgoliaRecommend
 		tool.PredefinedRecommendParameters = params
 	}
 
-	return agentStudio.AlgoliaRecommendToolConfigInputAsToolConfigInput(tool), diags
+	return agentStudio.AlgoliaRecommendToolConfigAsToolConfigInput(tool), diags
 }
 
 func expandAlgoliaDisplayResultsTool(model *ToolAlgoliaDisplayResultsModel) *agentStudio.ToolConfigInput {
-	tool := &agentStudio.AlgoliaDisplayResultsToolConfig{
-		Type: "algolia_display_results",
-	}
-
+	// Use the unknown-tool carrier because the client has no typed model for
+	// display-results tools.
+	document := map[string]any{"type": "algolia_display_results"}
 	if isKnown(model.Name) {
-		tool.Name = strPtr(model.Name.ValueString())
+		document["name"] = model.Name.ValueString()
 	}
-	tool.MinGroups = int32Ptr(model.MinGroups)
-	tool.MaxGroups = int32Ptr(model.MaxGroups)
-	tool.MinResultsPerGroup = int32Ptr(model.MinResultsPerGroup)
-	tool.MaxResultsPerGroup = int32Ptr(model.MaxResultsPerGroup)
-
-	return agentStudio.AlgoliaDisplayResultsToolConfigAsToolConfigInput(tool)
+	for key, value := range map[string]types.Int64{
+		"minGroups":          model.MinGroups,
+		"maxGroups":          model.MaxGroups,
+		"minResultsPerGroup": model.MinResultsPerGroup,
+		"maxResultsPerGroup": model.MaxResultsPerGroup,
+	} {
+		if isKnown(value) {
+			document[key] = value.ValueInt64()
+		}
+	}
+	return rawToolConfig(document)
 }
 
 func expandClientSideTool(model *ToolClientSideModel) (*agentStudio.ToolConfigInput, diag.Diagnostics) {
@@ -376,7 +380,7 @@ func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.ToolC
 		}
 
 		if len(allowedTools) > 0 {
-			allowedToolsMap := make(map[string]agentStudio.ToolConfig, len(allowedTools))
+			allowedToolsMap := make(map[string]agentStudio.ToolConfigOrBooleanUnion, len(allowedTools))
 			for _, at := range allowedTools {
 				entry := &agentStudio.McpToolConfig{}
 				if isKnown(at.RequiresApproval) {
@@ -385,7 +389,7 @@ func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.ToolC
 				if isKnown(at.Alias) {
 					entry.Alias = *utils.NewNullable(strPtr(at.Alias.ValueString()))
 				}
-				allowedToolsMap[at.Name.ValueString()] = *agentStudio.McpToolConfigAsToolConfig(entry)
+				allowedToolsMap[at.Name.ValueString()] = *agentStudio.McpToolConfigAsToolConfigOrBooleanUnion(entry)
 			}
 			tool.AllowedTools = allowedToolsMap
 		}
@@ -407,9 +411,8 @@ func expandMCPTool(ctx context.Context, model *ToolMCPModel) (*agentStudio.ToolC
 // literals intact. Only insignificant whitespace changes, because json.Marshal
 // compacts what a json.Marshaler returns; the response is matched against the
 // configured document semantically, so that costs nothing (see
-// flattenJSONDocument). Reads are unaffected: ToolConfigInput.UnmarshalJSON
-// routes on `type`, so a response never decodes into an UnknownToolConfig for a
-// type the provider supports.
+// flattenJSONDocument). ToolConfigOutput.UnmarshalJSON routes reads on `type`;
+// flattenTools also handles the legacy display-results tool carried as unknown.
 func rawToolConfig(document map[string]any) *agentStudio.ToolConfigInput {
 	name, _ := document["name"].(string)
 	toolType, _ := document["type"].(string)
@@ -466,16 +469,4 @@ func strPtr(s string) *string {
 
 func boolPtr(b bool) *bool {
 	return &b
-}
-
-// int32Ptr converts a Terraform int64 into the *int32 the API expects,
-// mapping null and unknown to nil so the field is omitted from the payload.
-func int32Ptr(v types.Int64) *int32 {
-	if !isKnown(v) {
-		return nil
-	}
-
-	value := int32(v.ValueInt64())
-
-	return &value
 }
