@@ -1,9 +1,5 @@
 ## Unreleased
 
-NOTES:
-
-- API requests now append `Terraform Provider (<version>)` to the Algolia SDK user agent.
-
 BUG FIXES:
 
 - **Rules saved with the deprecated singular `condition` now read their condition.** They
