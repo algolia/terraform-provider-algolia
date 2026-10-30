@@ -140,7 +140,7 @@ resource "algolia_ingestion_destination" "with_transformation" {
 
 ### Required
 
-- `input` (String) JSON-encoded configuration matching `type` (e.g. `jsonencode({ indexName = "..." })`). Unlike `algolia_ingestion_source`'s `input`, a destination's `input` is required: every destination writes to a specific `indexName`. The Ingestion API returns a destination's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON differences (key order, array order), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned.
+- `input` (String) JSON-encoded configuration matching `type` (e.g. `jsonencode({ indexName = "..." })`). Unlike `algolia_ingestion_source`'s `input`, a destination's `input` is required: every destination writes to a specific `indexName`. The Ingestion API returns a destination's `input` in full when reading it back (nothing is redacted), so this attribute is refreshed on read. Array order is significant. To avoid a perpetual diff caused by harmless JSON differences (object key order and whitespace), the refresh only replaces the configured value when it is not semantically equivalent to what the API returned.
 - `name` (String) Descriptive name for the destination.
 - `type` (String) Type of destination. One of: search, insights. Changing this forces replacement: the Ingestion API's destination update endpoint has no way to change a destination's type after creation.
 

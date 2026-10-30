@@ -90,9 +90,9 @@ func transformationResourceSchema() schema.Schema {
 					"Optional: a transformation's logic can instead be supplied via the legacy `code` attribute. " +
 					"The Ingestion API returns a transformation's `input` in full when reading it back (nothing is " +
 					"redacted), so this attribute is refreshed on read. To avoid a perpetual diff caused by " +
-					"harmless JSON differences (object key order, and the order of arrays of scalars), the refresh " +
+					"harmless JSON differences (object key order and whitespace), the refresh " +
 					"only replaces the configured value when it is not semantically equivalent to what the API " +
-					"returned. Note the order of arrays of objects (e.g. `steps`) is significant and preserved.",
+					"returned. Array order is significant and preserved.",
 				Optional: true,
 			},
 			"description": schema.StringAttribute{

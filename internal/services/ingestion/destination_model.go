@@ -13,7 +13,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // returns Input in full - nothing is redacted - so Read does refresh this
 // field, using the same semantic-equality preservation as
 // flattenSourceInput to avoid a perpetual diff from harmless JSON
-// differences (key order, array order). See
+// differences (object key order, whitespace). See
 // flattenDestination/flattenDestinationInput.
 type DestinationResourceModel struct {
 	ID                 types.String `tfsdk:"id"`

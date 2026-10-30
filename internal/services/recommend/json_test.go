@@ -25,13 +25,13 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			name:     "different array order",
 			a:        `{"hide":["1","2"]}`,
 			b:        `{"hide":["2","1"]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "different numeric array order",
 			a:        `{"scores":[1,2,3]}`,
 			b:        `{"scores":[3,1,2]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "arrays of objects keep order (not reordered)",

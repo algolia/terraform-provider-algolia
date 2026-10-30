@@ -11,7 +11,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // Like Source/Destination/Transformation's `input`, GetTask returns all
 // three in full (nothing is redacted), so Read refreshes them - but only
 // adopts the API's encoding when it is not semantically equal to what's
-// already configured (ignoring key/array order), to avoid a perpetual
+// already configured (ignoring object key order and whitespace), to avoid a perpetual
 // diff. See flattenTask/flattenTaskInput/flattenTaskNotifications/
 // flattenTaskPolicies and the shared jsonSemanticallyEqual/normalizeJSON
 // helpers in json.go.

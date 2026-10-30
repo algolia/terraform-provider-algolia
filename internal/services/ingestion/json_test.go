@@ -46,13 +46,13 @@ func TestJSONSemanticallyEqual(t *testing.T) {
 			name:     "different array order",
 			a:        `{"languages":["en","fr"]}`,
 			b:        `{"languages":["fr","en"]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "different numeric array order",
 			a:        `{"ports":[443,80,8080]}`,
 			b:        `{"ports":[80,8080,443]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "arrays of objects keep order (not reordered)",
@@ -194,6 +194,18 @@ func TestJSONEqualIgnoringAPINulls(t *testing.T) {
 			configured: `{"url":"https://example.com/old.csv"}`,
 			apiValue:   `{"url":"https://example.com/new.csv"}`,
 			expected:   false,
+		},
+		{
+			name:       "api null tolerance preserves nested array order",
+			configured: `{"configuration":{"fields":["title","description"]}}`,
+			apiValue:   `{"configuration":{"fields":["description","title"],"condition":null}}`,
+			expected:   false,
+		},
+		{
+			name:       "same array order with api nulls and different key order",
+			configured: `{"configuration":{"fields":["title","description"],"enabled":true}}`,
+			apiValue:   `{"configuration":{"enabled":true,"fields":["title","description"],"condition":null}}`,
+			expected:   true,
 		},
 	}
 

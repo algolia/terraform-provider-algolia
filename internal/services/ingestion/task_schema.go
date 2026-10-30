@@ -124,8 +124,8 @@ func taskResourceSchema() schema.Schema {
 					"input - a task on a \"push\" source, for example, has none, so `input` may be omitted. The " +
 					"Ingestion API returns a task's `input` in full when reading it back (nothing is redacted), " +
 					"so this attribute is refreshed on read. To avoid a perpetual diff caused by harmless JSON " +
-					"differences (key order, array order), the refresh only replaces the configured value when it " +
-					"is not semantically equivalent to what the API returned.",
+					"differences (object key order and whitespace), the refresh only replaces the configured value when it " +
+					"is not semantically equivalent to what the API returned. Array order is significant.",
 				Optional: true,
 			},
 			"notifications": schema.StringAttribute{

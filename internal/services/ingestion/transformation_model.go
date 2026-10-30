@@ -19,8 +19,8 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 //     Source/Destination's Input, GetTransformation returns it in full
 //     (nothing is redacted), so Read refreshes it too - but only adopts the
 //     API's encoding when it is not semantically equal to what's already
-//     configured (ignoring object key order and the order of scalar arrays;
-//     the order of object arrays like `steps` is significant and preserved),
+//     configured (ignoring object key order and whitespace;
+//     array order is significant and preserved),
 //     to avoid a perpetual diff. See flattenTransformation/
 //     flattenTransformationInput.
 type TransformationResourceModel struct {

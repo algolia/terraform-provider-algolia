@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"sort"
 )
 
 // decodeJSONStrict decodes raw into target, rejecting keys that target does not
@@ -69,19 +68,8 @@ func decodeJSONObject(raw []byte, target any, strict bool) error {
 }
 
 // jsonSemanticallyEqual returns true if two strings are both valid JSON and
-// represent the same data structure, ignoring object key order, whitespace,
-// and the order of arrays whose elements are all the same scalar kind (all
-// strings or all numbers) — the Ingestion API may echo such arrays back in a
-// different order than what was sent. Arrays containing objects, or with
-// mixed element kinds, keep their order, since element order there is
-// usually significant. Used by flattenSource to decide whether a
-// JSON-encoded attribute (e.g. a source's `input`) actually changed, or the
-// API just returned an equivalent encoding of the same configuration.
-//
-// This mirrors the identically named helper in internal/services/index -
-// replicated here rather than imported, since it's two small, dependency-
-// free functions and importing across service packages isn't worth it for
-// that.
+// represent the same data structure, ignoring object key order and whitespace.
+// Array order is significant: dismissing a reorder here can skip a PATCH.
 //
 // This comparison is strict about nulls: a key present with a null value is not
 // the same as an absent key. That matters because expandSourceUpdate uses it to
@@ -98,7 +86,7 @@ func jsonSemanticallyEqual(a, b string) bool {
 		return false
 	}
 
-	return reflect.DeepEqual(normalizeJSON(va, false), normalizeJSON(vb, false))
+	return reflect.DeepEqual(va, vb)
 }
 
 // jsonEqualIgnoringAPINulls reports whether an API response carries the same
@@ -125,11 +113,7 @@ func jsonEqualIgnoringAPINulls(configured, apiValue string) bool {
 	return reflect.DeepEqual(normalizeJSON(vc, false), normalizeJSON(va, true))
 }
 
-// normalizeJSON recursively normalizes a decoded JSON value so that
-// comparison is order-independent where order is insignificant: object keys
-// (already order-independent as Go maps) are recursed into, and arrays whose
-// elements are all strings or all numbers are sorted. Arrays containing
-// objects or a mix of kinds are left in their original order.
+// normalizeJSON recursively normalizes a decoded JSON value, preserving array order.
 // dropNulls omits object keys whose value is null. Only ever true for the side of
 // a comparison that came from the API - see jsonEqualIgnoringAPINulls.
 func normalizeJSON(v any, dropNulls bool) any {
@@ -148,36 +132,8 @@ func normalizeJSON(v any, dropNulls bool) any {
 		for i, item := range val {
 			normalized[i] = normalizeJSON(item, dropNulls)
 		}
-		sortScalarSlice(normalized)
 		return normalized
 	default:
 		return v
-	}
-}
-
-// sortScalarSlice sorts s in place only when every element is a string, or
-// every element is a float64 (JSON numbers decode to float64). Slices that
-// contain objects or mix element kinds are left untouched, since reordering
-// them could change meaning.
-func sortScalarSlice(s []any) {
-	if len(s) < 2 {
-		return
-	}
-
-	allStrings, allNumbers := true, true
-	for _, item := range s {
-		if _, ok := item.(string); !ok {
-			allStrings = false
-		}
-		if _, ok := item.(float64); !ok {
-			allNumbers = false
-		}
-	}
-
-	switch {
-	case allStrings:
-		sort.Slice(s, func(i, j int) bool { return s[i].(string) < s[j].(string) })
-	case allNumbers:
-		sort.Slice(s, func(i, j int) bool { return s[i].(float64) < s[j].(float64) })
 	}
 }

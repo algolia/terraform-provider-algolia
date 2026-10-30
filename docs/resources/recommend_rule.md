@@ -51,7 +51,7 @@ resource "algolia_recommend_rule" "hide_discontinued" {
 
 ### Optional
 
-- `condition` (String) JSON-encoded condition that triggers the rule (`context`/`filters`), e.g. `jsonencode({ filters = "brand:apple" })`. If omitted, the rule applies to every recommendation computed for this model/index. Refreshed on read, but the configured value is only replaced when it is not semantically equivalent (ignoring key/array order) to what the API returned, to avoid a perpetual diff from harmless reordering.
+- `condition` (String) JSON-encoded condition that triggers the rule (`context`/`filters`), e.g. `jsonencode({ filters = "brand:apple" })`. If omitted, the rule applies to every recommendation computed for this model/index. Refreshed on read, but the configured value is only replaced when it is not semantically equivalent (ignoring object key order and whitespace, preserving array order) to what the API returned, to avoid a perpetual diff from harmless re-encoding.
 - `description` (String) Human-readable description of the rule's purpose. This can be helpful for display in the Algolia dashboard.
 - `enabled` (Boolean) Whether the rule is active. If it isn't enabled, it isn't applied when computing recommendations.
 - `object_id` (String) Unique identifier of the Recommend rule. Generated automatically if omitted. Changing this forces replacement.

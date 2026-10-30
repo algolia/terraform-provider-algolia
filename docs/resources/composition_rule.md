@@ -71,7 +71,7 @@ resource "algolia_composition_rule" "example" {
 
 ### Optional
 
-- `conditions` (String) JSON-encoded array of conditions that trigger the rule (`pattern`/`anchoring`/`context`/`filters`/`sortBy`), e.g. `jsonencode([{ filters = "brand:apple" }])`. If omitted, the rule always applies. Refreshed on read, but the configured value is only replaced when it is not semantically equivalent (ignoring key/array order) to what the API returned, to avoid a perpetual diff from harmless reordering.
+- `conditions` (String) JSON-encoded array of conditions that trigger the rule (`pattern`/`anchoring`/`context`/`filters`/`sortBy`), e.g. `jsonencode([{ filters = "brand:apple" }])`. If omitted, the rule always applies. Refreshed on read, but the configured value is only replaced when it is not semantically equivalent (ignoring object key order and whitespace, preserving array order) to what the API returned, to avoid a perpetual diff from harmless re-encoding.
 - `description` (String) Human-readable description of the rule's purpose. This can be helpful for display in the Algolia dashboard.
 - `enabled` (Boolean) Whether the rule is active. If it isn't enabled, it isn't applied when running the composition.
 - `object_id` (String) Unique identifier of the composition rule. Generated automatically if omitted. Changing this forces replacement.

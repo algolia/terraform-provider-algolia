@@ -55,8 +55,8 @@ func destinationResourceSchema() schema.Schema {
 					"})`). Unlike `algolia_ingestion_source`'s `input`, a destination's `input` is required: every " +
 					"destination writes to a specific `indexName`. The Ingestion API returns a destination's " +
 					"`input` in full when reading it back (nothing is redacted), so this attribute is refreshed " +
-					"on read. To avoid a perpetual diff caused by harmless JSON differences (key order, array " +
-					"order), the refresh only replaces the configured value when it is not semantically " +
+					"on read. Array order is significant. To avoid a perpetual diff caused by harmless JSON differences " +
+					"(object key order and whitespace), the refresh only replaces the configured value when it is not semantically " +
 					"equivalent to what the API returned.",
 				Required: true,
 			},

@@ -78,7 +78,7 @@ func expandCompositionRule(objectID string, model *CompositionRuleResourceModel)
 // expandStringList converts a Terraform list of strings into a []string,
 // returning nil for a null/unknown list. Mirrors the identically named
 // helper in internal/services/dictionary (replicated here rather than
-// imported, per that package's own note on jsonSemanticallyEqual).
+// imported).
 func expandStringList(list types.List) []string {
 	if list.IsNull() || list.IsUnknown() {
 		return nil

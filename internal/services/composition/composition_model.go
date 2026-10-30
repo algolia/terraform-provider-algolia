@@ -9,7 +9,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // complex nested API types. They are refreshed on Read using the
 // semantic-equality preserve-prior pattern in json.go, to avoid a perpetual
 // diff when the API echoes back a semantically identical encoding (e.g. a
-// different key or array order).
+// different object key order or whitespace).
 type CompositionResourceModel struct {
 	ID              types.String `tfsdk:"id"`
 	ObjectID        types.String `tfsdk:"object_id"`

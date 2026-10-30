@@ -9,7 +9,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // Input, which GetAuthentication redacts and Read therefore never
 // refreshes, GetSource returns a source's Input in full - nothing is
 // redacted - so Read does refresh this field. To avoid a perpetual diff
-// from harmless JSON differences (key order, array order), flattenSource
+// from harmless JSON differences (object key order, whitespace), flattenSource
 // only adopts the API's encoding when it is not semantically equal to the
 // value already in state; otherwise it keeps the existing string as-is.
 // See flattenSource/flattenSourceInput.

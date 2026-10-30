@@ -249,7 +249,7 @@ func TestFlattenTransformation_NoDescriptionIsNull(t *testing.T) {
 // Source/Destination's input, GetTransformation returns a transformation's
 // input in full, so naively overwriting the configured JSON string with the
 // API's encoding on every Read would create a perpetual diff whenever the
-// API echoes back the same configuration with different key/array
+// API echoes back the same configuration with different object key
 // ordering.
 func TestFlattenTransformation_InputPreservedWhenSemanticallyEqual(t *testing.T) {
 	const configuredInput = `{"steps": [{"action": "addField", "extra": "value"}]}`

@@ -2,6 +2,11 @@
 
 BUG FIXES:
 
+- **Detect list-order changes in Index, Composition, Recommend and Ingestion JSON
+  settings**, including facet and feed ordering, and send Ingestion source updates
+  when only list order changes. Continue to ignore attribute order within
+  `decompounded_attributes`, which Algolia may reorder.
+
 - **Index updates no longer fail when Algolia changes the creation timestamp.**
   Index and virtual-index resources now allow `created_at` to change during settings
   updates instead of reporting an inconsistent result after apply.
