@@ -38,11 +38,12 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 				Description: "Rule scope. Algolia currently only returns `redirect` for redirect rules.",
 				Computed:    true,
 			},
-		},
-		Blocks: map[string]datasourceschema.Block{
-			"conditions": datasourceschema.ListNestedBlock{
+			// Computed collections stay unknown until a deferred read completes.
+			// Blocks instead plan as empty when omitted from configuration.
+			"conditions": datasourceschema.ListNestedAttribute{
 				Description: "Conditions that trigger the rule.",
-				NestedObject: datasourceschema.NestedBlockObject{
+				Computed:    true,
+				NestedObject: datasourceschema.NestedAttributeObject{
 					Attributes: map[string]datasourceschema.Attribute{
 						"pattern":      datasourceschema.StringAttribute{Computed: true},
 						"anchoring":    datasourceschema.StringAttribute{Computed: true},
@@ -52,9 +53,10 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 					},
 				},
 			},
-			"consequence": datasourceschema.ListNestedBlock{
+			"consequence": datasourceschema.ListNestedAttribute{
 				Description: "Rule consequence definition.",
-				NestedObject: datasourceschema.NestedBlockObject{
+				Computed:    true,
+				NestedObject: datasourceschema.NestedAttributeObject{
 					Attributes: map[string]datasourceschema.Attribute{
 						"params_json": datasourceschema.StringAttribute{Computed: true},
 						"hide": datasourceschema.SetAttribute{
@@ -64,11 +66,10 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 						"user_data":           datasourceschema.StringAttribute{Computed: true},
 						"filter_promotes":     datasourceschema.BoolAttribute{Computed: true},
 						"redirect_index_name": datasourceschema.StringAttribute{Computed: true},
-					},
-					Blocks: map[string]datasourceschema.Block{
-						"promote": datasourceschema.ListNestedBlock{
+						"promote": datasourceschema.ListNestedAttribute{
 							Description: "Promoted object IDs and their position.",
-							NestedObject: datasourceschema.NestedBlockObject{
+							Computed:    true,
+							NestedObject: datasourceschema.NestedAttributeObject{
 								Attributes: map[string]datasourceschema.Attribute{
 									"object_ids": datasourceschema.ListAttribute{
 										Description: "Object IDs promoted as a group, in the order returned by Algolia.",
@@ -82,9 +83,10 @@ func ruleDataSourceSchema() datasourceschema.Schema {
 					},
 				},
 			},
-			"validity": datasourceschema.ListNestedBlock{
+			"validity": datasourceschema.ListNestedAttribute{
 				Description: "Time windows during which the rule is active.",
-				NestedObject: datasourceschema.NestedBlockObject{
+				Computed:    true,
+				NestedObject: datasourceschema.NestedAttributeObject{
 					Attributes: map[string]datasourceschema.Attribute{
 						"from":  datasourceschema.StringAttribute{Computed: true},
 						"until": datasourceschema.StringAttribute{Computed: true},

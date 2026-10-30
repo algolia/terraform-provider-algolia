@@ -51,16 +51,16 @@ data "algolia_rule" "example" {
 
 ### Read-Only
 
-- `conditions` (Block List) Conditions that trigger the rule. (see [below for nested schema](#nestedblock--conditions))
-- `consequence` (Block List) Rule consequence definition. (see [below for nested schema](#nestedblock--consequence))
+- `conditions` (Attributes List) Conditions that trigger the rule. (see [below for nested schema](#nestedatt--conditions))
+- `consequence` (Attributes List) Rule consequence definition. (see [below for nested schema](#nestedatt--consequence))
 - `description` (String) Human-readable description of the rule.
 - `enabled` (Boolean) Whether the rule is active.
 - `id` (String) Terraform identifier in the form <index_name>/<object_id>.
 - `scope` (String) Rule scope. Algolia currently only returns `redirect` for redirect rules.
 - `tags` (List of String) Free-form tags used to group and filter rules in the Algolia dashboard.
-- `validity` (Block List) Time windows during which the rule is active. (see [below for nested schema](#nestedblock--validity))
+- `validity` (Attributes List) Time windows during which the rule is active. (see [below for nested schema](#nestedatt--validity))
 
-<a id="nestedblock--conditions"></a>
+<a id="nestedatt--conditions"></a>
 ### Nested Schema for `conditions`
 
 Read-Only:
@@ -72,7 +72,7 @@ Read-Only:
 - `pattern` (String)
 
 
-<a id="nestedblock--consequence"></a>
+<a id="nestedatt--consequence"></a>
 ### Nested Schema for `consequence`
 
 Read-Only:
@@ -80,11 +80,11 @@ Read-Only:
 - `filter_promotes` (Boolean)
 - `hide` (Set of String)
 - `params_json` (String)
-- `promote` (Block List) Promoted object IDs and their position. (see [below for nested schema](#nestedblock--consequence--promote))
+- `promote` (Attributes List) Promoted object IDs and their position. (see [below for nested schema](#nestedatt--consequence--promote))
 - `redirect_index_name` (String)
 - `user_data` (String)
 
-<a id="nestedblock--consequence--promote"></a>
+<a id="nestedatt--consequence--promote"></a>
 ### Nested Schema for `consequence.promote`
 
 Read-Only:
@@ -94,7 +94,7 @@ Read-Only:
 
 
 
-<a id="nestedblock--validity"></a>
+<a id="nestedatt--validity"></a>
 ### Nested Schema for `validity`
 
 Read-Only:
