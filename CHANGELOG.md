@@ -2,13 +2,18 @@
 
 BUG FIXES:
 
-- **Rule data-source outputs are available after one apply.** Nested values such as
-  promoted IDs now remain unknown until the rule is read, instead of appearing empty
-  or causing invalid-index errors during planning. No extra refresh is needed.
+- **Detect list-order changes in Index, Composition, Recommend and Ingestion JSON
+  settings**, including facet and feed ordering, and send Ingestion source updates
+  when only list order changes. Continue to ignore attribute order within
+  `decompounded_attributes`, which Algolia may reorder.
 
 - **Index updates no longer fail when Algolia changes the creation timestamp.**
   Index and virtual-index resources now allow `created_at` to change during settings
   updates instead of reporting an inconsistent result after apply.
+
+- **Rule data-source outputs are available after one apply.** Nested values such as
+  promoted IDs now remain unknown until the rule is read, instead of appearing empty
+  or causing invalid-index errors during planning. No extra refresh is needed.
 
 - **Rule promote groups now preserve record order.** `consequence.promote.object_ids`
   is now a list in the resource and data source. Existing resource state upgrades
