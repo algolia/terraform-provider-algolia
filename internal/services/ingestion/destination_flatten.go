@@ -18,8 +18,8 @@ import (
 // a destination's configuration in full, nothing is redacted - but naively
 // overwriting model.Input with the API's JSON encoding on every
 // Create/Read/Update would cause a perpetual diff whenever the API echoes
-// back semantically identical JSON in a different form (key order, array
-// order). So flattenDestinationInput keeps the model's existing Input
+// back semantically identical JSON in a different form (object key order,
+// whitespace). So flattenDestinationInput keeps the model's existing Input
 // string as-is when it is semantically equal to what the API returned, and
 // only adopts the API's encoding when it actually differs. Unlike Source's
 // Input (a pointer that can be nil for source types needing no

@@ -163,7 +163,7 @@ func stringPtr(s string) *string { return &s }
 // Source/Destination/Transformation's input, GetTask returns a task's
 // input in full, so naively overwriting the configured JSON string with
 // the API's encoding on every Read would create a perpetual diff whenever
-// the API echoes back the same configuration with different key/array
+// the API echoes back the same configuration with different object key
 // ordering.
 func TestFlattenTask_InputPreservedWhenSemanticallyEqual(t *testing.T) {
 	const configuredInput = `{"streams": [{"name": "orders", "syncMode": "fullTable"}]}`

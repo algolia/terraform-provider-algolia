@@ -56,8 +56,8 @@ func sourceResourceSchema() schema.Schema {
 					"accepts records pushed directly to it and has no `input` shape, so `input` may be omitted. " +
 					"Unlike `algolia_ingestion_authentication`'s `input`, the Ingestion API returns a source's " +
 					"`input` in full when reading it back (nothing is redacted), so this attribute is refreshed on " +
-					"read. To avoid a perpetual diff caused by harmless JSON differences (key order, array " +
-					"order), the refresh only replaces the configured value when it is not semantically " +
+					"read. Array order is significant. To avoid a perpetual diff caused by harmless JSON differences " +
+					"(object key order and whitespace), the refresh only replaces the configured value when it is not semantically " +
 					"equivalent to what the API returned. Treated as sensitive: several source types carry " +
 					"credentials here - a `docker` source's `configuration` is an arbitrary map holding the " +
 					"connector's secrets, and `csv`/`json` take a `url` that is commonly presigned - and since " +

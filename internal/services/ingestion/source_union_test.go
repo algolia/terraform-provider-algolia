@@ -321,3 +321,27 @@ func TestExpandSourceUpdate_UnchangedInputIsOmitted(t *testing.T) {
 		}
 	})
 }
+
+func TestExpandSourceUpdate_ReorderedInputIsSent(t *testing.T) {
+	const prior = `{"configuration":{"fields":["title","description"]}}`
+	const planned = `{"configuration":{"fields":["description","title"]}}`
+	model := &SourceResourceModel{
+		Type:  types.StringValue(string(ingestionapi.SOURCE_TYPE_DOCKER)),
+		Name:  types.StringValue("same"),
+		Input: types.StringValue(planned),
+	}
+	update, diags := expandSourceUpdate(model, types.StringValue(prior))
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if update.Input == nil {
+		t.Fatal("reordered configuration must be included in the PATCH")
+	}
+	out, err := json.Marshal(update.Input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != planned {
+		t.Fatalf("PATCH input = %s, want %s", out, planned)
+	}
+}

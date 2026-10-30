@@ -10,7 +10,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 // semantic-equality preserve-prior pattern as the Ingestion package's
 // JSON-encoded attributes (see json.go and flatten.go), to avoid a perpetual
 // diff when the API echoes back a semantically identical encoding (e.g. a
-// different key or array order).
+// different object key order or whitespace).
 type RecommendRuleResourceModel struct {
 	ID          types.String `tfsdk:"id"`
 	IndexName   types.String `tfsdk:"index_name"`

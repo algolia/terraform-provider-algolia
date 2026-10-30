@@ -1,6 +1,11 @@
 package index
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 func TestJsonSemanticallyEqual(t *testing.T) {
 	tests := []struct {
@@ -25,7 +30,7 @@ func TestJsonSemanticallyEqual(t *testing.T) {
 			name:     "different array order (strings)",
 			a:        `{"de":["name","desc"]}`,
 			b:        `{"de":["desc","name"]}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "structurally different values",
@@ -52,10 +57,10 @@ func TestJsonSemanticallyEqual(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "nested structures equal",
+			name:     "nested array order differs",
 			a:        `{"a":{"b":["x","y"]}}`,
 			b:        `{"a":{"b":["y","x"]}}`,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "empty objects",
@@ -87,80 +92,90 @@ func TestJsonSemanticallyEqual(t *testing.T) {
 	}
 }
 
-func TestNormalizeJSON(t *testing.T) {
-	tests := []struct {
+func TestPreservePlannedValuesRenderingContentOrder(t *testing.T) {
+	const planned = `{"facetOrdering":{"facets":{"order":["brand","category"]}}}`
+	for _, tc := range []struct {
 		name string
-		in   any
-		want any
+		api  string
+		want string
 	}{
 		{
-			name: "nil",
-			in:   nil,
-			want: nil,
+			name: "reordered facets remain visible",
+			api:  `{"facetOrdering":{"facets":{"order":["category","brand"]}}}`,
+			want: `{"facetOrdering":{"facets":{"order":["category","brand"]}}}`,
 		},
 		{
-			name: "string",
-			in:   "hello",
-			want: "hello",
+			name: "formatting alone preserves plan",
+			api:  `{ "facetOrdering": {"facets": {"order": ["brand", "category"]}} }`,
+			want: planned,
 		},
-		{
-			name: "number",
-			in:   float64(42),
-			want: float64(42),
-		},
-		{
-			name: "string slice sorted",
-			in:   []any{"b", "a", "c"},
-			want: []any{"a", "b", "c"},
-		},
-		{
-			name: "mixed slice not sorted",
-			in:   []any{"b", float64(1), "a"},
-			want: []any{"b", float64(1), "a"},
-		},
-		{
-			name: "nested map",
-			in:   map[string]any{"k": map[string]any{"z": "1"}},
-			want: map[string]any{"k": map[string]any{"z": "1"}},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := normalizeJSON(tt.in)
-			if !equalAny(got, tt.want) {
-				t.Errorf("normalizeJSON(%v) = %v, want %v", tt.in, got, tt.want)
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := IndexResourceModel{Advanced: blockObject(t, advancedAttrTypes, AdvancedModel{
+				RenderingContent: types.StringValue(planned),
+				ResponseFields:   types.ListNull(types.StringType),
+				Replicas:         types.ListNull(types.StringType),
+			})}
+			state := IndexResourceModel{Advanced: blockObject(t, advancedAttrTypes, AdvancedModel{
+				RenderingContent: types.StringValue(tc.api),
+				ResponseFields:   types.ListNull(types.StringType),
+				Replicas:         types.ListNull(types.StringType),
+			})}
+			if diags := preservePlannedValues(context.Background(), &plan, &state); diags.HasError() {
+				t.Fatal(diags)
+			}
+			got := state.Advanced.Attributes()["rendering_content"].(types.String).ValueString()
+			if got != tc.want {
+				t.Fatalf("rendering_content = %s, want %s", got, tc.want)
 			}
 		})
 	}
 }
 
-// equalAny is a simple deep-equal helper for test assertions.
-func equalAny(a, b any) bool {
-	switch va := a.(type) {
-	case map[string]any:
-		vb, ok := b.(map[string]any)
-		if !ok || len(va) != len(vb) {
-			return false
-		}
-		for k, v := range va {
-			if !equalAny(v, vb[k]) {
-				return false
+func TestPreservePlannedValuesDecompoundedAttributes(t *testing.T) {
+	const planned = `{"de":["name","description"],"nl":["title"]}`
+	for _, tc := range []struct {
+		name string
+		api  string
+		want string
+	}{
+		{
+			name: "API reorders attribute names",
+			api:  `{"nl":["title"],"de":["description","name"]}`,
+			want: planned,
+		},
+		{
+			name: "API changes attribute names",
+			api:  `{"de":["name","title"],"nl":["title"]}`,
+			want: `{"de":["name","title"],"nl":["title"]}`,
+		},
+		{
+			name: "API removes a language",
+			api:  `{"de":["name","description"]}`,
+			want: `{"de":["name","description"]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			block := func(value string) types.Object {
+				return blockObject(t, languagesAttrTypes, LanguagesModel{
+					IndexLanguages:            types.ListNull(types.StringType),
+					QueryLanguages:            types.ListNull(types.StringType),
+					IgnorePluralsLanguages:    types.ListNull(types.StringType),
+					RemoveStopWordsLanguages:  types.ListNull(types.StringType),
+					AttributesToTransliterate: types.ListNull(types.StringType),
+					CamelCaseAttributes:       types.ListNull(types.StringType),
+					DecompoundedAttributes:    types.StringValue(value),
+				})
 			}
-		}
-		return true
-	case []any:
-		vb, ok := b.([]any)
-		if !ok || len(va) != len(vb) {
-			return false
-		}
-		for i := range va {
-			if !equalAny(va[i], vb[i]) {
-				return false
+			plan := IndexResourceModel{Languages: block(planned)}
+			state := IndexResourceModel{Languages: block(tc.api)}
+			if diags := preservePlannedValues(context.Background(), &plan, &state); diags.HasError() {
+				t.Fatal(diags)
 			}
-		}
-		return true
-	default:
-		return a == b
+			got := state.Languages.Attributes()["decompounded_attributes"].(types.String).ValueString()
+			if got != tc.want {
+				t.Fatalf("decompounded_attributes = %s, want %s", got, tc.want)
+			}
+		})
 	}
 }

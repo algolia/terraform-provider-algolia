@@ -42,8 +42,8 @@ func compositionResourceSchema() schema.Schema {
 					"`multifeed` key (but not both), describing how the composition blends its sources, e.g. " +
 					"`jsonencode({ injection = { main = { source = { search = { index = \"products\" } } } } " +
 					"})`. Refreshed on read, but the configured value is only replaced when it is not " +
-					"semantically equivalent (ignoring key/array order) to what the API returned, to avoid a " +
-					"perpetual diff from harmless reordering.",
+					"semantically equivalent (ignoring object key order and whitespace, preserving array order) to what the API returned, to avoid a " +
+					"perpetual diff from harmless re-encoding.",
 				Required: true,
 			},
 			"sorting_strategy": schema.StringAttribute{

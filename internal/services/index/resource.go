@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 
 	"github.com/algolia/algoliasearch-client-go/v4/algolia/search"
 	"github.com/algolia/terraform-provider-algolia/internal/algoliaerr"
@@ -409,13 +409,17 @@ func preservePlannedValues(ctx context.Context, plan, state *IndexResourceModel)
 			}
 			// For JSON-encoded string fields, preserve the planned value if
 			// the API returned semantically equivalent JSON (e.g. different
-			// array element ordering).
+			// object key ordering).
 			planStr, planIsStr := planVal.(types.String)
 			stateStr, stateIsStr := stateVal.(types.String)
+			equal := jsonSemanticallyEqual
+			if k == "decompounded_attributes" {
+				equal = decompoundedAttributesEqual
+			}
 			if planIsStr && stateIsStr && !planStr.IsNull() && !stateStr.IsNull() &&
 				!planStr.IsUnknown() && !stateStr.IsUnknown() &&
 				planStr.ValueString() != stateStr.ValueString() &&
-				jsonSemanticallyEqual(planStr.ValueString(), stateStr.ValueString()) {
+				equal(planStr.ValueString(), stateStr.ValueString()) {
 				stateAttrs[k] = planVal
 				changed = true
 			}
@@ -529,9 +533,8 @@ func newIndexIdentityState(indexName string, deletionProtection types.Bool) Inde
 }
 
 // jsonSemanticallyEqual returns true if two strings are both valid JSON and
-// represent the same data structure, ignoring key order, whitespace, and
-// array element order (the Algolia API may return array elements in a
-// different order than what was sent).
+// represent the same data structure, ignoring object key order and whitespace.
+// Array order is significant, including in nested settings such as facet ordering.
 func jsonSemanticallyEqual(a, b string) bool {
 	var va, vb any
 	if err := json.Unmarshal([]byte(a), &va); err != nil {
@@ -540,39 +543,25 @@ func jsonSemanticallyEqual(a, b string) bool {
 	if err := json.Unmarshal([]byte(b), &vb); err != nil {
 		return false
 	}
-	return reflect.DeepEqual(normalizeJSON(va), normalizeJSON(vb))
+	return reflect.DeepEqual(va, vb)
 }
 
-// normalizeJSON recursively sorts arrays of strings/numbers and normalizes
-// maps so that JSON comparison is order-independent.
-func normalizeJSON(v any) any {
-	switch val := v.(type) {
-	case map[string]any:
-		m := make(map[string]any, len(val))
-		for k, v := range val {
-			m[k] = normalizeJSON(v)
-		}
-		return m
-	case []any:
-		normalized := make([]any, len(val))
-		for i, item := range val {
-			normalized[i] = normalizeJSON(item)
-		}
-		// Sort the slice if all elements are strings.
-		allStrings := true
-		for _, item := range normalized {
-			if _, ok := item.(string); !ok {
-				allStrings = false
-				break
-			}
-		}
-		if allStrings {
-			sort.Slice(normalized, func(i, j int) bool {
-				return normalized[i].(string) < normalized[j].(string)
-			})
-		}
-		return normalized
-	default:
-		return v
+// decompoundedAttributesEqual tolerates API reordering of the attribute names
+// for each language. This caused inconsistent apply results (cb55fdc); keep the
+// exception local to this setting, since arrays such as facet order are ordered.
+func decompoundedAttributesEqual(a, b string) bool {
+	var va, vb map[string][]string
+	if err := json.Unmarshal([]byte(a), &va); err != nil {
+		return false
 	}
+	if err := json.Unmarshal([]byte(b), &vb); err != nil {
+		return false
+	}
+	for _, attributes := range va {
+		slices.Sort(attributes)
+	}
+	for _, attributes := range vb {
+		slices.Sort(attributes)
+	}
+	return reflect.DeepEqual(va, vb)
 }

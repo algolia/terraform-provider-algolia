@@ -59,8 +59,8 @@ func recommendRuleResourceSchema() schema.Schema {
 				Description: "JSON-encoded condition that triggers the rule (`context`/`filters`), e.g. " +
 					"`jsonencode({ filters = \"brand:apple\" })`. If omitted, the rule applies to every " +
 					"recommendation computed for this model/index. Refreshed on read, but the configured value " +
-					"is only replaced when it is not semantically equivalent (ignoring key/array order) to what " +
-					"the API returned, to avoid a perpetual diff from harmless reordering.",
+					"is only replaced when it is not semantically equivalent (ignoring object key order and whitespace, preserving array order) to what " +
+					"the API returned, to avoid a perpetual diff from harmless re-encoding.",
 				Optional: true,
 			},
 			"consequence": schema.StringAttribute{
