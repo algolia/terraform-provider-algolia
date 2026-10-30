@@ -859,6 +859,21 @@ data source algolia_recommend_rule
 
 data source algolia_rule
   schema version 0
+  conditions object(LIST) [computed]
+    alternatives tftypes.Bool [computed]
+    anchoring tftypes.String [computed]
+    context tftypes.String [computed]
+    filters tftypes.String [computed]
+    pattern tftypes.String [computed]
+  consequence object(LIST) [computed]
+    filter_promotes tftypes.Bool [computed]
+    hide tftypes.Set[tftypes.String] [computed]
+    params_json tftypes.String [computed]
+    promote object(LIST) [computed]
+      object_ids tftypes.List[tftypes.String] [computed]
+      position tftypes.Number [computed]
+    redirect_index_name tftypes.String [computed]
+    user_data tftypes.String [computed]
   description tftypes.String [computed]
   enabled tftypes.Bool [computed]
   id tftypes.String [computed]
@@ -866,22 +881,7 @@ data source algolia_rule
   object_id tftypes.String [required]
   scope tftypes.String [computed]
   tags tftypes.List[tftypes.String] [computed]
-  block conditions (LIST)
-    alternatives tftypes.Bool [computed]
-    anchoring tftypes.String [computed]
-    context tftypes.String [computed]
-    filters tftypes.String [computed]
-    pattern tftypes.String [computed]
-  block consequence (LIST)
-    filter_promotes tftypes.Bool [computed]
-    hide tftypes.Set[tftypes.String] [computed]
-    params_json tftypes.String [computed]
-    redirect_index_name tftypes.String [computed]
-    user_data tftypes.String [computed]
-    block promote (LIST)
-      object_ids tftypes.List[tftypes.String] [computed]
-      position tftypes.Number [computed]
-  block validity (LIST)
+  validity object(LIST) [computed]
     from tftypes.String [computed]
     until tftypes.String [computed]
 

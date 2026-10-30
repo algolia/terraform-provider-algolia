@@ -2,6 +2,10 @@
 
 BUG FIXES:
 
+- **Rule data-source outputs are available after one apply.** Nested values such as
+  promoted IDs now remain unknown until the rule is read, instead of appearing empty
+  or causing invalid-index errors during planning. No extra refresh is needed.
+
 - **Index updates no longer fail when Algolia changes the creation timestamp.**
   Index and virtual-index resources now allow `created_at` to change during settings
   updates instead of reporting an inconsistent result after apply.
