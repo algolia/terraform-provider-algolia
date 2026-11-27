@@ -45,10 +45,8 @@ jobs:
       # Enable GitHub's native auto-merge so the PR merges as soon as the required
       # status checks pass.
       #
-      # Patch-only, deliberately. The checks reachable from a pull request are
-      # Build, Lint and Unit Tests: the acceptance suite runs only on pushes to
-      # main, because it needs the admin API key and secrets must not be exposed to
-      # PR code. Those three checks cannot detect a behavioural change in
+      # Patch-only, deliberately. Auto-merge does not require the live suites.
+      # Build, Lint and Unit Tests alone cannot detect a behavioural change in
       # algoliasearch-client-go - which is exactly the failure class behind the
       # recommend_rule outage, and minor bumps of that client are where it lives.
       # Minor and major bumps therefore wait for a maintainer, who can merge to main

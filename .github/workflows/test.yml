@@ -5,9 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    # labeled/unlabeled are not in the default set, and without them adding the
-    # label would not start a run. unlabeled is what makes removing it stop.
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 permissions:
@@ -75,27 +73,23 @@ jobs:
     needs: [build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Runs on a push to main as before, and on a pull request only when a
-    # maintainer applies the `acceptance` label. The label changes who can start the
-    # run, not whose code runs, so the same-repository check below still matters:
-    # GitHub withholds secrets from fork pull requests, and without the check such
-    # a run would go green having skipped everything. Never switch this to
-    # pull_request_target, which *would* hand the admin key to a fork.
+    # Applying the `acceptance` label approves only the PR head SHA in that event.
     if: >-
       vars.ALGOLIA_APP_ID != '' && (
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
-          contains(github.event.pull_request.labels.*.name, 'acceptance'))
+          github.event.action == 'labeled' && github.event.label.name == 'acceptance')
       )
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ github.event_name == 'push' }}
       # The plugin-testing framework auto-downloads the Terraform CLI when none
       # is on PATH; pre-installing it avoids that (and its expired-GPG-key
       # verification failure). terraform_wrapper: false keeps the real binary on
@@ -118,31 +112,22 @@ jobs:
     needs: [build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Same guard as the acceptance job: this job runs repository code with the
-    # admin ALGOLIA_API_KEY and a GH_TOKEN, so it must only run on a push to main
-    # (post-review), never on a pull request. The repo variable additionally acts
-    # as a feature flag for whether an e2e application is configured at all.
-    # Runs on a push to main as before, and on a pull request only when a
-    # maintainer applies the `e2e` label. The label changes who can start the
-    # run, not whose code runs, so the same-repository check below still matters:
-    # GitHub withholds secrets from fork pull requests, and without the check such
-    # a run would go green having skipped everything. Never switch this to
-    # pull_request_target, which *would* hand the admin key to a fork.
     if: >-
       vars.ALGOLIA_APP_ID != '' && (
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
-          contains(github.event.pull_request.labels.*.name, 'e2e'))
+          github.event.action == 'labeled' && github.event.label.name == 'e2e')
       )
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ github.event_name == 'push' }}
       # The plugin-testing framework auto-downloads the Terraform CLI when none
       # is on PATH; pre-installing it avoids that (and its expired-GPG-key
       # verification failure). terraform_wrapper: false keeps the real binary on
