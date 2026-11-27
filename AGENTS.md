@@ -32,16 +32,9 @@ you can conclude from a green run:
   configurations through create, drift, reconcile, update and destroy, asserting
   Algolia's own view at each stage rather than only Terraform state.
 
-**In CI, the acceptance and e2e jobs run on pushes to `main` and when someone applies
-the matching `acceptance` or `e2e` label to a same-repository pull request.** GitHub's
-label permissions control who can start a suite this way. The tests use credentials
-that can modify the Algolia test application. Any code they run can read those
-credentials. Keep the same-repository check: fork PRs do not receive these secrets
-and could pass without exercising the live tests. Use `pull_request` (never
-`pull_request_target`), and review the code before applying the label.
+**In CI, the acceptance and e2e jobs run on pushes to `main` and when someone applies the matching `acceptance` or `e2e` label to a same-repository pull request.** GitHub's label permissions control who can start a suite this way. The tests use credentials that can modify the Algolia test application. Any code they run can read those credentials. Keep the same-repository check: fork PRs do not receive these secrets and could pass without exercising the live tests. Use `pull_request` (never `pull_request_target`), and review the code before applying the label.
 
-Applying a suite's label runs it against the head SHA from that event. After a new
-push, review the new head, then remove and reapply the label to test it.
+Applying a suite's label runs it against the head SHA from that event. After a new push, review the new head, then remove and reapply the label to test it.
 
 Without a label a pull request goes green on build, lint and unit tests alone. If a change
 touches behaviour the unit tests cannot reach, either label the PR or run the relevant
@@ -295,12 +288,7 @@ refer to the key (its operator-supplied description), `redactKey` strips the val
 an API error before it reaches a diagnostic, and `maskKeyValue` puts it in the logging
 context so `tflog` cannot print it. `resource_secret_test.go` exists to keep that honest.
 
-Acceptance and e2e tests run PR code that can read the test credentials. The fork
-check excludes external PR branches. Each suite runs the head SHA from its label
-event; a later push does not trigger it. This gate is in the workflow itself:
-it does not restrict access to repository secrets if a same-repository PR changes
-the workflow. See
-[Build & Test Commands](#build--test-commands).
+Acceptance and e2e tests run PR code that can read the test credentials. The fork check excludes external PR branches. Each suite runs the head SHA from its label event; a later push does not trigger it. This gate is in the workflow itself: it does not restrict access to repository secrets if a same-repository PR changes the workflow. See [Build & Test Commands](#build--test-commands).
 
 ### Commits, pull requests and the CHANGELOG
 
